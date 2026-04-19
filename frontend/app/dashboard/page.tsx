@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { getAddressFromCoords } from "@/lib/kakao";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 interface LocationRecord {
   latitude: number;
   longitude: number;
@@ -71,7 +73,7 @@ export default function Dashboard() {
 
       const address = await getAddressFromCoords(latitude, longitude);
 
-      await fetch("http://127.0.0.1:8000/api/location/record", {
+      await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -113,7 +115,7 @@ export default function Dashboard() {
 
       const address = await getAddressFromCoords(latitude, longitude);
 
-      await fetch("http://127.0.0.1:8000/api/location/record", {
+      await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -264,7 +266,7 @@ export default function Dashboard() {
 
       {/* 리포트 링크 */}
       <Link href="/report">
-        <div className="bg-gray-900 hover:bg-gray-800 rounded-2xl p-5 flex items-center justify-between cursor-pointer transition">
+        <div className="bg-gray-900 hover:bg-gray-800 rounded-2xl p-5 mb-4 flex items-center justify-between cursor-pointer transition">
           <div className="flex items-center gap-3">
             <span className="text-2xl">📊</span>
             <div>
@@ -276,18 +278,19 @@ export default function Dashboard() {
         </div>
       </Link>
 
+      {/* 관리자 링크 */}
       <Link href="/admin">
-        <div className="bg-gray-900 hover:bg-gray-800 rounded-2xl p-5 mt-4 flex items-center justify-between cursor-pointer transition">
+        <div className="bg-gray-900 hover:bg-gray-800 rounded-2xl p-5 flex items-center justify-between cursor-pointer transition">
           <div className="flex items-center gap-3">
-        <span className="text-2xl">🏢</span>
-        <div>
-          <div className="text-white font-bold">관리자 페이지</div>
-          <div className="text-gray-400 text-xs">팀 근태 현황 관리</div>
+            <span className="text-2xl">🏢</span>
+            <div>
+              <div className="text-white font-bold">관리자 페이지</div>
+              <div className="text-gray-400 text-xs">팀 근태 현황 관리</div>
+            </div>
+          </div>
+          <span className="text-gray-400">→</span>
         </div>
-       </div>
-       <span className="text-gray-400">→</span>
-      </div>
-    </Link>
+      </Link>
     </main>
   );
 }
