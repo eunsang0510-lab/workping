@@ -3,10 +3,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
 from models.company import Company, CompanyMember
-from models.user import User
-from models.attendance import Attendance
+from pydantic import BaseModel
+from typing import Optional
+import uuid
 
 router = APIRouter()
+
+# 회사 생성 스키마
+class CompanyCreate(BaseModel):
+    name: str
+    plan: Optional[str] = "team"
+
+# 멤버 추가 스키마
+class MemberCreate(BaseModel):
+    company_id: str
+    user_email: str
+    user_name: Optional[str] = None
+    is_admin: Optional[bool] = False
 
 
 # 전체 통계
@@ -40,6 +53,21 @@ def get_companies(db: Session = Depends(get_db)):
     return result
 
 
+# 회사 생성
+@router.post("/company")
+def create_company(body: CompanyCreate, db: Session = Depends(get_db)):
+    company = Company(
+        id=str(uuid.uuid4()),
+        name=body.name,
+        admin_id="superadmin",
+        plan=body.plan,
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    return {"success": True, "company": {"id": company.id, "name": company.name}}
+
+
 # 회사 삭제
 @router.delete("/company/{company_id}")
 def delete_company(company_id: str, db: Session = Depends(get_db)):
@@ -70,6 +98,26 @@ def get_members(db: Session = Depends(get_db)):
             "created_at": m.created_at,
         })
     return result
+
+
+# 멤버 추가
+@router.post("/member")
+def create_member(body: MemberCreate, db: Session = Depends(get_db)):
+    company = db.query(Company).filter(Company.id == body.company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
+    member = CompanyMember(
+        id=str(uuid.uuid4()),
+        company_id=body.company_id,
+        user_id=str(uuid.uuid4()),
+        user_email=body.user_email,
+        user_name=body.user_name,
+        is_admin=body.is_admin,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return {"success": True, "member": {"id": member.id, "user_email": member.user_email}}
 
 
 # 직원 삭제
