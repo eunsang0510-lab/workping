@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -24,6 +25,12 @@ interface Company {
   member_count: number;
 }
 
+interface ExcelMember {
+  이름: string;
+  이메일: string;
+  생년월일: string;
+}
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +41,9 @@ export default function Admin() {
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberBirth, setMemberBirth] = useState("");
+  const [excelMembers, setExcelMembers] = useState<ExcelMember[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -131,6 +141,67 @@ export default function Admin() {
     } catch (error) {
       alert("초기화 실패");
     }
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<ExcelMember>(sheet);
+        setExcelMembers(rows);
+      } catch (error) {
+        alert("엑셀 파일을 읽을 수 없어요");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleBulkRegister = async () => {
+    if (excelMembers.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const members = excelMembers.map(m => ({
+        company_id: company?.id,
+        email: m.이메일,
+        name: m.이름,
+        birth_date: String(m.생년월일)
+      }));
+
+      const res = await fetch(`${API_URL}/api/company/members/bulk-register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: company?.id,
+          members
+        })
+      });
+      const data = await res.json();
+      alert(`✅ ${data.message}`);
+      setExcelMembers([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      fetchAttendance(company!.id);
+    } catch (error) {
+      alert("일괄 등록 실패");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const template = [
+      { 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" },
+      { 이름: "김철수", 이메일: "kim@company.com", 생년월일: "19850315" },
+    ];
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "직원목록");
+    XLSX.writeFile(wb, "직원등록양식.xlsx");
   };
 
   const formatTime = (isoString: string | null) => {
@@ -269,8 +340,8 @@ export default function Admin() {
             )}
           </div>
 
-          {/* 직원 등록 */}
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
+          {/* 직원 개별 등록 */}
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
             <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-4">직원 등록</div>
             <div className="space-y-3">
               <input
@@ -301,6 +372,60 @@ export default function Admin() {
                 직원 등록하기
               </button>
             </div>
+          </div>
+
+          {/* 엑셀 일괄 등록 */}
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">엑셀 일괄 등록</div>
+              <button
+                onClick={handleDownloadTemplate}
+                className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
+              >
+                양식 다운로드
+              </button>
+            </div>
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border border-dashed border-[#27272a] hover:border-[#6366f1] rounded-xl p-6 text-center cursor-pointer transition-all mb-3"
+            >
+              <div className="text-2xl mb-2">📂</div>
+              <div className="text-white text-sm font-medium">엑셀 파일 업로드</div>
+              <div className="text-[#71717a] text-xs mt-1">이름, 이메일, 생년월일 컬럼 필요</div>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              className="hidden"
+            />
+
+            {excelMembers.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[#71717a] text-xs mb-2">{excelMembers.length}명 확인됨</div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {excelMembers.map((m, i) => (
+                    <div key={i} className="bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 flex items-center justify-between">
+                      <span className="text-white text-xs font-medium">{m.이름}</span>
+                      <span className="text-[#71717a] text-xs">{m.이메일}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {excelMembers.length > 0 && (
+              <button
+                onClick={handleBulkRegister}
+                disabled={bulkLoading}
+                className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                {bulkLoading ? "등록 중..." : `${excelMembers.length}명 일괄 등록`}
+              </button>
+            )}
           </div>
         </>
       )}
