@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
-  const [workHours, setWorkHours] = useState("0시간 0분");
+  const [workHours, setWorkHours] = useState("0h 0m");
   const [currentLocation, setCurrentLocation] = useState("-");
   const [records, setRecords] = useState<LocationRecord[]>([]);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -39,6 +39,7 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
+        fetchTodayAttendance(user.uid);
       } else {
         router.push("/");
       }
@@ -46,6 +47,28 @@ export default function Dashboard() {
     });
     return () => unsubscribe();
   }, [router]);
+
+  const fetchTodayAttendance = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`);
+      const data = await res.json();
+
+      if (data.checkin) {
+        setIsCheckedIn(!data.checkout);
+        setCheckInTime(data.checkin);
+        setCurrentLocation(data.checkin_address || "-");
+      }
+      if (data.checkout) {
+        setCheckOutTime(data.checkout);
+        const minutes = Math.floor(
+          (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
+        );
+        setWorkHours(formatWorkTime(minutes));
+      }
+    } catch (error) {
+      console.error("오늘 기록 로딩 실패:", error);
+    }
+  };
 
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
@@ -96,7 +119,9 @@ export default function Dashboard() {
       setIsCheckedIn(true);
       setCheckInTime(nowISO);
       setCurrentLocation(address);
-      setRecords(prev => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin" }]);
+      setRecords(prev => [...prev, {
+        latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin"
+      }]);
     } catch (error) {
       alert("GPS 위치를 가져올 수 없어요.");
     } finally {
@@ -130,7 +155,9 @@ export default function Dashboard() {
       if (checkInTime) {
         setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
       }
-      setRecords(prev => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
+      setRecords(prev => [...prev, {
+        latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout"
+      }]);
     } catch (error) {
       alert("GPS 위치를 가져올 수 없어요.");
     } finally {
@@ -179,7 +206,7 @@ export default function Dashboard() {
           <div>
             <div className="text-[#71717a] text-xs mb-1">{formatDate()}</div>
             <div className="text-white text-4xl font-bold tracking-tighter">
-              {isCheckedIn && checkInTime ? formatWorkTime(workMinutes) : "0h 0m"}
+              {isCheckedIn && checkInTime ? formatWorkTime(workMinutes) : workHours}
             </div>
             <div className="text-[#71717a] text-xs mt-1">
               {currentLocation !== "-" ? `📍 ${currentLocation}` : "위치 미확인"}
@@ -190,11 +217,10 @@ export default function Dashboard() {
               ? "bg-[#052e16] text-[#22c55e] border border-[#166534]"
               : "bg-[#18181b] text-[#71717a] border border-[#27272a]"
           }`}>
-            {isCheckedIn ? "근무중" : "미출근"}
+            {isCheckedIn ? "근무중" : checkOutTime ? "퇴근완료" : "미출근"}
           </div>
         </div>
 
-        {/* 출퇴근 시간 */}
         <div className="flex gap-4 pt-4 border-t border-[#27272a]">
           <div>
             <div className="text-[#71717a] text-xs mb-1">출근</div>
@@ -238,19 +264,28 @@ export default function Dashboard() {
       {/* 오늘의 기록 */}
       <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
         <div className="text-[#71717a] text-xs font-semibold mb-3 uppercase tracking-wider">오늘의 기록</div>
-        {records.length === 0 ? (
+        {!checkInTime ? (
           <div className="text-[#52525b] text-sm text-center py-6">아직 기록이 없어요</div>
         ) : (
           <div className="space-y-3">
-            {records.map((record, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${record.type === "checkin" ? "bg-[#22c55e]" : "bg-[#ef4444]"}`}></div>
-                <div className="flex-1">
-                  <div className="text-white text-sm">{record.type === "checkin" ? "출근" : "퇴근"}</div>
-                  <div className="text-[#71717a] text-xs">{formatTime(record.timestamp)} · {record.place_name}</div>
+            {checkInTime && (
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-[#22c55e]"></div>
+                <div>
+                  <div className="text-white text-sm">출근</div>
+                  <div className="text-[#71717a] text-xs">{formatTime(checkInTime)} · {currentLocation}</div>
                 </div>
               </div>
-            ))}
+            )}
+            {checkOutTime && (
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
+                <div>
+                  <div className="text-white text-sm">퇴근</div>
+                  <div className="text-[#71717a] text-xs">{formatTime(checkOutTime)}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
