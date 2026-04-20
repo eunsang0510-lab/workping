@@ -93,8 +93,6 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
 @router.post("/members/register")
 def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
-    """직원 등록 (Firebase Auth 계정 생성)"""
-
     existing = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_email == req.email
@@ -107,6 +105,9 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
     initial_password = f"{email_prefix}{req.birth_date}"
 
     firebase_api_key = os.getenv("FIREBASE_API_KEY")
+    print(f"Firebase API Key 존재: {'Yes' if firebase_api_key else 'No'}")
+    print(f"등록 시도: {req.email}")
+
     response = requests.post(
         f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={firebase_api_key}",
         json={
@@ -115,6 +116,9 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
             "displayName": req.name
         }
     )
+
+    print(f"Firebase 응답 코드: {response.status_code}")
+    print(f"Firebase 응답: {response.json()}")
 
     if response.status_code != 200:
         error = response.json().get("error", {}).get("message", "알 수 없는 오류")
