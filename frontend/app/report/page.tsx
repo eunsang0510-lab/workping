@@ -6,18 +6,20 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 interface DailyData {
   checkin: string | null;
   checkout: string | null;
-  checkin_address?: string;
-  checkout_address?: string;
   work_hours: string;
   work_minutes: number;
 }
 
-interface WeeklyReport {
+interface Report {
   period: string;
   total_work_hours: string;
+  work_days?: number;
+  avg_work_hours?: string;
   daily: Record<string, DailyData>;
 }
 
@@ -25,15 +27,14 @@ export default function Report() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"weekly" | "monthly">("weekly");
-  const [weeklyReport, setWeeklyReport] = useState<WeeklyReport | null>(null);
-  const [monthlyReport, setMonthlyReport] = useState<any>(null);
+  const [report, setReport] = useState<Report | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
-        fetchReports(user.uid);
+        fetchReport(user.uid, "weekly");
       } else {
         router.push("/");
       }
@@ -42,72 +43,66 @@ export default function Report() {
     return () => unsubscribe();
   }, [router]);
 
-  const fetchReports = async (userId: string) => {
+  const fetchReport = async (userId: string, type: "weekly" | "monthly") => {
     try {
-      const [weeklyRes, monthlyRes] = await Promise.all([
-        fetch(`http://127.0.0.1:8000/api/attendance/weekly/${userId}`),
-        fetch(`http://127.0.0.1:8000/api/attendance/monthly/${userId}`)
-      ]);
-      const weekly = await weeklyRes.json();
-      const monthly = await monthlyRes.json();
-      setWeeklyReport(weekly);
-      setMonthlyReport(monthly);
+      const res = await fetch(`${API_URL}/api/attendance/${type}/${userId}`);
+      const data = await res.json();
+      setReport(data);
     } catch (error) {
       console.error("리포트 로딩 실패:", error);
     }
   };
 
+  const handleTabChange = (tab: "weekly" | "monthly") => {
+    setActiveTab(tab);
+    if (user) fetchReport(user.uid, tab);
+  };
+
   const formatTime = (isoString: string | null) => {
-    if (!isoString) return "-";
-    return new Date(isoString).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    if (!isoString) return "--:--";
+    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("ko-KR", {
-      month: "long",
-      day: "numeric",
-      weekday: "short"
-    });
+    return new Date(dateStr).toLocaleDateString("ko-KR", { month: "short", day: "numeric", weekday: "short" });
+  };
+
+  const getWorkBarWidth = (minutes: number) => {
+    const max = 600;
+    return Math.min((minutes / max) * 100, 100);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-white">로딩 중...</div>
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="text-[#6366f1]">로딩 중...</div>
       </div>
     );
   }
 
-  const report = activeTab === "weekly" ? weeklyReport : monthlyReport;
-
   return (
-    <main className="min-h-screen bg-gray-950 p-6">
+    <main className="min-h-screen bg-[#09090b] p-5">
+
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center cursor-pointer hover:bg-gray-700">
-              <span className="text-white">←</span>
-            </div>
-          </Link>
-          <h1 className="text-white text-xl font-bold">근태 리포트</h1>
-        </div>
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/dashboard">
+          <div className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-xl flex items-center justify-center text-[#71717a] hover:border-[#6366f1] transition-all cursor-pointer">
+            ←
+          </div>
+        </Link>
+        <h1 className="text-white text-lg font-bold">근태 리포트</h1>
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-5 bg-[#18181b] border border-[#27272a] rounded-xl p-1">
         {(["weekly", "monthly"] as const).map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded-xl font-semibold text-sm transition ${
+            onClick={() => handleTabChange(tab)}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
               activeTab === tab
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                ? "bg-[#6366f1] text-white"
+                : "text-[#71717a] hover:text-white"
             }`}
           >
             {tab === "weekly" ? "주간" : "월간"}
@@ -118,59 +113,53 @@ export default function Report() {
       {/* 요약 카드 */}
       {report && (
         <>
-          <div className="bg-blue-600 rounded-2xl p-6 mb-6">
-            <p className="text-blue-200 text-sm mb-1">{report.period}</p>
-            <h2 className="text-white text-2xl font-bold">
-              총 {report.total_work_hours}
-            </h2>
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
+            <div className="text-[#71717a] text-xs mb-1">{report.period}</div>
+            <div className="text-white text-3xl font-bold tracking-tight mb-3">
+              {report.total_work_hours}
+            </div>
             {activeTab === "monthly" && (
-              <div className="flex gap-4 mt-3">
+              <div className="flex gap-6 pt-3 border-t border-[#27272a]">
                 <div>
-                  <p className="text-blue-200 text-xs">출근일수</p>
-                  <p className="text-white font-bold">{report.work_days}일</p>
+                  <div className="text-[#71717a] text-xs mb-1">출근일수</div>
+                  <div className="text-white font-semibold">{report.work_days}일</div>
                 </div>
                 <div>
-                  <p className="text-blue-200 text-xs">일평균</p>
-                  <p className="text-white font-bold">{report.avg_work_hours}</p>
+                  <div className="text-[#71717a] text-xs mb-1">일평균</div>
+                  <div className="text-white font-semibold">{report.avg_work_hours}</div>
                 </div>
               </div>
             )}
           </div>
 
           {/* 일별 기록 */}
-          <div className="bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-white font-bold mb-4">📋 일별 기록</h3>
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
+            <div className="text-[#71717a] text-xs font-semibold mb-4 uppercase tracking-wider">일별 기록</div>
             {Object.keys(report.daily).length === 0 ? (
-              <div className="text-gray-500 text-sm text-center py-8">
-                기록이 없어요
-              </div>
+              <div className="text-[#52525b] text-sm text-center py-8">기록이 없어요</div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {Object.entries(report.daily)
                   .sort(([a], [b]) => b.localeCompare(a))
                   .map(([date, data]: [string, any]) => (
-                    <div key={date} className="bg-gray-800 rounded-xl p-4">
+                    <div key={date}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-white font-semibold text-sm">
-                          {formatDate(date)}
-                        </span>
-                        <span className="text-blue-400 font-bold text-sm">
-                          {data.work_hours}
-                        </span>
+                        <span className="text-[#a1a1aa] text-sm">{formatDate(date)}</span>
+                        <span className="text-[#6366f1] text-sm font-semibold">{data.work_hours}</span>
+                      </div>
+                      <div className="bg-[#27272a] rounded-full h-1.5 mb-2">
+                        <div
+                          className="bg-[#6366f1] rounded-full h-1.5 transition-all"
+                          style={{ width: `${getWorkBarWidth(data.work_minutes)}%` }}
+                        ></div>
                       </div>
                       <div className="flex gap-4">
-                        <div>
-                          <span className="text-gray-500 text-xs">출근 </span>
-                          <span className="text-green-400 text-xs">
-                            {formatTime(data.checkin)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 text-xs">퇴근 </span>
-                          <span className="text-red-400 text-xs">
-                            {formatTime(data.checkout)}
-                          </span>
-                        </div>
+                        <span className="text-[#71717a] text-xs">
+                          출근 <span className="text-[#22c55e]">{formatTime(data.checkin)}</span>
+                        </span>
+                        <span className="text-[#71717a] text-xs">
+                          퇴근 <span className="text-[#ef4444]">{formatTime(data.checkout)}</span>
+                        </span>
                       </div>
                     </div>
                   ))}
