@@ -6,6 +6,7 @@ from models import user, location as location_model
 from models import attendance as attendance_model
 from models import company as company_model
 from dotenv import load_dotenv
+from routers import auth, location, attendance, company, superadmin
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(location.router, prefix="/api/location", tags=["위치"])
 app.include_router(attendance.router, prefix="/api/attendance", tags=["근태"])
 app.include_router(company.router, prefix="/api/company", tags=["기업"])
+app.include_router(superadmin.router, prefix="/api/superadmin", tags=["시스템관리자"])
 
 @app.get("/")
 def root():
