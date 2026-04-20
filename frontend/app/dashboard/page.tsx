@@ -53,12 +53,12 @@ export default function Dashboard() {
       const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`);
       const data = await res.json();
 
-      if (data.checkin) {
-        setIsCheckedIn(!data.checkout);
-        setCheckInTime(data.checkin);
-        setCurrentLocation(data.checkin_address || "-");
+     if (data.checkin) {
+       setCheckInTime(data.checkin);
+       setCurrentLocation(data.checkin_address || "-");
       }
       if (data.checkout) {
+        setIsCheckedIn(false);
         setCheckOutTime(data.checkout);
         const minutes = Math.floor(
           (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
@@ -247,7 +247,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={handleCheckIn}
-          disabled={isCheckedIn || gpsLoading}
+          disabled={isCheckedIn || !!checkOutTime || gpsLoading}
           className="bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-xl transition-all text-sm"
         >
           {gpsLoading ? "⏳ 확인중..." : "📍 출근하기"}
