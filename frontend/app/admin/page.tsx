@@ -8,6 +8,7 @@ import Link from "next/link";
 import * as XLSX from "xlsx";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
 interface Member {
   user_id: string;
@@ -23,12 +24,7 @@ interface Company {
   id: string;
   name: string;
   member_count: number;
-}
-
-interface ExcelMember {
-  이름: string;
-  이메일: string;
-  생년월일: string;
+  company_code: string;
 }
 
 export default function Admin() {
@@ -41,7 +37,7 @@ export default function Admin() {
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberBirth, setMemberBirth] = useState("");
-  const [excelMembers, setExcelMembers] = useState<ExcelMember[]>([]);
+  const [excelMembers, setExcelMembers] = useState<any[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -58,6 +54,8 @@ export default function Admin() {
     });
     return () => unsubscribe();
   }, [router]);
+
+  const isSystemAdmin = user?.email === SYSTEM_ADMIN_EMAIL;
 
   const fetchCompanyInfo = async (userId: string) => {
     try {
@@ -143,6 +141,25 @@ export default function Admin() {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    let template;
+    if (isSystemAdmin) {
+      template = [
+        { 회사코드: "abc12345", 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" },
+        { 회사코드: "xyz98765", 이름: "김철수", 이메일: "kim@other.com", 생년월일: "19850315" },
+      ];
+    } else {
+      template = [
+        { 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" },
+        { 이름: "김철수", 이메일: "kim@company.com", 생년월일: "19850315" },
+      ];
+    }
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "직원목록");
+    XLSX.writeFile(wb, "직원등록양식.xlsx");
+  };
+
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -153,7 +170,7 @@ export default function Admin() {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<ExcelMember>(sheet);
+        const rows = XLSX.utils.sheet_to_json<any>(sheet);
         setExcelMembers(rows);
       } catch (error) {
         alert("엑셀 파일을 읽을 수 없어요");
@@ -164,10 +181,14 @@ export default function Admin() {
 
   const handleBulkRegister = async () => {
     if (excelMembers.length === 0) return;
+    if (!company?.id) {
+      alert("회사 정보를 불러올 수 없어요.");
+      return;
+    }
     setBulkLoading(true);
     try {
-      const members = excelMembers.map(m => ({
-        company_id: company?.id,
+      const members = excelMembers.map((m: any) => ({
+        company_code: m.회사코드 || "",
         email: m.이메일,
         name: m.이름,
         birth_date: String(m.생년월일)
@@ -177,7 +198,7 @@ export default function Admin() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          company_id: company?.id,
+          company_id: company.id,
           members
         })
       });
@@ -185,23 +206,12 @@ export default function Admin() {
       alert(`✅ ${data.message}`);
       setExcelMembers([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      fetchAttendance(company!.id);
+      fetchAttendance(company.id);
     } catch (error) {
       alert("일괄 등록 실패");
     } finally {
       setBulkLoading(false);
     }
-  };
-
-  const handleDownloadTemplate = () => {
-    const template = [
-      { 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" },
-      { 이름: "김철수", 이메일: "kim@company.com", 생년월일: "19850315" },
-    ];
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "직원목록");
-    XLSX.writeFile(wb, "직원등록양식.xlsx");
   };
 
   const formatTime = (isoString: string | null) => {
@@ -231,13 +241,20 @@ export default function Admin() {
     <main className="min-h-screen bg-[#09090b] p-5">
 
       {/* 헤더 */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/dashboard">
-          <div className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-xl flex items-center justify-center text-[#71717a] hover:border-[#6366f1] transition-all cursor-pointer">
-            ←
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard">
+            <div className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-xl flex items-center justify-center text-[#71717a] hover:border-[#6366f1] transition-all cursor-pointer">
+              ←
+            </div>
+          </Link>
+          <h1 className="text-white text-lg font-bold">관리자</h1>
+        </div>
+        {isSystemAdmin && (
+          <div className="bg-[#1e1b4b] border border-[#3730a3] rounded-lg px-2 py-1">
+            <span className="text-[#818cf8] text-xs font-semibold">시스템 관리자</span>
           </div>
-        </Link>
-        <h1 className="text-white text-lg font-bold">관리자</h1>
+        )}
       </div>
 
       {/* 회사 생성 폼 */}
@@ -266,7 +283,14 @@ export default function Admin() {
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
             <div className="text-[#71717a] text-xs mb-1">회사</div>
             <div className="text-white text-xl font-bold">{company.name}</div>
-            <div className="text-[#71717a] text-xs mt-1">팀원 {company.member_count}명</div>
+            <div className="flex items-center gap-3 mt-1">
+              <div className="text-[#71717a] text-xs">팀원 {company.member_count}명</div>
+              <div className="bg-[#09090b] border border-[#27272a] rounded-lg px-2 py-1">
+                <span className="text-[#6366f1] text-xs font-mono">
+                  코드: {company.id.slice(0, 8)}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* 오늘 현황 요약 */}
@@ -377,7 +401,12 @@ export default function Admin() {
           {/* 엑셀 일괄 등록 */}
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">엑셀 일괄 등록</div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">
+                엑셀 일괄 등록
+                {isSystemAdmin && (
+                  <span className="ml-2 text-[#818cf8]">(회사코드 포함)</span>
+                )}
+              </div>
               <button
                 onClick={handleDownloadTemplate}
                 className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
@@ -392,7 +421,12 @@ export default function Admin() {
             >
               <div className="text-2xl mb-2">📂</div>
               <div className="text-white text-sm font-medium">엑셀 파일 업로드</div>
-              <div className="text-[#71717a] text-xs mt-1">이름, 이메일, 생년월일 컬럼 필요</div>
+              <div className="text-[#71717a] text-xs mt-1">
+                {isSystemAdmin
+                  ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요"
+                  : "이름, 이메일, 생년월일 컬럼 필요"
+                }
+              </div>
             </div>
 
             <input
@@ -409,7 +443,12 @@ export default function Admin() {
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {excelMembers.map((m, i) => (
                     <div key={i} className="bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 flex items-center justify-between">
-                      <span className="text-white text-xs font-medium">{m.이름}</span>
+                      <div className="flex items-center gap-2">
+                        {m.회사코드 && (
+                          <span className="text-[#6366f1] text-xs font-mono">{m.회사코드}</span>
+                        )}
+                        <span className="text-white text-xs font-medium">{m.이름}</span>
+                      </div>
                       <span className="text-[#71717a] text-xs">{m.이메일}</span>
                     </div>
                   ))}

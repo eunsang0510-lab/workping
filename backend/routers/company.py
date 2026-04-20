@@ -27,9 +27,15 @@ class RegisterMemberRequest(BaseModel):
     name: str
     birth_date: str
 
+class BulkMemberItem(BaseModel):
+    name: str
+    email: str
+    birth_date: str
+    company_code: str = ""  # 시스템 관리자용 (선택)
+
 class BulkRegisterRequest(BaseModel):
-    company_id: str
-    members: list[RegisterMemberRequest]
+    company_id: str  # 일반 관리자용 기본값
+    members: list[BulkMemberItem]
 
 @router.post("/create")
 def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
@@ -50,7 +56,7 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(company)
 
-    return {"message": "회사 생성 완료", "company_id": company.id}
+    return {"message": "회사 생성 완료", "company_id": company.id, "company_code": company.id[:8]}
 
 @router.get("/info/{admin_id}")
 def get_company_info(admin_id: str, db: Session = Depends(get_db)):
@@ -66,7 +72,8 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
         "company": {
             "id": company.id,
             "name": company.name,
-            "member_count": len(members)
+            "member_count": len(members),
+            "company_code": company.id[:8]  # 회사코드 (ID 앞 8자리)
         }
     }
 
@@ -150,8 +157,25 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
     """직원 일괄 등록"""
     results = []
     for member_data in req.members:
+        # 회사코드가 있으면 해당 회사로, 없으면 기본 company_id 사용
+        if member_data.company_code:
+            # 회사코드로 회사 찾기 (ID 앞 8자리)
+            company = db.query(Company).filter(
+                Company.id.like(f"{member_data.company_code}%")
+            ).first()
+            if not company:
+                results.append({
+                    "success": False,
+                    "email": member_data.email,
+                    "message": f"회사코드 {member_data.company_code} 를 찾을 수 없어요"
+                })
+                continue
+            company_id = company.id
+        else:
+            company_id = req.company_id
+
         member_req = RegisterMemberRequest(
-            company_id=req.company_id,
+            company_id=company_id,
             email=member_data.email,
             name=member_data.name,
             birth_date=member_data.birth_date
@@ -185,7 +209,6 @@ def get_members(company_id: str, db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search_company(name: str, db: Session = Depends(get_db)):
-    """회사 검색"""
     companies = db.query(Company).filter(
         Company.name.ilike(f"%{name}%")
     ).limit(10).all()
