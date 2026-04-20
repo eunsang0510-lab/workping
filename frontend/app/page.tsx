@@ -13,8 +13,7 @@ export default function Home() {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      console.log("로그인 성공:", user.email);
+      console.log("로그인 성공:", result.user.email);
       router.push("/dashboard");
     } catch (error) {
       console.error("로그인 실패:", error);
@@ -24,29 +23,36 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="bg-gray-900 rounded-2xl p-10 w-full max-w-md shadow-2xl">
+    <main className="min-h-screen bg-[#09090b] flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
 
         {/* 로고 */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#6366f1] rounded-2xl mb-6">
             <span className="text-white text-2xl font-bold">W</span>
           </div>
-          <h1 className="text-white text-3xl font-bold">WorkPing</h1>
-          <p className="text-gray-400 mt-2">GPS 기반 스마트 근태관리</p>
+          <h1 className="text-white text-3xl font-bold tracking-tight">
+            Work<span className="text-[#6366f1]">Ping</span>
+          </h1>
+          <p className="text-[#71717a] mt-2 text-sm">
+            GPS 기반 스마트 근태관리
+          </p>
         </div>
 
         {/* 기능 소개 */}
         <div className="space-y-3 mb-8">
           {[
-            { icon: "📍", text: "GPS 자동 출퇴근 기록" },
-            { icon: "⏰", text: "실시간 근무 시간 추적" },
-            { icon: "📊", text: "근태 리포트 자동 생성" },
-            { icon: "🏢", text: "기업 팀 관리 기능" },
+            { icon: "📍", title: "GPS 자동 출퇴근", desc: "위치 기반 자동 기록" },
+            { icon: "⏰", title: "실시간 근무 추적", desc: "분 단위 정확한 기록" },
+            { icon: "📊", title: "리포트 자동 생성", desc: "주간/월간 분석" },
+            { icon: "🏢", title: "팀 관리 기능", desc: "기업 근태 관리" },
           ].map((item, i) => (
-            <div key={i} className="flex items-center gap-3 bg-gray-800 rounded-xl px-4 py-3">
+            <div key={i} className="flex items-center gap-4 bg-[#18181b] border border-[#27272a] rounded-xl px-4 py-3">
               <span className="text-xl">{item.icon}</span>
-              <span className="text-gray-300 text-sm">{item.text}</span>
+              <div>
+                <div className="text-white text-sm font-medium">{item.title}</div>
+                <div className="text-[#71717a] text-xs">{item.desc}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -55,7 +61,7 @@ export default function Home() {
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -66,7 +72,7 @@ export default function Home() {
           {loading ? "로그인 중..." : "Google로 시작하기"}
         </button>
 
-        <p className="text-gray-500 text-xs text-center mt-4">
+        <p className="text-[#52525b] text-xs text-center mt-4">
           로그인 시 서비스 이용약관 및 개인정보처리방침에 동의합니다
         </p>
       </div>
