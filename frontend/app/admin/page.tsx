@@ -120,6 +120,19 @@ export default function Admin() {
     }
   };
 
+  const handleResetAttendance = async (userId: string, userName: string) => {
+    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
+    try {
+      await fetch(`${API_URL}/api/attendance/reset/${userId}`, {
+        method: "DELETE"
+      });
+      alert("✅ 초기화 완료!");
+      fetchAttendance(company!.id);
+    } catch (error) {
+      alert("초기화 실패");
+    }
+  };
+
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
     return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
@@ -226,9 +239,17 @@ export default function Admin() {
                             {member.user_name || member.user_email}
                           </span>
                         </div>
-                        <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>
-                          {member.status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>
+                            {member.status}
+                          </span>
+                          <button
+                            onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)}
+                            className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                          >
+                            초기화
+                          </button>
+                        </div>
                       </div>
                       <div className="flex gap-4">
                         <span className="text-[#71717a] text-xs">

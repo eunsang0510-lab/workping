@@ -3,13 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
 from models.attendance import Attendance
+from models.location import Location
 from datetime import datetime, timedelta
 
 router = APIRouter()
 
 @router.get("/summary/{user_id}")
 def get_attendance_summary(user_id: str, db: Session = Depends(get_db)):
-    """오늘 근태 요약"""
     today = datetime.now().date()
 
     records = db.query(Attendance).filter(
@@ -37,7 +37,6 @@ def get_attendance_summary(user_id: str, db: Session = Depends(get_db)):
 
 @router.get("/weekly/{user_id}")
 def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
-    """주간 리포트"""
     today = datetime.now().date()
     week_ago = today - timedelta(days=7)
 
@@ -46,7 +45,6 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
         Attendance.recorded_at >= week_ago
     ).order_by(Attendance.recorded_at).all()
 
-    # 날짜별 그룹화
     daily = {}
     for r in records:
         date_str = r.recorded_at.date().isoformat()
@@ -59,7 +57,6 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
             daily[date_str]["checkout"] = r.recorded_at.isoformat()
             daily[date_str]["checkout_address"] = r.address
 
-    # 근무 시간 계산
     for date_str, data in daily.items():
         if data["checkin"] and data["checkout"]:
             checkin = datetime.fromisoformat(data["checkin"])
@@ -81,7 +78,6 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
 
 @router.get("/monthly/{user_id}")
 def get_monthly_report(user_id: str, db: Session = Depends(get_db)):
-    """월간 리포트"""
     today = datetime.now().date()
     month_ago = today - timedelta(days=30)
 
@@ -121,3 +117,22 @@ def get_monthly_report(user_id: str, db: Session = Depends(get_db)):
         "avg_work_hours": f"{(total_minutes // work_days) // 60}시간 {(total_minutes // work_days) % 60}분" if work_days > 0 else "-",
         "daily": daily
     }
+
+@router.delete("/reset/{user_id}")
+def reset_attendance(user_id: str, db: Session = Depends(get_db)):
+    """오늘 근태 기록 초기화"""
+    today = datetime.now().date()
+
+    db.query(Attendance).filter(
+        Attendance.user_id == user_id,
+        func.date(Attendance.recorded_at) == today
+    ).delete()
+
+    db.query(Location).filter(
+        Location.user_id == user_id,
+        func.date(Location.recorded_at) == today
+    ).delete()
+
+    db.commit()
+
+    return {"message": "오늘 기록 초기화 완료"}
