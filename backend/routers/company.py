@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 from database.connection import get_db
 from models.company import Company, CompanyMember
 from models.attendance import Attendance
-from datetime import datetime, timedelta
+from datetime import datetime
+import requests
+import os
 
 router = APIRouter()
 
@@ -19,15 +21,24 @@ class AddMemberRequest(BaseModel):
     user_email: str
     user_name: str = ""
 
+class RegisterMemberRequest(BaseModel):
+    company_id: str
+    email: str
+    name: str
+    birth_date: str
+
+class BulkRegisterRequest(BaseModel):
+    company_id: str
+    members: list[RegisterMemberRequest]
+
 @router.post("/create")
 def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
-    """회사 생성"""
     company = Company(
         name=req.name,
         admin_id=req.admin_id
     )
     db.add(company)
-    db.flush()  # company.id 확정
+    db.flush()
 
     member = CompanyMember(
         company_id=company.id,
@@ -43,7 +54,6 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
 
 @router.get("/info/{admin_id}")
 def get_company_info(admin_id: str, db: Session = Depends(get_db)):
-    """관리자 ID로 회사 정보 조회"""
     company = db.query(Company).filter(Company.admin_id == admin_id).first()
     if not company:
         return {"company": None}
@@ -62,7 +72,6 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
 
 @router.post("/members/add")
 def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
-    """팀원 추가"""
     existing = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_id == req.user_id
@@ -82,9 +91,78 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
     return {"message": "팀원 추가 완료"}
 
+@router.post("/members/register")
+def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
+    """직원 등록 (Firebase Auth 계정 생성)"""
+
+    existing = db.query(CompanyMember).filter(
+        CompanyMember.company_id == req.company_id,
+        CompanyMember.user_email == req.email
+    ).first()
+
+    if existing:
+        return {"message": "이미 등록된 직원이에요", "success": False}
+
+    email_prefix = req.email.split("@")[0]
+    initial_password = f"{email_prefix}{req.birth_date}"
+
+    firebase_api_key = os.getenv("FIREBASE_API_KEY")
+    response = requests.post(
+        f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={firebase_api_key}",
+        json={
+            "email": req.email,
+            "password": initial_password,
+            "displayName": req.name
+        }
+    )
+
+    if response.status_code != 200:
+        error = response.json().get("error", {}).get("message", "알 수 없는 오류")
+        if "EMAIL_EXISTS" in error:
+            uid = ""
+        else:
+            raise HTTPException(status_code=400, detail=f"계정 생성 실패: {error}")
+    else:
+        uid = response.json().get("localId", "")
+
+    member = CompanyMember(
+        company_id=req.company_id,
+        user_id=uid,
+        user_email=req.email,
+        user_name=req.name
+    )
+    db.add(member)
+    db.commit()
+
+    return {
+        "message": "직원 등록 완료",
+        "success": True,
+        "email": req.email,
+        "initial_password": initial_password
+    }
+
+@router.post("/members/bulk-register")
+def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db)):
+    """직원 일괄 등록"""
+    results = []
+    for member_data in req.members:
+        member_req = RegisterMemberRequest(
+            company_id=req.company_id,
+            email=member_data.email,
+            name=member_data.name,
+            birth_date=member_data.birth_date
+        )
+        result = register_member(member_req, db)
+        results.append(result)
+
+    success_count = len([r for r in results if r.get("success")])
+    return {
+        "message": f"{success_count}명 등록 완료",
+        "results": results
+    }
+
 @router.get("/members/{company_id}")
 def get_members(company_id: str, db: Session = Depends(get_db)):
-    """팀원 목록 조회"""
     members = db.query(CompanyMember).filter(
         CompanyMember.company_id == company_id
     ).all()
@@ -101,9 +179,22 @@ def get_members(company_id: str, db: Session = Depends(get_db)):
         ]
     }
 
+@router.get("/search")
+def search_company(name: str, db: Session = Depends(get_db)):
+    """회사 검색"""
+    companies = db.query(Company).filter(
+        Company.name.ilike(f"%{name}%")
+    ).limit(10).all()
+
+    return {
+        "companies": [
+            {"id": c.id, "name": c.name}
+            for c in companies
+        ]
+    }
+
 @router.get("/attendance/{company_id}")
 def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
-    """회사 전체 근태 현황"""
     today = datetime.now().date()
 
     members = db.query(CompanyMember).filter(

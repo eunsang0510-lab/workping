@@ -31,6 +31,9 @@ export default function Admin() {
   const [attendance, setAttendance] = useState<Member[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [companyName, setCompanyName] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberBirth, setMemberBirth] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -86,6 +89,37 @@ export default function Admin() {
     }
   };
 
+  const handleRegisterMember = async () => {
+    if (!memberName || !memberEmail || !memberBirth) {
+      alert("모든 항목을 입력해주세요");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/company/members/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: company?.id,
+          email: memberEmail,
+          name: memberName,
+          birth_date: memberBirth
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ 등록 완료!\n초기 비밀번호: ${data.initial_password}`);
+        setMemberName("");
+        setMemberEmail("");
+        setMemberBirth("");
+        fetchAttendance(company!.id);
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      alert("등록 실패");
+    }
+  };
+
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
     return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
@@ -131,7 +165,7 @@ export default function Admin() {
             placeholder="회사 이름 입력"
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
-            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 mb-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 mb-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
           />
           <button
             onClick={handleCreateCompany}
@@ -166,7 +200,7 @@ export default function Admin() {
           </div>
 
           {/* 팀원 목록 */}
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">오늘 근태 현황</div>
               <button
@@ -212,6 +246,40 @@ export default function Admin() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* 직원 등록 */}
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
+            <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-4">직원 등록</div>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="이름"
+                value={memberName}
+                onChange={(e) => setMemberName(e.target.value)}
+                className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
+              />
+              <input
+                type="email"
+                placeholder="회사 이메일"
+                value={memberEmail}
+                onChange={(e) => setMemberEmail(e.target.value)}
+                className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
+              />
+              <input
+                type="text"
+                placeholder="생년월일 (예: 19901225)"
+                value={memberBirth}
+                onChange={(e) => setMemberBirth(e.target.value)}
+                className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
+              />
+              <button
+                onClick={handleRegisterMember}
+                className="w-full bg-[#6366f1] hover:bg-[#4f46e5] text-white font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                직원 등록하기
+              </button>
+            </div>
           </div>
         </>
       )}
