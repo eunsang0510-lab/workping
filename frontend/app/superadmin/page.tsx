@@ -41,6 +41,20 @@ export default function SuperAdmin() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+
+  // 회사 추가 폼
+  const [showCompanyForm, setShowCompanyForm] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [companyLoading, setCompanyLoading] = useState(false);
+
+  // 멤버 추가 폼
+  const [showMemberForm, setShowMemberForm] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberCompanyId, setNewMemberCompanyId] = useState("");
+  const [newMemberIsAdmin, setNewMemberIsAdmin] = useState(false);
+  const [memberLoading, setMemberLoading] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -68,6 +82,63 @@ export default function SuperAdmin() {
       setMembers(await membersRes.json());
     } catch (error) {
       console.error("데이터 로딩 실패:", error);
+    }
+  };
+
+  const handleCreateCompany = async () => {
+    if (!newCompanyName.trim()) return;
+    setCompanyLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/superadmin/company`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newCompanyName, plan: "team" }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ 회사 추가 완료!");
+        setNewCompanyName("");
+        setShowCompanyForm(false);
+        fetchAll();
+      }
+    } catch {
+      alert("회사 추가 실패");
+    } finally {
+      setCompanyLoading(false);
+    }
+  };
+
+  const handleCreateMember = async () => {
+    if (!newMemberEmail || !newMemberCompanyId) {
+      alert("회사와 이메일을 입력해주세요");
+      return;
+    }
+    setMemberLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/superadmin/member`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: newMemberCompanyId,
+          user_email: newMemberEmail,
+          user_name: newMemberName,
+          is_admin: newMemberIsAdmin,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ 멤버 추가 완료!");
+        setNewMemberEmail("");
+        setNewMemberName("");
+        setNewMemberCompanyId("");
+        setNewMemberIsAdmin(false);
+        setShowMemberForm(false);
+        fetchAll();
+      }
+    } catch {
+      alert("멤버 추가 실패");
+    } finally {
+      setMemberLoading(false);
     }
   };
 
@@ -148,90 +219,182 @@ export default function SuperAdmin() {
                 : "bg-[#18181b] border border-[#27272a] text-[#71717a]"
             }`}
           >
-            {t === "companies" ? `회사 목록 (${companies.length})` : `직원 목록 (${members.length})`}
+            {t === "companies" ? `회사 (${companies.length})` : `직원 (${members.length})`}
           </button>
         ))}
       </div>
 
-      {/* 새로고침 */}
-      <div className="flex justify-end mb-3">
-        <button
-          onClick={fetchAll}
-          className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
-        >
-          새로고침
-        </button>
-      </div>
-
-      {/* 회사 목록 */}
+      {/* 회사 탭 */}
       {tab === "companies" && (
-        <div className="space-y-3">
-          {companies.length === 0 ? (
-            <div className="text-[#52525b] text-sm text-center py-12">등록된 회사가 없어요</div>
-          ) : (
-            companies.map((c) => (
-              <div key={c.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white font-semibold">{c.name}</span>
-                  <button
-                    onClick={() => handleDeleteCompany(c.id, c.name)}
-                    className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                  >
-                    삭제
-                  </button>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  <span className="text-[#71717a] text-xs">
-                    직원 <span className="text-white">{c.member_count}명</span>
-                  </span>
-                  <span className="text-[#71717a] text-xs">
-                    플랜 <span className="text-[#6366f1]">{c.plan}</span>
-                  </span>
-                  <span className="text-[#71717a] text-xs">
-                    생성 <span className="text-[#52525b]">{formatDate(c.created_at)}</span>
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <span className="text-[#52525b] text-xs font-mono">{c.id.slice(0, 16)}...</span>
-                </div>
-              </div>
-            ))
+        <>
+          {/* 회사 추가 버튼 */}
+          <button
+            onClick={() => setShowCompanyForm(!showCompanyForm)}
+            className="w-full bg-[#18181b] border border-dashed border-[#27272a] hover:border-[#6366f1] text-[#71717a] hover:text-[#6366f1] rounded-2xl py-3 text-sm font-semibold transition-all mb-3"
+          >
+            + 회사 추가
+          </button>
+
+          {/* 회사 추가 폼 */}
+          {showCompanyForm && (
+            <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 회사 등록</div>
+              <input
+                type="text"
+                placeholder="회사 이름"
+                value={newCompanyName}
+                onChange={(e) => setNewCompanyName(e.target.value)}
+                className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b] mb-3"
+              />
+              <button
+                onClick={handleCreateCompany}
+                disabled={companyLoading}
+                className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                {companyLoading ? "추가 중..." : "등록하기"}
+              </button>
+            </div>
           )}
-        </div>
+
+          {/* 새로고침 */}
+          <div className="flex justify-end mb-3">
+            <button onClick={fetchAll} className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors">
+              새로고침
+            </button>
+          </div>
+
+          {/* 회사 목록 */}
+          <div className="space-y-3">
+            {companies.length === 0 ? (
+              <div className="text-[#52525b] text-sm text-center py-12">등록된 회사가 없어요</div>
+            ) : (
+              companies.map((c) => (
+                <div key={c.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white font-semibold">{c.name}</span>
+                    <button
+                      onClick={() => handleDeleteCompany(c.id, c.name)}
+                      className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                  <div className="flex gap-3 flex-wrap">
+                    <span className="text-[#71717a] text-xs">
+                      직원 <span className="text-white">{c.member_count}명</span>
+                    </span>
+                    <span className="text-[#71717a] text-xs">
+                      플랜 <span className="text-[#6366f1]">{c.plan}</span>
+                    </span>
+                    <span className="text-[#71717a] text-xs">
+                      생성 <span className="text-[#52525b]">{formatDate(c.created_at)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-[#52525b] text-xs font-mono">{c.id.slice(0, 16)}...</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
       )}
 
-      {/* 직원 목록 */}
+      {/* 직원 탭 */}
       {tab === "members" && (
-        <div className="space-y-3">
-          {members.length === 0 ? (
-            <div className="text-[#52525b] text-sm text-center py-12">등록된 직원이 없어요</div>
-          ) : (
-            members.map((m) => (
-              <div key={m.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-semibold">{m.user_name || "-"}</span>
-                    {m.is_admin && (
-                      <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">관리자</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
-                    className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                  >
-                    삭제
-                  </button>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  <span className="text-[#71717a] text-xs">{m.user_email}</span>
-                </div>
-                <div className="mt-1">
-                  <span className="text-[#6366f1] text-xs">{m.company_name}</span>
-                </div>
+        <>
+          {/* 멤버 추가 버튼 */}
+          <button
+            onClick={() => setShowMemberForm(!showMemberForm)}
+            className="w-full bg-[#18181b] border border-dashed border-[#27272a] hover:border-[#6366f1] text-[#71717a] hover:text-[#6366f1] rounded-2xl py-3 text-sm font-semibold transition-all mb-3"
+          >
+            + 멤버 추가
+          </button>
+
+          {/* 멤버 추가 폼 */}
+          {showMemberForm && (
+            <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 멤버 등록</div>
+              <div className="space-y-3">
+                <select
+                  value={newMemberCompanyId}
+                  onChange={(e) => setNewMemberCompanyId(e.target.value)}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+                >
+                  <option value="">회사 선택</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="이름"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
+                />
+                <input
+                  type="email"
+                  placeholder="이메일"
+                  value={newMemberEmail}
+                  onChange={(e) => setNewMemberEmail(e.target.value)}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm placeholder-[#52525b]"
+                />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newMemberIsAdmin}
+                    onChange={(e) => setNewMemberIsAdmin(e.target.checked)}
+                    className="w-4 h-4 accent-[#6366f1]"
+                  />
+                  <span className="text-[#71717a] text-sm">관리자 권한</span>
+                </label>
+                <button
+                  onClick={handleCreateMember}
+                  disabled={memberLoading}
+                  className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+                >
+                  {memberLoading ? "추가 중..." : "등록하기"}
+                </button>
               </div>
-            ))
+            </div>
           )}
-        </div>
+
+          {/* 새로고침 */}
+          <div className="flex justify-end mb-3">
+            <button onClick={fetchAll} className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors">
+              새로고침
+            </button>
+          </div>
+
+          {/* 직원 목록 */}
+          <div className="space-y-3">
+            {members.length === 0 ? (
+              <div className="text-[#52525b] text-sm text-center py-12">등록된 직원이 없어요</div>
+            ) : (
+              members.map((m) => (
+                <div key={m.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-semibold">{m.user_name || "-"}</span>
+                      {m.is_admin && (
+                        <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">관리자</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
+                      className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                  <div className="text-[#71717a] text-xs mb-1">{m.user_email}</div>
+                  <div className="text-[#6366f1] text-xs">{m.company_name}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
       )}
 
     </main>
