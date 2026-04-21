@@ -10,12 +10,17 @@ from urllib.parse import quote
 
 router = APIRouter()
 
+
 def get_work_day_range():
     """새벽 4시 기준으로 오늘의 근무일 시작/끝 반환"""
     now = datetime.now()
     if now.hour < 4:
         # 새벽 4시 이전이면 어제가 근무일
-        start = datetime(now.year, now.month, now.day) - timedelta(days=1) + timedelta(hours=4)
+        start = (
+            datetime(now.year, now.month, now.day)
+            - timedelta(days=1)
+            + timedelta(hours=4)
+        )
     else:
         start = datetime(now.year, now.month, now.day) + timedelta(hours=4)
     end = start + timedelta(hours=24)
@@ -26,11 +31,16 @@ def get_work_day_range():
 def get_attendance_summary(user_id: str, db: Session = Depends(get_db)):
     start, end = get_work_day_range()
 
-    records = db.query(Attendance).filter(
-        Attendance.user_id == user_id,
-        Attendance.recorded_at >= start,
-        Attendance.recorded_at < end,
-    ).order_by(Attendance.recorded_at).all()
+    records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
 
     checkin = next((r for r in records if r.type == "checkin"), None)
     checkout = next((r for r in records if r.type == "checkout"), None)
@@ -47,7 +57,7 @@ def get_attendance_summary(user_id: str, db: Session = Depends(get_db)):
         "checkin_address": checkin.address if checkin else None,
         "checkout_address": checkout.address if checkout else None,
         "work_minutes": work_minutes,
-        "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분"
+        "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분",
     }
 
 
@@ -57,26 +67,31 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
     start, end = get_work_day_range()
     now = datetime.now()
 
-    members = db.query(CompanyMember).filter(
-        CompanyMember.company_id == company_id
-    ).all()
+    members = (
+        db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    )
 
     result = []
     for member in members:
-        records = db.query(Attendance).filter(
-            Attendance.user_id == member.user_id,
-            Attendance.recorded_at >= start,
-            Attendance.recorded_at < end,
-        ).order_by(Attendance.recorded_at).all()
+        records = (
+            db.query(Attendance)
+            .filter(
+                Attendance.user_id == member.user_id,
+                Attendance.recorded_at >= start,
+                Attendance.recorded_at < end,
+            )
+            .order_by(Attendance.recorded_at)
+            .all()
+        )
 
         checkin = next((r for r in records if r.type == "checkin"), None)
         checkout = next((r for r in records if r.type == "checkout"), None)
 
         # 미퇴근 감지: 출근은 했는데 퇴근 안 했고 현재 새벽 4시 이후
         is_missing_checkout = (
-            checkin is not None and
-            checkout is None and
-            now >= end  # 근무일 종료(다음날 새벽 4시) 이후
+            checkin is not None
+            and checkout is None
+            and now >= end  # 근무일 종료(다음날 새벽 4시) 이후
         )
 
         work_minutes = 0
@@ -93,16 +108,22 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
         else:
             status = "미출근"
 
-        result.append({
-            "user_id": member.user_id,
-            "user_name": member.user_name,
-            "user_email": member.user_email,
-            "checkin": checkin.recorded_at.isoformat() if checkin else None,
-            "checkout": checkout.recorded_at.isoformat() if checkout else None,
-            "work_hours": f"{work_minutes // 60}h {work_minutes % 60}m" if work_minutes else "-",
-            "status": status,
-            "is_missing_checkout": is_missing_checkout,
-        })
+        result.append(
+            {
+                "user_id": member.user_id,
+                "user_name": member.user_name,
+                "user_email": member.user_email,
+                "checkin": checkin.recorded_at.isoformat() if checkin else None,
+                "checkout": checkout.recorded_at.isoformat() if checkout else None,
+                "work_hours": (
+                    f"{work_minutes // 60}h {work_minutes % 60}m"
+                    if work_minutes
+                    else "-"
+                ),
+                "status": status,
+                "is_missing_checkout": is_missing_checkout,
+            }
+        )
 
     return {"attendance": result}
 
@@ -112,10 +133,12 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
     today = datetime.now().date()
     week_ago = today - timedelta(days=7)
 
-    records = db.query(Attendance).filter(
-        Attendance.user_id == user_id,
-        Attendance.recorded_at >= week_ago
-    ).order_by(Attendance.recorded_at).all()
+    records = (
+        db.query(Attendance)
+        .filter(Attendance.user_id == user_id, Attendance.recorded_at >= week_ago)
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
 
     daily = {}
     for r in records:
@@ -135,7 +158,9 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
             checkout = datetime.fromisoformat(data["checkout"])
             diff = checkout - checkin
             data["work_minutes"] = int(diff.total_seconds() / 60)
-            data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
+            data["work_hours"] = (
+                f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
+            )
         else:
             data["work_hours"] = "-"
 
@@ -145,7 +170,7 @@ def get_weekly_report(user_id: str, db: Session = Depends(get_db)):
         "user_id": user_id,
         "period": f"{week_ago} ~ {today}",
         "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
-        "daily": daily
+        "daily": daily,
     }
 
 
@@ -154,10 +179,12 @@ def get_monthly_report(user_id: str, db: Session = Depends(get_db)):
     today = datetime.now().date()
     month_ago = today - timedelta(days=30)
 
-    records = db.query(Attendance).filter(
-        Attendance.user_id == user_id,
-        Attendance.recorded_at >= month_ago
-    ).order_by(Attendance.recorded_at).all()
+    records = (
+        db.query(Attendance)
+        .filter(Attendance.user_id == user_id, Attendance.recorded_at >= month_ago)
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
 
     daily = {}
     for r in records:
@@ -175,7 +202,9 @@ def get_monthly_report(user_id: str, db: Session = Depends(get_db)):
             checkout = datetime.fromisoformat(data["checkout"])
             diff = checkout - checkin
             data["work_minutes"] = int(diff.total_seconds() / 60)
-            data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
+            data["work_hours"] = (
+                f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
+            )
         else:
             data["work_hours"] = "-"
 
@@ -187,8 +216,12 @@ def get_monthly_report(user_id: str, db: Session = Depends(get_db)):
         "period": f"{month_ago} ~ {today}",
         "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
         "work_days": work_days,
-        "avg_work_hours": f"{(total_minutes // work_days) // 60}시간 {(total_minutes // work_days) % 60}분" if work_days > 0 else "-",
-        "daily": daily
+        "avg_work_hours": (
+            f"{(total_minutes // work_days) // 60}시간 {(total_minutes // work_days) % 60}분"
+            if work_days > 0
+            else "-"
+        ),
+        "daily": daily,
     }
 
 
@@ -211,10 +244,12 @@ def reset_attendance(user_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "오늘 기록 초기화 완료"}
 
+
 from fastapi.responses import StreamingResponse
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import io
+
 
 @router.get("/export/{company_id}")
 def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
@@ -224,7 +259,9 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
 
-    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    members = (
+        db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    )
 
     # 최근 30일
     end_date = datetime.now().date()
@@ -235,10 +272,21 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
     ws.title = "근무기록"
 
     # 헤더 스타일
-    header_fill = PatternFill(start_color="6366F1", end_color="6366F1", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="6366F1", end_color="6366F1", fill_type="solid"
+    )
     header_font = Font(color="FFFFFF", bold=True)
 
-    headers = ["이름", "이메일", "날짜", "출근시간", "퇴근시간", "근무시간(분)", "출근위치", "퇴근위치"]
+    headers = [
+        "이름",
+        "이메일",
+        "날짜",
+        "출근시간",
+        "퇴근시간",
+        "근무시간(분)",
+        "출근위치",
+        "퇴근위치",
+    ]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
@@ -248,11 +296,18 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
 
     row = 2
     for member in members:
-        records = db.query(Attendance).filter(
-            Attendance.user_id == member.user_id,
-            Attendance.recorded_at >= datetime.combine(start_date, datetime.min.time()),
-            Attendance.recorded_at <= datetime.combine(end_date, datetime.max.time()),
-        ).order_by(Attendance.recorded_at).all()
+        records = (
+            db.query(Attendance)
+            .filter(
+                Attendance.user_id == member.user_id,
+                Attendance.recorded_at
+                >= datetime.combine(start_date, datetime.min.time()),
+                Attendance.recorded_at
+                <= datetime.combine(end_date, datetime.max.time()),
+            )
+            .order_by(Attendance.recorded_at)
+            .all()
+        )
 
         # 날짜별 그룹핑
         daily = {}
@@ -276,8 +331,16 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
             ws.cell(row=row, column=1, value=member.user_name or "-")
             ws.cell(row=row, column=2, value=member.user_email)
             ws.cell(row=row, column=3, value=date_str)
-            ws.cell(row=row, column=4, value=checkin.recorded_at.strftime("%H:%M") if checkin else "-")
-            ws.cell(row=row, column=5, value=checkout.recorded_at.strftime("%H:%M") if checkout else "-")
+            ws.cell(
+                row=row,
+                column=4,
+                value=checkin.recorded_at.strftime("%H:%M") if checkin else "-",
+            )
+            ws.cell(
+                row=row,
+                column=5,
+                value=checkout.recorded_at.strftime("%H:%M") if checkout else "-",
+            )
             ws.cell(row=row, column=6, value=work_minutes if work_minutes > 0 else "-")
             ws.cell(row=row, column=7, value=checkin.address if checkin else "-")
             ws.cell(row=row, column=8, value=checkout.address if checkout else "-")
@@ -292,7 +355,9 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
     encoded_filename = quote(filename)
 
     return StreamingResponse(
-    stream,
-    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
-)
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )

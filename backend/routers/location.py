@@ -13,6 +13,7 @@ load_dotenv()
 
 router = APIRouter()
 
+
 class LocationData(BaseModel):
     user_id: str
     latitude: float
@@ -20,6 +21,7 @@ class LocationData(BaseModel):
     timestamp: datetime = None
     type: str = "checkin"
     address: str = ""
+
 
 @router.post("/record")
 def record_location(data: LocationData, db: Session = Depends(get_db)):
@@ -31,7 +33,7 @@ def record_location(data: LocationData, db: Session = Depends(get_db)):
         latitude=data.latitude,
         longitude=data.longitude,
         place_name=data.address,
-        recorded_at=data.timestamp or datetime.now()
+        recorded_at=data.timestamp or datetime.now(),
     )
     db.add(location)
 
@@ -42,17 +44,15 @@ def record_location(data: LocationData, db: Session = Depends(get_db)):
         latitude=data.latitude,
         longitude=data.longitude,
         address=data.address,
-        recorded_at=data.timestamp or datetime.now()
+        recorded_at=data.timestamp or datetime.now(),
     )
     db.add(attendance)
     db.commit()
 
     print(f"✅ DB 저장 완료: {data.user_id} - {data.type} - {data.address}")
 
-    return {
-        "message": "위치 기록 완료",
-        "data": data
-    }
+    return {"message": "위치 기록 완료", "data": data}
+
 
 @router.get("/address")
 def get_address(lat: float, lng: float):
@@ -61,7 +61,7 @@ def get_address(lat: float, lng: float):
         kakao_key = os.getenv("KAKAO_REST_API_KEY")
         response = requests.get(
             f"https://dapi.kakao.com/v2/local/geo/coord2address.json?x={lng}&y={lat}",
-            headers={"Authorization": f"KakaoAK {kakao_key}"}
+            headers={"Authorization": f"KakaoAK {kakao_key}"},
         )
         data = response.json()
         if data.get("documents"):
@@ -75,12 +75,17 @@ def get_address(lat: float, lng: float):
         print(f"오류: {e}")
         return {"address": f"{lat:.4f}, {lng:.4f}"}
 
+
 @router.get("/history/{user_id}")
 def get_location_history(user_id: str, db: Session = Depends(get_db)):
     """사용자 위치 기록 조회"""
-    records = db.query(Attendance).filter(
-        Attendance.user_id == user_id
-    ).order_by(Attendance.recorded_at.desc()).limit(20).all()
+    records = (
+        db.query(Attendance)
+        .filter(Attendance.user_id == user_id)
+        .order_by(Attendance.recorded_at.desc())
+        .limit(20)
+        .all()
+    )
 
     return {
         "user_id": user_id,
@@ -89,8 +94,8 @@ def get_location_history(user_id: str, db: Session = Depends(get_db)):
                 "id": r.id,
                 "type": r.type,
                 "address": r.address,
-                "recorded_at": r.recorded_at.isoformat()
+                "recorded_at": r.recorded_at.isoformat(),
             }
             for r in records
-        ]
+        ],
     }

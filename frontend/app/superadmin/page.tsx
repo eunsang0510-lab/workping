@@ -143,9 +143,12 @@ export default function SuperAdmin() {
   };
 
   const handleDeleteCompany = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`)) return;
+    if (!confirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`))
+      return;
     try {
-      await fetch(`${API_URL}/api/superadmin/company/${id}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/superadmin/company/${id}`, {
+        method: "DELETE",
+      });
       alert("✅ 삭제 완료");
       fetchAll();
     } catch {
@@ -156,7 +159,9 @@ export default function SuperAdmin() {
   const handleDeleteMember = async (id: string, name: string) => {
     if (!confirm(`"${name}" 직원을 삭제할까요?`)) return;
     try {
-      await fetch(`${API_URL}/api/superadmin/member/${id}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/superadmin/member/${id}`, {
+        method: "DELETE",
+      });
       alert("✅ 삭제 완료");
       fetchAll();
     } catch {
@@ -179,7 +184,6 @@ export default function SuperAdmin() {
 
   return (
     <main className="min-h-screen bg-[#09090b] p-5">
-
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -191,18 +195,24 @@ export default function SuperAdmin() {
           <h1 className="text-white text-lg font-bold">시스템 관리자</h1>
         </div>
         <div className="bg-[#1e1b4b] border border-[#3730a3] rounded-lg px-2 py-1">
-          <span className="text-[#818cf8] text-xs font-semibold">SUPERADMIN</span>
+          <span className="text-[#818cf8] text-xs font-semibold">
+            SUPERADMIN
+          </span>
         </div>
       </div>
 
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 text-center">
-          <div className="text-3xl font-bold text-[#6366f1]">{stats?.total_companies ?? 0}</div>
+          <div className="text-3xl font-bold text-[#6366f1]">
+            {stats?.total_companies ?? 0}
+          </div>
           <div className="text-[#71717a] text-xs mt-1">전체 회사</div>
         </div>
         <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 text-center">
-          <div className="text-3xl font-bold text-[#22c55e]">{stats?.total_members ?? 0}</div>
+          <div className="text-3xl font-bold text-[#22c55e]">
+            {stats?.total_members ?? 0}
+          </div>
           <div className="text-[#71717a] text-xs mt-1">전체 직원</div>
         </div>
       </div>
@@ -219,7 +229,9 @@ export default function SuperAdmin() {
                 : "bg-[#18181b] border border-[#27272a] text-[#71717a]"
             }`}
           >
-            {t === "companies" ? `회사 (${companies.length})` : `직원 (${members.length})`}
+            {t === "companies"
+              ? `회사 (${companies.length})`
+              : `직원 (${members.length})`}
           </button>
         ))}
       </div>
@@ -238,7 +250,9 @@ export default function SuperAdmin() {
           {/* 회사 추가 폼 */}
           {showCompanyForm && (
             <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 회사 등록</div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">
+                새 회사 등록
+              </div>
               <input
                 type="text"
                 placeholder="회사 이름"
@@ -258,7 +272,10 @@ export default function SuperAdmin() {
 
           {/* 새로고침 */}
           <div className="flex justify-end mb-3">
-            <button onClick={fetchAll} className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors">
+            <button
+              onClick={fetchAll}
+              className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
+            >
               새로고침
             </button>
           </div>
@@ -266,40 +283,56 @@ export default function SuperAdmin() {
           {/* 회사 목록 */}
           <div className="space-y-3">
             {companies.length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-12">등록된 회사가 없어요</div>
+              <div className="text-[#52525b] text-sm text-center py-12">
+                등록된 회사가 없어요
+              </div>
             ) : (
               companies.map((c) => (
-                <div key={c.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
-                 <div className="flex items-center justify-between mb-2">
-                   <span className="text-white font-semibold">{c.name}</span>
-                   <div className="flex items-center gap-3">
-                     <button
-                       onClick={() => window.open(`${API_URL}/api/attendance/export/${c.id}`, "_blank")}
-                       className="bg-[#052e16] border border-[#166534] text-[#22c55e] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#14532d] transition-all"
-                     >
-                       📥 엑셀
-                     </button>
-                     <button
-                       onClick={() => handleDeleteCompany(c.id, c.name)}
-                       className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                     >
-                       삭제
-                     </button>
-                   </div>
-                 </div>
+                <div
+                  key={c.id}
+                  className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white font-semibold">{c.name}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `${API_URL}/api/attendance/export/${c.id}`,
+                            "_blank",
+                          )
+                        }
+                        className="bg-[#052e16] border border-[#166534] text-[#22c55e] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#14532d] transition-all"
+                      >
+                        📥 엑셀
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCompany(c.id, c.name)}
+                        className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex gap-3 flex-wrap">
                     <span className="text-[#71717a] text-xs">
-                      직원 <span className="text-white">{c.member_count}명</span>
+                      직원{" "}
+                      <span className="text-white">{c.member_count}명</span>
                     </span>
                     <span className="text-[#71717a] text-xs">
                       플랜 <span className="text-[#6366f1]">{c.plan}</span>
                     </span>
                     <span className="text-[#71717a] text-xs">
-                      생성 <span className="text-[#52525b]">{formatDate(c.created_at)}</span>
+                      생성{" "}
+                      <span className="text-[#52525b]">
+                        {formatDate(c.created_at)}
+                      </span>
                     </span>
                   </div>
                   <div className="mt-2">
-                    <span className="text-[#52525b] text-xs font-mono">{c.id.slice(0, 16)}...</span>
+                    <span className="text-[#52525b] text-xs font-mono">
+                      {c.id.slice(0, 16)}...
+                    </span>
                   </div>
                 </div>
               ))
@@ -322,7 +355,9 @@ export default function SuperAdmin() {
           {/* 멤버 추가 폼 */}
           {showMemberForm && (
             <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 멤버 등록</div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">
+                새 멤버 등록
+              </div>
               <div className="space-y-3">
                 <select
                   value={newMemberCompanyId}
@@ -331,7 +366,9 @@ export default function SuperAdmin() {
                 >
                   <option value="">회사 선택</option>
                   {companies.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
                 <input
@@ -370,7 +407,10 @@ export default function SuperAdmin() {
 
           {/* 새로고침 */}
           <div className="flex justify-end mb-3">
-            <button onClick={fetchAll} className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors">
+            <button
+              onClick={fetchAll}
+              className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
+            >
               새로고침
             </button>
           </div>
@@ -378,25 +418,38 @@ export default function SuperAdmin() {
           {/* 직원 목록 */}
           <div className="space-y-3">
             {members.length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-12">등록된 직원이 없어요</div>
+              <div className="text-[#52525b] text-sm text-center py-12">
+                등록된 직원이 없어요
+              </div>
             ) : (
               members.map((m) => (
-                <div key={m.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
+                <div
+                  key={m.id}
+                  className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-white font-semibold">{m.user_name || "-"}</span>
+                      <span className="text-white font-semibold">
+                        {m.user_name || "-"}
+                      </span>
                       {m.is_admin && (
-                        <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">관리자</span>
+                        <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">
+                          관리자
+                        </span>
                       )}
                     </div>
                     <button
-                      onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
+                      onClick={() =>
+                        handleDeleteMember(m.id, m.user_name || m.user_email)
+                      }
                       className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
                     >
                       삭제
                     </button>
                   </div>
-                  <div className="text-[#71717a] text-xs mb-1">{m.user_email}</div>
+                  <div className="text-[#71717a] text-xs mb-1">
+                    {m.user_email}
+                  </div>
                   <div className="text-[#6366f1] text-xs">{m.company_name}</div>
                 </div>
               ))
@@ -404,7 +457,6 @@ export default function SuperAdmin() {
           </div>
         </>
       )}
-
     </main>
   );
 }

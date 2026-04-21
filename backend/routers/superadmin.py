@@ -9,10 +9,12 @@ import uuid
 
 router = APIRouter()
 
+
 # 회사 생성 스키마
 class CompanyCreate(BaseModel):
     name: str
     plan: Optional[str] = "team"
+
 
 # 멤버 추가 스키마
 class MemberCreate(BaseModel):
@@ -39,17 +41,21 @@ def get_companies(db: Session = Depends(get_db)):
     companies = db.query(Company).order_by(Company.created_at.desc()).all()
     result = []
     for c in companies:
-        member_count = db.query(func.count(CompanyMember.id)).filter(
-            CompanyMember.company_id == c.id
-        ).scalar()
-        result.append({
-            "id": c.id,
-            "name": c.name,
-            "admin_id": c.admin_id,
-            "plan": c.plan,
-            "member_count": member_count,
-            "created_at": c.created_at,
-        })
+        member_count = (
+            db.query(func.count(CompanyMember.id))
+            .filter(CompanyMember.company_id == c.id)
+            .scalar()
+        )
+        result.append(
+            {
+                "id": c.id,
+                "name": c.name,
+                "admin_id": c.admin_id,
+                "plan": c.plan,
+                "member_count": member_count,
+                "created_at": c.created_at,
+            }
+        )
     return result
 
 
@@ -87,16 +93,18 @@ def get_members(db: Session = Depends(get_db)):
     result = []
     for m in members:
         company = db.query(Company).filter(Company.id == m.company_id).first()
-        result.append({
-            "id": m.id,
-            "company_id": m.company_id,
-            "company_name": company.name if company else "알 수 없음",
-            "user_id": m.user_id,
-            "user_email": m.user_email,
-            "user_name": m.user_name,
-            "is_admin": m.is_admin,
-            "created_at": m.created_at,
-        })
+        result.append(
+            {
+                "id": m.id,
+                "company_id": m.company_id,
+                "company_name": company.name if company else "알 수 없음",
+                "user_id": m.user_id,
+                "user_email": m.user_email,
+                "user_name": m.user_name,
+                "is_admin": m.is_admin,
+                "created_at": m.created_at,
+            }
+        )
     return result
 
 
@@ -117,7 +125,10 @@ def create_member(body: MemberCreate, db: Session = Depends(get_db)):
     db.add(member)
     db.commit()
     db.refresh(member)
-    return {"success": True, "member": {"id": member.id, "user_email": member.user_email}}
+    return {
+        "success": True,
+        "member": {"id": member.id, "user_email": member.user_email},
+    }
 
 
 # 직원 삭제

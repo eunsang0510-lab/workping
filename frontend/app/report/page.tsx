@@ -60,11 +60,18 @@ export default function Report() {
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    return new Date(isoString).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("ko-KR", { month: "short", day: "numeric", weekday: "short" });
+    return new Date(dateStr).toLocaleDateString("ko-KR", {
+      month: "short",
+      day: "numeric",
+      weekday: "short",
+    });
   };
 
   const getWorkBarWidth = (minutes: number) => {
@@ -82,7 +89,6 @@ export default function Report() {
 
   return (
     <main className="min-h-screen bg-[#09090b] p-5">
-
       {/* 헤더 */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/dashboard">
@@ -122,11 +128,15 @@ export default function Report() {
               <div className="flex gap-6 pt-3 border-t border-[#27272a]">
                 <div>
                   <div className="text-[#71717a] text-xs mb-1">출근일수</div>
-                  <div className="text-white font-semibold">{report.work_days}일</div>
+                  <div className="text-white font-semibold">
+                    {report.work_days}일
+                  </div>
                 </div>
                 <div>
                   <div className="text-[#71717a] text-xs mb-1">일평균</div>
-                  <div className="text-white font-semibold">{report.avg_work_hours}</div>
+                  <div className="text-white font-semibold">
+                    {report.avg_work_hours}
+                  </div>
                 </div>
               </div>
             )}
@@ -134,9 +144,13 @@ export default function Report() {
 
           {/* 일별 기록 */}
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
-            <div className="text-[#71717a] text-xs font-semibold mb-4 uppercase tracking-wider">일별 기록</div>
+            <div className="text-[#71717a] text-xs font-semibold mb-4 uppercase tracking-wider">
+              일별 기록
+            </div>
             {Object.keys(report.daily).length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-8">기록이 없어요</div>
+              <div className="text-[#52525b] text-sm text-center py-8">
+                기록이 없어요
+              </div>
             ) : (
               <div className="space-y-4">
                 {Object.entries(report.daily)
@@ -144,21 +158,33 @@ export default function Report() {
                   .map(([date, data]: [string, any]) => (
                     <div key={date}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[#a1a1aa] text-sm">{formatDate(date)}</span>
-                        <span className="text-[#6366f1] text-sm font-semibold">{data.work_hours}</span>
+                        <span className="text-[#a1a1aa] text-sm">
+                          {formatDate(date)}
+                        </span>
+                        <span className="text-[#6366f1] text-sm font-semibold">
+                          {data.work_hours}
+                        </span>
                       </div>
                       <div className="bg-[#27272a] rounded-full h-1.5 mb-2">
                         <div
                           className="bg-[#6366f1] rounded-full h-1.5 transition-all"
-                          style={{ width: `${getWorkBarWidth(data.work_minutes)}%` }}
+                          style={{
+                            width: `${getWorkBarWidth(data.work_minutes)}%`,
+                          }}
                         ></div>
                       </div>
                       <div className="flex gap-4">
                         <span className="text-[#71717a] text-xs">
-                          출근 <span className="text-[#22c55e]">{formatTime(data.checkin)}</span>
+                          출근{" "}
+                          <span className="text-[#22c55e]">
+                            {formatTime(data.checkin)}
+                          </span>
                         </span>
                         <span className="text-[#71717a] text-xs">
-                          퇴근 <span className="text-[#ef4444]">{formatTime(data.checkout)}</span>
+                          퇴근{" "}
+                          <span className="text-[#ef4444]">
+                            {formatTime(data.checkout)}
+                          </span>
                         </span>
                       </div>
                     </div>

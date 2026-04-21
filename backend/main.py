@@ -13,9 +13,7 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="WorkPing API",
-    description="GPS 기반 근태관리 서비스",
-    version="1.0.0"
+    title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0"
 )
 
 app.add_middleware(
@@ -33,9 +31,11 @@ app.include_router(company.router, prefix="/api/company", tags=["기업"])
 app.include_router(superadmin.router, prefix="/api/superadmin", tags=["시스템관리자"])
 app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 
+
 @app.get("/")
 def root():
     return {"message": "WorkPing API 서버 실행 중 🚀"}
+
 
 @app.get("/health")
 def health():

@@ -120,7 +120,7 @@ export default function Admin() {
       await fetch(`${API_URL}/api/company/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: companyName, admin_id: user?.uid })
+        body: JSON.stringify({ name: companyName, admin_id: user?.uid }),
       });
       setShowCreateForm(false);
       fetchCompanyInfo(user!.uid);
@@ -142,8 +142,8 @@ export default function Admin() {
           company_id: company?.id,
           email: memberEmail,
           name: memberName,
-          birth_date: memberBirth
-        })
+          birth_date: memberBirth,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -163,7 +163,9 @@ export default function Admin() {
   const handleResetAttendance = async (userId: string, userName: string) => {
     if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
     try {
-      await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/attendance/reset/${userId}`, {
+        method: "DELETE",
+      });
       alert("✅ 초기화 완료!");
       fetchAttendance(company!.id);
     } catch (error) {
@@ -175,8 +177,18 @@ export default function Admin() {
     let template;
     if (isSystemAdmin) {
       template = [
-        { 회사코드: "abc12345", 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" },
-        { 회사코드: "xyz98765", 이름: "김철수", 이메일: "kim@other.com", 생년월일: "19850315" },
+        {
+          회사코드: "abc12345",
+          이름: "홍길동",
+          이메일: "hong@company.com",
+          생년월일: "19901225",
+        },
+        {
+          회사코드: "xyz98765",
+          이름: "김철수",
+          이메일: "kim@other.com",
+          생년월일: "19850315",
+        },
       ];
     } else {
       template = [
@@ -220,12 +232,12 @@ export default function Admin() {
         company_code: m.회사코드 || "",
         email: m.이메일,
         name: m.이름,
-        birth_date: String(m.생년월일)
+        birth_date: String(m.생년월일),
       }));
       const res = await fetch(`${API_URL}/api/company/members/bulk-register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: company.id, members })
+        body: JSON.stringify({ company_id: company.id, members }),
       });
       const data = await res.json();
       alert(`✅ ${data.message}`);
@@ -250,7 +262,7 @@ export default function Admin() {
       () => {
         alert("GPS 위치를 가져올 수 없어요");
         setGettingLocation(false);
-      }
+      },
     );
   };
 
@@ -292,7 +304,9 @@ export default function Admin() {
   const handleDeleteLocation = async (id: string, name: string) => {
     if (!confirm(`"${name}" 위치를 삭제할까요?`)) return;
     try {
-      await fetch(`${API_URL}/api/company/locations/${id}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/company/locations/${id}`, {
+        method: "DELETE",
+      });
       fetchLocations(company!.id);
     } catch {
       alert("삭제 실패");
@@ -301,14 +315,37 @@ export default function Admin() {
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    return new Date(isoString).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const statusConfig = {
-    "출근중": { bg: "bg-[#052e16]", text: "text-[#22c55e]", border: "border-[#166534]", dot: "bg-[#22c55e]" },
-    "퇴근": { bg: "bg-[#1e1b4b]", text: "text-[#818cf8]", border: "border-[#3730a3]", dot: "bg-[#818cf8]" },
-    "미출근": { bg: "bg-[#18181b]", text: "text-[#71717a]", border: "border-[#27272a]", dot: "bg-[#52525b]" },
-    "미퇴근": { bg: "bg-[#450a0a]", text: "text-[#ef4444]", border: "border-[#991b1b]", dot: "bg-[#ef4444]" },
+    출근중: {
+      bg: "bg-[#052e16]",
+      text: "text-[#22c55e]",
+      border: "border-[#166534]",
+      dot: "bg-[#22c55e]",
+    },
+    퇴근: {
+      bg: "bg-[#1e1b4b]",
+      text: "text-[#818cf8]",
+      border: "border-[#3730a3]",
+      dot: "bg-[#818cf8]",
+    },
+    미출근: {
+      bg: "bg-[#18181b]",
+      text: "text-[#71717a]",
+      border: "border-[#27272a]",
+      dot: "bg-[#52525b]",
+    },
+    미퇴근: {
+      bg: "bg-[#450a0a]",
+      text: "text-[#ef4444]",
+      border: "border-[#991b1b]",
+      dot: "bg-[#ef4444]",
+    },
   };
 
   if (loading) {
@@ -319,14 +356,13 @@ export default function Admin() {
     );
   }
 
-  const checkinCount = attendance.filter(m => m.status === "출근중").length;
-  const checkoutCount = attendance.filter(m => m.status === "퇴근").length;
-  const absentCount = attendance.filter(m => m.status === "미출근").length;
-  const missingCount = attendance.filter(m => m.status === "미퇴근").length;
+  const checkinCount = attendance.filter((m) => m.status === "출근중").length;
+  const checkoutCount = attendance.filter((m) => m.status === "퇴근").length;
+  const absentCount = attendance.filter((m) => m.status === "미출근").length;
+  const missingCount = attendance.filter((m) => m.status === "미퇴근").length;
 
   return (
     <main className="min-h-screen bg-[#09090b] p-5">
-
       {/* 헤더 */}
       <div className="flex items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
@@ -339,7 +375,9 @@ export default function Admin() {
         </div>
         {isSystemAdmin && (
           <div className="bg-[#1e1b4b] border border-[#3730a3] rounded-lg px-2 py-1">
-            <span className="text-[#818cf8] text-xs font-semibold">시스템 관리자</span>
+            <span className="text-[#818cf8] text-xs font-semibold">
+              시스템 관리자
+            </span>
           </div>
         )}
       </div>
@@ -372,13 +410,22 @@ export default function Admin() {
             <div className="text-white text-xl font-bold">{company.name}</div>
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-3">
-                <div className="text-[#71717a] text-xs">팀원 {company.member_count}명</div>
+                <div className="text-[#71717a] text-xs">
+                  팀원 {company.member_count}명
+                </div>
                 <div className="bg-[#09090b] border border-[#27272a] rounded-lg px-2 py-1">
-                  <span className="text-[#6366f1] text-xs font-mono">코드: {company.id.slice(0, 8)}</span>
+                  <span className="text-[#6366f1] text-xs font-mono">
+                    코드: {company.id.slice(0, 8)}
+                  </span>
                 </div>
               </div>
               <button
-                onClick={() => window.open(`${API_URL}/api/attendance/export/${company.id}`, "_blank")}
+                onClick={() =>
+                  window.open(
+                    `${API_URL}/api/attendance/export/${company.id}`,
+                    "_blank",
+                  )
+                }
                 className="bg-[#052e16] border border-[#166534] text-[#22c55e] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#14532d] transition-all"
               >
                 📥 엑셀 다운
@@ -394,8 +441,13 @@ export default function Admin() {
               { label: "미출근", count: absentCount, color: "text-[#71717a]" },
               { label: "미퇴근", count: missingCount, color: "text-[#ef4444]" },
             ].map((item, i) => (
-              <div key={i} className="bg-[#18181b] border border-[#27272a] rounded-xl p-3 text-center">
-                <div className={`text-xl font-bold ${item.color}`}>{item.count}</div>
+              <div
+                key={i}
+                className="bg-[#18181b] border border-[#27272a] rounded-xl p-3 text-center"
+              >
+                <div className={`text-xl font-bold ${item.color}`}>
+                  {item.count}
+                </div>
                 <div className="text-[#71717a] text-xs mt-1">{item.label}</div>
               </div>
             ))}
@@ -404,7 +456,9 @@ export default function Admin() {
           {/* 팀원 목록 */}
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">오늘 근태 현황</div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">
+                오늘 근태 현황
+              </div>
               <button
                 onClick={() => fetchAttendance(company.id)}
                 className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
@@ -414,29 +468,46 @@ export default function Admin() {
             </div>
 
             {attendance.length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-8">등록된 팀원이 없어요</div>
+              <div className="text-[#52525b] text-sm text-center py-8">
+                등록된 팀원이 없어요
+              </div>
             ) : (
               <div className="space-y-3">
                 {attendance.map((member, i) => {
-                  const config = statusConfig[member.status] || statusConfig["미출근"];
+                  const config =
+                    statusConfig[member.status] || statusConfig["미출근"];
                   return (
-                    <div key={i} className={`bg-[#09090b] border rounded-xl p-4 ${member.is_missing_checkout ? "border-[#991b1b]" : "border-[#27272a]"}`}>
+                    <div
+                      key={i}
+                      className={`bg-[#09090b] border rounded-xl p-4 ${member.is_missing_checkout ? "border-[#991b1b]" : "border-[#27272a]"}`}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${config.dot}`}></div>
+                          <div
+                            className={`w-2 h-2 rounded-full ${config.dot}`}
+                          ></div>
                           <span className="text-white text-sm font-medium">
                             {member.user_name || member.user_email}
                           </span>
                           {member.is_missing_checkout && (
-                            <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>
+                            <span className="text-[#ef4444] text-xs">
+                              ⚠️ 미퇴근
+                            </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}
+                          >
                             {member.status}
                           </span>
                           <button
-                            onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)}
+                            onClick={() =>
+                              handleResetAttendance(
+                                member.user_id,
+                                member.user_name || member.user_email,
+                              )
+                            }
                             className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
                           >
                             초기화
@@ -445,13 +516,21 @@ export default function Admin() {
                       </div>
                       <div className="flex gap-4">
                         <span className="text-[#71717a] text-xs">
-                          출근 <span className="text-[#22c55e]">{formatTime(member.checkin)}</span>
+                          출근{" "}
+                          <span className="text-[#22c55e]">
+                            {formatTime(member.checkin)}
+                          </span>
                         </span>
                         <span className="text-[#71717a] text-xs">
-                          퇴근 <span className="text-[#ef4444]">{formatTime(member.checkout)}</span>
+                          퇴근{" "}
+                          <span className="text-[#ef4444]">
+                            {formatTime(member.checkout)}
+                          </span>
                         </span>
                         <span className="text-[#71717a] text-xs">
-                          <span className="text-[#818cf8]">{member.work_hours}</span>
+                          <span className="text-[#818cf8]">
+                            {member.work_hours}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -463,7 +542,9 @@ export default function Admin() {
 
           {/* 직원 개별 등록 */}
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
-            <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-4">직원 등록</div>
+            <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-4">
+              직원 등록
+            </div>
             <div className="space-y-3">
               <input
                 type="text"
@@ -516,9 +597,13 @@ export default function Admin() {
               className="border border-dashed border-[#27272a] hover:border-[#6366f1] rounded-xl p-6 text-center cursor-pointer transition-all mb-3"
             >
               <div className="text-2xl mb-2">📂</div>
-              <div className="text-white text-sm font-medium">엑셀 파일 업로드</div>
+              <div className="text-white text-sm font-medium">
+                엑셀 파일 업로드
+              </div>
               <div className="text-[#71717a] text-xs mt-1">
-                {isSystemAdmin ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요" : "이름, 이메일, 생년월일 컬럼 필요"}
+                {isSystemAdmin
+                  ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요"
+                  : "이름, 이메일, 생년월일 컬럼 필요"}
               </div>
             </div>
             <input
@@ -530,15 +615,24 @@ export default function Admin() {
             />
             {excelMembers.length > 0 && (
               <div className="mb-3">
-                <div className="text-[#71717a] text-xs mb-2">{excelMembers.length}명 확인됨</div>
+                <div className="text-[#71717a] text-xs mb-2">
+                  {excelMembers.length}명 확인됨
+                </div>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {excelMembers.map((m, i) => (
-                    <div key={i} className="bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 flex items-center justify-between">
+                    <div
+                      key={i}
+                      className="bg-[#09090b] border border-[#27272a] rounded-lg px-3 py-2 flex items-center justify-between"
+                    >
                       <div className="flex items-center gap-2">
                         {m.회사코드 && (
-                          <span className="text-[#6366f1] text-xs font-mono">{m.회사코드}</span>
+                          <span className="text-[#6366f1] text-xs font-mono">
+                            {m.회사코드}
+                          </span>
                         )}
-                        <span className="text-white text-xs font-medium">{m.이름}</span>
+                        <span className="text-white text-xs font-medium">
+                          {m.이름}
+                        </span>
                       </div>
                       <span className="text-[#71717a] text-xs">{m.이메일}</span>
                     </div>
@@ -552,7 +646,9 @@ export default function Admin() {
                 disabled={bulkLoading}
                 className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
               >
-                {bulkLoading ? "등록 중..." : `${excelMembers.length}명 일괄 등록`}
+                {bulkLoading
+                  ? "등록 중..."
+                  : `${excelMembers.length}명 일괄 등록`}
               </button>
             )}
           </div>
@@ -560,7 +656,9 @@ export default function Admin() {
           {/* 출근 위치 관리 */}
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">출근 위치 관리</div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider">
+                출근 위치 관리
+              </div>
               <button
                 onClick={() => setShowLocationForm(!showLocationForm)}
                 className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
@@ -584,7 +682,9 @@ export default function Admin() {
                   disabled={gettingLocation}
                   className="w-full bg-[#18181b] border border-dashed border-[#27272a] hover:border-[#6366f1] text-[#71717a] hover:text-[#6366f1] rounded-xl py-3 text-sm transition-all"
                 >
-                  {gettingLocation ? "⏳ 위치 가져오는 중..." : "📍 현재 위치 가져오기"}
+                  {gettingLocation
+                    ? "⏳ 위치 가져오는 중..."
+                    : "📍 현재 위치 가져오기"}
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -625,17 +725,25 @@ export default function Admin() {
             {/* 위치 목록 */}
             {locations.length === 0 ? (
               <div className="text-[#52525b] text-sm text-center py-6">
-                등록된 위치가 없어요<br />
-                <span className="text-xs">위치 미등록 시 어디서든 출근 가능</span>
+                등록된 위치가 없어요
+                <br />
+                <span className="text-xs">
+                  위치 미등록 시 어디서든 출근 가능
+                </span>
               </div>
             ) : (
               <div className="space-y-3">
                 {locations.map((loc) => (
-                  <div key={loc.id} className="bg-[#09090b] border border-[#27272a] rounded-xl p-4">
+                  <div
+                    key={loc.id}
+                    className="bg-[#09090b] border border-[#27272a] rounded-xl p-4"
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">📍</span>
-                        <span className="text-white text-sm font-medium">{loc.name}</span>
+                        <span className="text-white text-sm font-medium">
+                          {loc.name}
+                        </span>
                       </div>
                       <button
                         onClick={() => handleDeleteLocation(loc.id, loc.name)}
@@ -648,7 +756,9 @@ export default function Admin() {
                       <span className="text-[#52525b] text-xs font-mono">
                         {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
                       </span>
-                      <span className="text-[#6366f1] text-xs">반경 {loc.radius}m</span>
+                      <span className="text-[#6366f1] text-xs">
+                        반경 {loc.radius}m
+                      </span>
                     </div>
                   </div>
                 ))}

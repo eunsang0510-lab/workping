@@ -9,10 +9,12 @@ router = APIRouter()
 
 SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com"
 
+
 class UpsertUserRequest(BaseModel):
     uid: str
     email: str
     name: str = ""
+
 
 @router.post("/upsert")
 def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
@@ -30,10 +32,11 @@ def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
 
     db.commit()
 
-    member = db.query(CompanyMember).filter(
-        CompanyMember.user_id == req.uid,
-        CompanyMember.is_admin == True
-    ).first()
+    member = (
+        db.query(CompanyMember)
+        .filter(CompanyMember.user_id == req.uid, CompanyMember.is_admin == True)
+        .first()
+    )
 
     is_admin = member is not None or req.email == SYSTEM_ADMIN_EMAIL
 
@@ -45,17 +48,20 @@ def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
         "is_admin": is_admin,
     }
 
+
 @router.get("/admin-check/{user_id}")
 def check_admin(user_id: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if user and user.email == SYSTEM_ADMIN_EMAIL:
         return {"is_admin": True}
 
-    member = db.query(CompanyMember).filter(
-        CompanyMember.user_id == user_id,
-        CompanyMember.is_admin == True
-    ).first()
+    member = (
+        db.query(CompanyMember)
+        .filter(CompanyMember.user_id == user_id, CompanyMember.is_admin == True)
+        .first()
+    )
     return {"is_admin": member is not None}
+
 
 @router.get("/test")
 def test():

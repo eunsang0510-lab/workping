@@ -132,9 +132,10 @@ export default function Dashboard() {
       setIsCheckedIn(true);
       setCheckInTime(nowISO);
       setCurrentLocation(address);
-      setRecords(prev => [...prev, {
-        latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin"
-      }]);
+      setRecords((prev) => [
+        ...prev,
+        { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin" },
+      ]);
     } catch (error) {
       alert("GPS 위치를 가져올 수 없어요.");
     } finally {
@@ -168,9 +169,10 @@ export default function Dashboard() {
       if (checkInTime) {
         setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
       }
-      setRecords(prev => [...prev, {
-        latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout"
-      }]);
+      setRecords((prev) => [
+        ...prev,
+        { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" },
+      ]);
     } catch (error) {
       alert("GPS 위치를 가져올 수 없어요.");
     } finally {
@@ -180,11 +182,18 @@ export default function Dashboard() {
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    return new Date(isoString).toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const formatDate = () => {
-    return now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
+    return now.toLocaleDateString("ko-KR", {
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    });
   };
 
   if (loading) {
@@ -217,11 +226,7 @@ export default function Dashboard() {
 
           {showUserMenu && (
             <>
-              {/* 배경 클릭 시 닫기 */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowUserMenu(false)}
-              />
+              <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
               <div className="absolute right-0 top-11 bg-[#18181b] border border-[#27272a] rounded-2xl p-3 w-52 z-50 shadow-xl">
                 <div className="px-2 py-1.5 mb-2 border-b border-[#27272a]">
                   <div className="text-white text-xs font-semibold truncate">
@@ -307,7 +312,9 @@ export default function Dashboard() {
 
       {/* 오늘의 기록 */}
       <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
-        <div className="text-[#71717a] text-xs font-semibold mb-3 uppercase tracking-wider">오늘의 기록</div>
+        <div className="text-[#71717a] text-xs font-semibold mb-3 uppercase tracking-wider">
+          오늘의 기록
+        </div>
         {!checkInTime ? (
           <div className="text-[#52525b] text-sm text-center py-6">아직 기록이 없어요</div>
         ) : (
@@ -317,7 +324,9 @@ export default function Dashboard() {
                 <div className="w-2 h-2 rounded-full bg-[#22c55e]"></div>
                 <div>
                   <div className="text-white text-sm">출근</div>
-                  <div className="text-[#71717a] text-xs">{formatTime(checkInTime)} · {currentLocation}</div>
+                  <div className="text-[#71717a] text-xs">
+                    {formatTime(checkInTime)} · {currentLocation}
+                  </div>
                 </div>
               </div>
             )}
@@ -352,6 +361,17 @@ export default function Dashboard() {
               <div>
                 <div className="text-white text-sm font-medium">관리자</div>
                 <div className="text-[#71717a] text-xs">팀 현황</div>
+              </div>
+            </div>
+          </Link>
+        )}
+        {user?.email === "eunsang0510@gmail.com" && (
+          <Link href="/superadmin">
+            <div className="bg-[#1e1b4b] border border-[#3730a3] hover:border-[#6366f1] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer">
+              <span className="text-lg">⚙️</span>
+              <div>
+                <div className="text-white text-sm font-medium">시스템 관리</div>
+                <div className="text-[#818cf8] text-xs">SUPERADMIN</div>
               </div>
             </div>
           </Link>
