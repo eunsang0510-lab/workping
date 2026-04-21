@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, location, attendance, company
+from routers import auth, location, attendance, company, superadmin, payment
 from database.connection import engine, Base
 from models import user, location as location_model
 from models import attendance as attendance_model
 from models import company as company_model
+from models import subscription as subscription_model
 from dotenv import load_dotenv
-from routers import auth, location, attendance, company, superadmin
 
 load_dotenv()
 
@@ -20,11 +20,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://workping-kappa.vercel.app"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -34,6 +31,7 @@ app.include_router(location.router, prefix="/api/location", tags=["위치"])
 app.include_router(attendance.router, prefix="/api/attendance", tags=["근태"])
 app.include_router(company.router, prefix="/api/company", tags=["기업"])
 app.include_router(superadmin.router, prefix="/api/superadmin", tags=["시스템관리자"])
+app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 
 @app.get("/")
 def root():
