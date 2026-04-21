@@ -270,15 +270,23 @@ export default function SuperAdmin() {
             ) : (
               companies.map((c) => (
                 <div key={c.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-semibold">{c.name}</span>
-                    <button
-                      onClick={() => handleDeleteCompany(c.id, c.name)}
-                      className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                    >
-                      삭제
-                    </button>
-                  </div>
+                 <div className="flex items-center justify-between mb-2">
+                   <span className="text-white font-semibold">{c.name}</span>
+                   <div className="flex items-center gap-3">
+                     <button
+                       onClick={() => window.open(`${API_URL}/api/attendance/export/${c.id}`, "_blank")}
+                       className="bg-[#052e16] border border-[#166534] text-[#22c55e] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#14532d] transition-all"
+                     >
+                       📥 엑셀
+                     </button>
+                     <button
+                       onClick={() => handleDeleteCompany(c.id, c.name)}
+                       className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                     >
+                       삭제
+                     </button>
+                   </div>
+                 </div>
                   <div className="flex gap-3 flex-wrap">
                     <span className="text-[#71717a] text-xs">
                       직원 <span className="text-white">{c.member_count}명</span>
