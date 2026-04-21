@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -18,26 +19,36 @@ export default function Home() {
   const [error, setError] = useState("");
   const router = useRouter();
 
- const handleGoogleLogin = async () => {
-  setLoading(true);
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-
-    await fetch(`${API_URL}/api/auth/upsert`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        uid: user.uid,
-        email: user.email,
-        name: user.displayName || "",
-      }),
+  // 로그인 상태면 dashboard로 리다이렉트
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.push("/dashboard");
+      }
     });
+    return () => unsubscribe();
+  }, [router]);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      await fetch(`${API_URL}/api/auth/upsert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || "",
+        }),
+      });
 
       router.push("/dashboard");
-     } catch (error) {
-     console.error("로그인 실패:", error);
-     } finally {
+    } catch (error) {
+      console.error("로그인 실패:", error);
+    } finally {
       setLoading(false);
     }
   };
@@ -160,7 +171,6 @@ export default function Home() {
               ← 뒤로
             </button>
 
-            {/* 회사 검색 */}
             {!selectedCompany && (
               <>
                 <div className="text-[#71717a] text-xs uppercase tracking-wider mb-2">회사 검색</div>
@@ -197,14 +207,11 @@ export default function Home() {
                 )}
 
                 {companies.length === 0 && companySearch && (
-                  <div className="text-[#71717a] text-sm text-center py-4">
-                    검색 결과가 없어요
-                  </div>
+                  <div className="text-[#71717a] text-sm text-center py-4">검색 결과가 없어요</div>
                 )}
               </>
             )}
 
-            {/* 이메일/비밀번호 로그인 */}
             {selectedCompany && (
               <>
                 <div className="bg-[#18181b] border border-[#27272a] rounded-xl px-4 py-3 flex items-center justify-between">

@@ -28,8 +28,9 @@ export default function Dashboard() {
   const [records, setRecords] = useState<LocationRecord[]>([]);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [now, setNow] = useState(new Date());
-  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -41,7 +42,7 @@ export default function Dashboard() {
       if (user) {
         setUser(user);
         fetchTodayAttendance(user.uid);
-        fetchAdminStatus(user.uid);  // ← 추가
+        fetchAdminStatus(user.uid);
       } else {
         router.push("/");
       }
@@ -55,9 +56,9 @@ export default function Dashboard() {
       const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`);
       const data = await res.json();
 
-     if (data.checkin) {
-       setCheckInTime(data.checkin);
-       setCurrentLocation(data.checkin_address || "-");
+      if (data.checkin) {
+        setCheckInTime(data.checkin);
+        setCurrentLocation(data.checkin_address || "-");
       }
       if (data.checkout) {
         setIsCheckedIn(false);
@@ -74,9 +75,9 @@ export default function Dashboard() {
 
   const fetchAdminStatus = async (userId: string) => {
     try {
-     const res = await fetch(`${API_URL}/api/company/admin-check/${userId}`);
-     const data = await res.json();
-     setIsAdmin(data.is_admin || false);
+      const res = await fetch(`${API_URL}/api/auth/admin-check/${userId}`);
+      const data = await res.json();
+      setIsAdmin(data.is_admin || false);
     } catch (error) {
       console.error("관리자 확인 실패:", error);
     }
@@ -204,12 +205,43 @@ export default function Dashboard() {
         <h1 className="text-white text-xl font-bold tracking-tight">
           Work<span className="text-[#6366f1]">Ping</span>
         </h1>
-        <button
-          onClick={async () => { await signOut(auth); router.push("/"); }}
-          className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-full flex items-center justify-center text-sm"
-        >
-          👤
-        </button>
+
+        {/* 유저 메뉴 */}
+        <div className="relative">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-full flex items-center justify-center text-sm hover:border-[#6366f1] transition-all"
+          >
+            👤
+          </button>
+
+          {showUserMenu && (
+            <>
+              {/* 배경 클릭 시 닫기 */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowUserMenu(false)}
+              />
+              <div className="absolute right-0 top-11 bg-[#18181b] border border-[#27272a] rounded-2xl p-3 w-52 z-50 shadow-xl">
+                <div className="px-2 py-1.5 mb-2 border-b border-[#27272a]">
+                  <div className="text-white text-xs font-semibold truncate">
+                    {user?.displayName || user?.email}
+                  </div>
+                  <div className="text-[#71717a] text-xs truncate">{user?.email}</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    await signOut(auth);
+                    router.push("/");
+                  }}
+                  className="w-full text-left px-2 py-2 text-[#ef4444] text-sm hover:bg-[#27272a] rounded-xl transition-all"
+                >
+                  🚪 로그아웃
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* 메인 카드 */}
@@ -314,14 +346,14 @@ export default function Dashboard() {
           </div>
         </Link>
         {isAdmin && (
-         <Link href="/admin">
-          <div className="bg-[#18181b] border border-[#27272a] hover:border-[#6366f1] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer">
-           <span className="text-lg">🏢</span>
-            <div>
-              <div className="text-white text-sm font-medium">관리자</div>
-             <div className="text-[#71717a] text-xs">팀 현황</div>
+          <Link href="/admin">
+            <div className="bg-[#18181b] border border-[#27272a] hover:border-[#6366f1] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer">
+              <span className="text-lg">🏢</span>
+              <div>
+                <div className="text-white text-sm font-medium">관리자</div>
+                <div className="text-[#71717a] text-xs">팀 현황</div>
+              </div>
             </div>
-          </div>
           </Link>
         )}
       </div>
