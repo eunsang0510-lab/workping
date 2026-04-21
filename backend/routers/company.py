@@ -126,10 +126,11 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
         return {"message": "이미 등록된 팀원이에요"}
 
     member = CompanyMember(
-        company_id=req.company_id,
-        user_id=req.user_id,
-        user_email=req.user_email,
-        user_name=req.user_name,
+            company_id=req.company_id,
+            user_id=uid,
+            user_email=req.email,
+            user_name=req.name,
+            birth_date=req.birth_date
     )
     db.add(member)
     db.commit()
@@ -425,41 +426,45 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
     return {"is_admin": member is not None}
 
 class ResetPasswordRequest(BaseModel):
-    user_id: str
+    user_id: str = ""
     email: str
-    birth_date: str = ""
 
 @router.post("/members/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    """비밀번호를 초기값으로 초기화"""
     firebase_api_key = os.getenv("FIREBASE_API_KEY")
 
-    # 이메일 앞부분 + 생년월일로 초기 비밀번호 생성
-    # 생년월일 없으면 email prefix + "00000000"
+    # DB에서 생년월일 조회
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_email == req.email
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+
     email_prefix = req.email.split("@")[0]
-    initial_password = f"{email_prefix}{req.birth_date or '00000000'}"
+    birth = member.birth_date or "00000000"
+    initial_password = f"{email_prefix}{birth}"
 
-    # Firebase에서 비밀번호 변경
-    # 먼저 로그인해서 idToken 얻기
-    sign_in_res = requests.post(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={firebase_api_key}",
-        json={"email": req.email, "password": initial_password, "returnSecureToken": True}
-    )
-
-    # 비밀번호 초기화는 관리자 SDK 없이 못하므로 새 비밀번호 직접 설정
-    # sendOobCode 사용 (비밀번호 재설정 이메일 발송)
+    # Firebase에서 비밀번호 변경 (관리자 권한으로)
+    # 1. 먼저 해당 유저 찾기
+    # 2. 비밀번호 업데이트
     response = requests.post(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={firebase_api_key}",
+        f"https://identitytoolkit.googleapis.com/v1/accounts:update?key={firebase_api_key}",
         json={
-            "requestType": "PASSWORD_RESET",
-            "email": req.email
+            "localId": member.user_id,
+            "password": initial_password,
+            "returnSecureToken": False
         }
     )
 
     if response.status_code == 200:
-        return {"success": True, "message": f"{req.email}로 비밀번호 재설정 이메일을 발송했어요"}
+        return {
+            "success": True,
+            "message": f"비밀번호가 초기화됐어요",
+            "initial_password": initial_password
+        }
     else:
-        error = response.json().get("error", {}).get("message", "발송 실패")
+        error = response.json().get("error", {}).get("message", "초기화 실패")
         raise HTTPException(status_code=400, detail=error)
     
 
