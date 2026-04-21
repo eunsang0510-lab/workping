@@ -9,19 +9,25 @@ from datetime import datetime
 import requests
 import os
 import math
+import json
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-import os
 
 # Firebase Admin 초기화 (한 번만)
 if not firebase_admin._apps:
-    cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json'))
+    firebase_creds = os.getenv("FIREBASE_ADMIN_CREDENTIALS")
+    if firebase_creds:
+        cred_dict = json.loads(firebase_creds)
+        cred = credentials.Certificate(cred_dict)
+    else:
+        cred = credentials.Certificate(
+            os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json')
+        )
     firebase_admin.initialize_app(cred)
 
 router = APIRouter()
 
 
-# 거리 계산 함수 (하버사인 공식)
 def calc_distance(lat1, lon1, lat2, lon2):
     R = 6371000
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -79,6 +85,18 @@ class CheckInValidateRequest(BaseModel):
     longitude: float
 
 
+class ResetPasswordRequest(BaseModel):
+    user_id: str = ""
+    email: str
+
+
+class UpdateMemberRequest(BaseModel):
+    user_name: str = ""
+    user_email: str = ""
+    is_admin: bool = False
+    company_id: str = ""
+
+
 @router.post("/create")
 def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
     company = Company(name=req.name, admin_id=req.admin_id)
@@ -105,9 +123,7 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
     if not company:
         return {"company": None}
 
-    members = (
-        db.query(CompanyMember).filter(CompanyMember.company_id == company.id).all()
-    )
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company.id).all()
 
     return {
         "company": {
@@ -121,24 +137,19 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
 
 @router.post("/members/add")
 def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
-    existing = (
-        db.query(CompanyMember)
-        .filter(
-            CompanyMember.company_id == req.company_id,
-            CompanyMember.user_id == req.user_id,
-        )
-        .first()
-    )
+    existing = db.query(CompanyMember).filter(
+        CompanyMember.company_id == req.company_id,
+        CompanyMember.user_id == req.user_id,
+    ).first()
 
     if existing:
         return {"message": "이미 등록된 팀원이에요"}
 
     member = CompanyMember(
-            company_id=req.company_id,
-            user_id=uid,
-            user_email=req.email,
-            user_name=req.name,
-            birth_date=req.birth_date
+        company_id=req.company_id,
+        user_id=req.user_id,
+        user_email=req.user_email,
+        user_name=req.user_name,
     )
     db.add(member)
     db.commit()
@@ -147,14 +158,10 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
 @router.post("/members/register")
 def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
-    existing = (
-        db.query(CompanyMember)
-        .filter(
-            CompanyMember.company_id == req.company_id,
-            CompanyMember.user_email == req.email,
-        )
-        .first()
-    )
+    existing = db.query(CompanyMember).filter(
+        CompanyMember.company_id == req.company_id,
+        CompanyMember.user_email == req.email,
+    ).first()
 
     if existing:
         return {"message": "이미 등록된 직원이에요", "success": False}
@@ -183,7 +190,11 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
         uid = response.json().get("localId", "")
 
     member = CompanyMember(
-        company_id=req.company_id, user_id=uid, user_email=req.email, user_name=req.name
+        company_id=req.company_id,
+        user_id=uid,
+        user_email=req.email,
+        user_name=req.name,
+        birth_date=req.birth_date,
     )
     db.add(member)
     db.commit()
@@ -201,19 +212,15 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
     results = []
     for member_data in req.members:
         if member_data.company_code:
-            company = (
-                db.query(Company)
-                .filter(Company.id.like(f"{member_data.company_code}%"))
-                .first()
-            )
+            company = db.query(Company).filter(
+                Company.id.like(f"{member_data.company_code}%")
+            ).first()
             if not company:
-                results.append(
-                    {
-                        "success": False,
-                        "email": member_data.email,
-                        "message": f"회사코드 {member_data.company_code} 를 찾을 수 없어요",
-                    }
-                )
+                results.append({
+                    "success": False,
+                    "email": member_data.email,
+                    "message": f"회사코드 {member_data.company_code} 를 찾을 수 없어요",
+                })
                 continue
             company_id = company.id
         else:
@@ -234,9 +241,7 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
 
 @router.get("/members/{company_id}")
 def get_members(company_id: str, db: Session = Depends(get_db)):
-    members = (
-        db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
-    )
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
     return {
         "members": [
             {
@@ -252,9 +257,7 @@ def get_members(company_id: str, db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search_company(name: str, db: Session = Depends(get_db)):
-    companies = (
-        db.query(Company).filter(Company.name.ilike(f"%{name}%")).limit(10).all()
-    )
+    companies = db.query(Company).filter(Company.name.ilike(f"%{name}%")).limit(10).all()
     return {"companies": [{"id": c.id, "name": c.name} for c in companies]}
 
 
@@ -265,22 +268,15 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
     start, end = get_work_day_range()
     now = datetime.now()
 
-    members = (
-        db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
-    )
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
 
     result = []
     for member in members:
-        records = (
-            db.query(Attendance)
-            .filter(
-                Attendance.user_id == member.user_id,
-                Attendance.recorded_at >= start,
-                Attendance.recorded_at < end,
-            )
-            .order_by(Attendance.recorded_at)
-            .all()
-        )
+        records = db.query(Attendance).filter(
+            Attendance.user_id == member.user_id,
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        ).order_by(Attendance.recorded_at).all()
 
         checkin = next((r for r in records if r.type == "checkin"), None)
         checkout = next((r for r in records if r.type == "checkout"), None)
@@ -301,38 +297,28 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
         else:
             status = "미출근"
 
-        result.append(
-            {
-                "user_id": member.user_id,
-                "user_name": member.user_name or member.user_email,
-                "user_email": member.user_email,
-                "checkin": checkin.recorded_at.isoformat() if checkin else None,
-                "checkin_address": checkin.address if checkin else None,
-                "checkout": checkout.recorded_at.isoformat() if checkout else None,
-                "work_minutes": work_minutes,
-                "work_hours": (
-                    f"{work_minutes // 60}시간 {work_minutes % 60}분"
-                    if work_minutes > 0
-                    else "-"
-                ),
-                "status": status,
-                "is_missing_checkout": is_missing_checkout,
-            }
-        )
+        result.append({
+            "user_id": member.user_id,
+            "user_name": member.user_name or member.user_email,
+            "user_email": member.user_email,
+            "checkin": checkin.recorded_at.isoformat() if checkin else None,
+            "checkin_address": checkin.address if checkin else None,
+            "checkout": checkout.recorded_at.isoformat() if checkout else None,
+            "work_minutes": work_minutes,
+            "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분" if work_minutes > 0 else "-",
+            "status": status,
+            "is_missing_checkout": is_missing_checkout,
+        })
 
     return {"date": str(start.date()), "attendance": result}
 
 
-# 회사 출근 위치 목록 조회
 @router.get("/locations/{company_id}")
 def get_locations(company_id: str, db: Session = Depends(get_db)):
-    locations = (
-        db.query(CompanyLocation)
-        .filter(
-            CompanyLocation.company_id == company_id, CompanyLocation.is_active == True
-        )
-        .all()
-    )
+    locations = db.query(CompanyLocation).filter(
+        CompanyLocation.company_id == company_id,
+        CompanyLocation.is_active == True
+    ).all()
     return {
         "locations": [
             {
@@ -348,7 +334,6 @@ def get_locations(company_id: str, db: Session = Depends(get_db)):
     }
 
 
-# 출근 위치 추가
 @router.post("/locations/add")
 def add_location(req: LocationCreateRequest, db: Session = Depends(get_db)):
     location = CompanyLocation(
@@ -364,12 +349,9 @@ def add_location(req: LocationCreateRequest, db: Session = Depends(get_db)):
     return {"success": True, "id": location.id, "message": "위치 등록 완료"}
 
 
-# 출근 위치 삭제
 @router.delete("/locations/{location_id}")
 def delete_location(location_id: str, db: Session = Depends(get_db)):
-    location = (
-        db.query(CompanyLocation).filter(CompanyLocation.id == location_id).first()
-    )
+    location = db.query(CompanyLocation).filter(CompanyLocation.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="위치를 찾을 수 없습니다")
     db.delete(location)
@@ -377,27 +359,18 @@ def delete_location(location_id: str, db: Session = Depends(get_db)):
     return {"message": "삭제 완료"}
 
 
-# 출근 가능 여부 검증
 @router.post("/locations/validate")
-def validate_checkin_location(
-    req: CheckInValidateRequest, db: Session = Depends(get_db)
-):
-    locations = (
-        db.query(CompanyLocation)
-        .filter(
-            CompanyLocation.company_id == req.company_id,
-            CompanyLocation.is_active == True,
-        )
-        .all()
-    )
+def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends(get_db)):
+    locations = db.query(CompanyLocation).filter(
+        CompanyLocation.company_id == req.company_id,
+        CompanyLocation.is_active == True,
+    ).all()
 
     if not locations:
         return {"allowed": True, "message": "위치 제한 없음"}
 
     for loc in locations:
-        distance = calc_distance(
-            req.latitude, req.longitude, loc.latitude, loc.longitude
-        )
+        distance = calc_distance(req.latitude, req.longitude, loc.latitude, loc.longitude)
         if distance <= loc.radius:
             return {
                 "allowed": True,
@@ -408,9 +381,7 @@ def validate_checkin_location(
 
     nearest = min(
         locations,
-        key=lambda l: calc_distance(
-            req.latitude, req.longitude, l.latitude, l.longitude
-        ),
+        key=lambda l: calc_distance(req.latitude, req.longitude, l.latitude, l.longitude),
     )
     nearest_distance = int(
         calc_distance(req.latitude, req.longitude, nearest.latitude, nearest.longitude)
@@ -426,16 +397,12 @@ def validate_checkin_location(
 
 @router.get("/admin-check/{user_id}")
 def check_admin(user_id: str, db: Session = Depends(get_db)):
-    member = (
-        db.query(CompanyMember)
-        .filter(CompanyMember.user_id == user_id, CompanyMember.is_admin == True)
-        .first()
-    )
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id,
+        CompanyMember.is_admin == True
+    ).first()
     return {"is_admin": member is not None}
 
-class ResetPasswordRequest(BaseModel):
-    user_id: str = ""
-    email: str
 
 @router.post("/members/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
@@ -455,16 +422,11 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         return {
             "success": True,
             "message": "비밀번호가 초기화됐어요",
-            "initial_password": initial_password
+            "initial_password": initial_password,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-class UpdateMemberRequest(BaseModel):
-    user_name: str = ""
-    user_email: str = ""
-    is_admin: bool = False
-    company_id: str = ""
 
 @router.put("/members/{member_id}")
 def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depends(get_db)):
@@ -481,4 +443,4 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
     member.is_admin = req.is_admin
 
     db.commit()
-    return {"success": True, "message": "수정 완료"}  
+    return {"success": True, "message": "수정 완료"}
