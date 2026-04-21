@@ -1,7 +1,24 @@
-from fastapi import APIRouter
+const handleGoogleLogin = async () => {
+  setLoading(true);
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
 
-router = APIRouter()
+    // DB에 유저 정보 저장
+    const res = await fetch(`${API_URL}/api/auth/upsert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: user.uid,
+        email: user.email,
+        name: user.displayName || "",
+      }),
+    });
 
-@router.get("/test")
-def test():
-    return {"message": "auth router 작동 중"}
+    router.push("/dashboard");
+  } catch (error) {
+    console.error("로그인 실패:", error);
+  } finally {
+    setLoading(false);
+  }
+};
