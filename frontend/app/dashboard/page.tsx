@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [now, setNow] = useState(new Date());
   const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -40,6 +41,7 @@ export default function Dashboard() {
       if (user) {
         setUser(user);
         fetchTodayAttendance(user.uid);
+        fetchAdminStatus(user.uid);  // ← 추가
       } else {
         router.push("/");
       }
@@ -67,6 +69,16 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("오늘 기록 로딩 실패:", error);
+    }
+  };
+
+  const fetchAdminStatus = async (userId: string) => {
+    try {
+     const res = await fetch(`${API_URL}/api/company/admin-check/${userId}`);
+     const data = await res.json();
+     setIsAdmin(data.is_admin || false);
+    } catch (error) {
+      console.error("관리자 확인 실패:", error);
     }
   };
 
@@ -301,15 +313,17 @@ export default function Dashboard() {
             </div>
           </div>
         </Link>
-        <Link href="/admin">
+        {isAdmin && (
+         <Link href="/admin">
           <div className="bg-[#18181b] border border-[#27272a] hover:border-[#6366f1] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer">
-            <span className="text-lg">🏢</span>
+           <span className="text-lg">🏢</span>
             <div>
               <div className="text-white text-sm font-medium">관리자</div>
-              <div className="text-[#71717a] text-xs">팀 현황</div>
+             <div className="text-[#71717a] text-xs">팀 현황</div>
             </div>
           </div>
-        </Link>
+          </Link>
+        )}
       </div>
     </main>
   );

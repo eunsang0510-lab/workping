@@ -356,3 +356,11 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
         "nearest_location": nearest.name,
         "distance": nearest_distance
     }
+
+@router.get("/admin-check/{user_id}")
+def check_admin(user_id: str, db: Session = Depends(get_db)):
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id,
+        CompanyMember.is_admin == True
+    ).first()
+    return {"is_admin": member is not None}
