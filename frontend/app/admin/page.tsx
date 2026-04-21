@@ -332,21 +332,21 @@ export default function Admin() {
   };
 
   const handleResetPassword = async (email: string) => {
-  if (!confirm(`${email}의 비밀번호 재설정 이메일을 발송할까요?`)) return;
+  if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
   try {
     const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: "", email })
+      body: JSON.stringify({ email })
     });
     const data = await res.json();
     if (data.success) {
-      alert(`✅ ${data.message}`);
+      alert(`✅ 비밀번호 초기화 완료!\n초기 비밀번호: ${data.initial_password}`);
     } else {
-      alert("발송 실패");
+      alert("초기화 실패");
     }
   } catch {
-    alert("발송 실패");
+    alert("초기화 실패");
   }
 };
 
