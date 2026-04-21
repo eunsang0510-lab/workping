@@ -9,6 +9,14 @@ from datetime import datetime
 import requests
 import os
 import math
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
+import os
+
+# Firebase Admin 초기화 (한 번만)
+if not firebase_admin._apps:
+    cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json'))
+    firebase_admin.initialize_app(cred)
 
 router = APIRouter()
 
@@ -431,9 +439,6 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/members/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
-    firebase_api_key = os.getenv("FIREBASE_API_KEY")
-
-    # DB에서 생년월일 조회
     member = db.query(CompanyMember).filter(
         CompanyMember.user_email == req.email
     ).first()
@@ -445,28 +450,15 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     birth = member.birth_date or "00000000"
     initial_password = f"{email_prefix}{birth}"
 
-    # Firebase에서 비밀번호 변경 (관리자 권한으로)
-    # 1. 먼저 해당 유저 찾기
-    # 2. 비밀번호 업데이트
-    response = requests.post(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:update?key={firebase_api_key}",
-        json={
-            "localId": member.user_id,
-            "password": initial_password,
-            "returnSecureToken": False
-        }
-    )
-
-    if response.status_code == 200:
+    try:
+        firebase_auth.update_user(member.user_id, password=initial_password)
         return {
             "success": True,
-            "message": f"비밀번호가 초기화됐어요",
+            "message": "비밀번호가 초기화됐어요",
             "initial_password": initial_password
         }
-    else:
-        error = response.json().get("error", {}).get("message", "초기화 실패")
-        raise HTTPException(status_code=400, detail=error)
-    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 class UpdateMemberRequest(BaseModel):
     user_name: str = ""
