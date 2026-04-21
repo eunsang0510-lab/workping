@@ -10,6 +10,14 @@ import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
+interface EditMember {
+  id: string;
+  user_name: string;
+  user_email: string;
+  is_admin: boolean;
+  company_id: string;
+}
+
 interface Member {
   user_id: string;
   user_name: string;
@@ -62,6 +70,8 @@ export default function Admin() {
   const [gettingLocation, setGettingLocation] = useState(false);
 
   const router = useRouter();
+  const [editMember, setEditMember] = useState<EditMember | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -340,6 +350,33 @@ export default function Admin() {
   }
 };
 
+const handleUpdateMember = async () => {
+  if (!editMember) return;
+  setEditLoading(true);
+  try {
+    const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_name: editMember.user_name,
+        user_email: editMember.user_email,
+        is_admin: editMember.is_admin,
+        company_id: editMember.company_id,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("✅ 수정 완료!");
+      setEditMember(null);
+      fetchAttendance(company!.id);
+    }
+  } catch {
+    alert("수정 실패");
+  } finally {
+    setEditLoading(false);
+  }
+};
+
   const statusConfig = {
     출근중: {
       bg: "bg-[#052e16]",
@@ -521,17 +558,23 @@ export default function Admin() {
                             {member.status}
                           </span>
                           <button
-                            onClick={() => handleResetPassword(member.user_email)}
-                            className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
-                            >
-                              PW초기화
-                            </button>
-                            <button
-                              onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)}
-                              className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                            >
-                              출근초기화
-                            </button>
+  onClick={() => setEditMember({
+    id: member.user_id,
+    user_name: member.user_name,
+    user_email: member.user_email,
+    is_admin: false,
+    company_id: company!.id,
+  })}
+  className="text-[#71717a] hover:text-[#818cf8] text-xs transition-colors"
+>
+  수정
+</button>
+<button
+  onClick={() => handleResetPassword(member.user_email)}
+  className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
+>
+  PW초기화
+</button>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -787,6 +830,60 @@ export default function Admin() {
           </div>
         </>
       )}
+      {/* 수정 모달 */}
+{editMember && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-5">
+    <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 w-full max-w-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-white font-semibold">직원 정보 수정</div>
+        <button
+          onClick={() => setEditMember(null)}
+          className="text-[#71717a] hover:text-white text-sm"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <div className="text-[#71717a] text-xs mb-1">이름</div>
+          <input
+            type="text"
+            value={editMember.user_name}
+            onChange={(e) => setEditMember({ ...editMember, user_name: e.target.value })}
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+          />
+        </div>
+        <div>
+          <div className="text-[#71717a] text-xs mb-1">이메일</div>
+          <input
+            type="email"
+            value={editMember.user_email}
+            onChange={(e) => setEditMember({ ...editMember, user_email: e.target.value })}
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+          />
+        </div>
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editMember.is_admin}
+              onChange={(e) => setEditMember({ ...editMember, is_admin: e.target.checked })}
+              className="w-4 h-4 accent-[#6366f1]"
+            />
+            <span className="text-[#71717a] text-sm">관리자 권한</span>
+          </label>
+        </div>
+        <button
+          onClick={handleUpdateMember}
+          disabled={editLoading}
+          className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+        >
+          {editLoading ? "수정 중..." : "저장하기"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }

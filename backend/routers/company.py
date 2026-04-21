@@ -461,3 +461,26 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     else:
         error = response.json().get("error", {}).get("message", "발송 실패")
         raise HTTPException(status_code=400, detail=error)
+    
+  class UpdateMemberRequest(BaseModel):
+    user_name: str = ""
+    user_email: str = ""
+    is_admin: bool = False
+    company_id: str = ""
+
+@router.put("/members/{member_id}")
+def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depends(get_db)):
+    member = db.query(CompanyMember).filter(CompanyMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+
+    if req.user_name:
+        member.user_name = req.user_name
+    if req.user_email:
+        member.user_email = req.user_email
+    if req.company_id:
+        member.company_id = req.company_id
+    member.is_admin = req.is_admin
+
+    db.commit()
+    return {"success": True, "message": "수정 완료"}  

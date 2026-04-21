@@ -9,6 +9,7 @@ import Link from "next/link";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
+
 interface Company {
   id: string;
   name: string;
@@ -56,6 +57,8 @@ export default function SuperAdmin() {
   const [memberLoading, setMemberLoading] = useState(false);
 
   const router = useRouter();
+  const [editMember, setEditMember] = useState<any | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -187,6 +190,33 @@ export default function SuperAdmin() {
     alert("발송 실패");
   }
 };
+const handleUpdateMember = async () => {
+  if (!editMember) return;
+  setEditLoading(true);
+  try {
+    const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_name: editMember.user_name,
+        user_email: editMember.user_email,
+        is_admin: editMember.is_admin,
+        company_id: editMember.company_id,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("✅ 수정 완료!");
+      setEditMember(null);
+      fetchAll();
+    }
+  } catch {
+    alert("수정 실패");
+  } finally {
+    setEditLoading(false);
+  }
+};
+
 
   const formatDate = (iso: string) => {
     if (!iso) return "-";
@@ -457,20 +487,26 @@ export default function SuperAdmin() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
-                   <button
-                      onClick={() => handleResetPassword(m.user_email)}
-                      className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
-                    >
-                      PW초기화
-                    </button>
-                    <button
-                      onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
-                      className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-                    >
-                      삭제
-                    </button>
-                  </div>
+                 <div className="flex items-center gap-3">
+  <button
+    onClick={() => setEditMember(m)}
+    className="text-[#71717a] hover:text-[#818cf8] text-xs transition-colors"
+  >
+    수정
+  </button>
+  <button
+    onClick={() => handleResetPassword(m.user_email)}
+    className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
+  >
+    PW초기화
+  </button>
+  <button
+    onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
+    className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+  >
+    삭제
+  </button>
+</div>
                   </div>
                   <div className="text-[#71717a] text-xs mb-1">
                     {m.user_email}
@@ -482,6 +518,64 @@ export default function SuperAdmin() {
           </div>
         </>
       )}
+      {editMember && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-5">
+    <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 w-full max-w-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-white font-semibold">직원 정보 수정</div>
+        <button onClick={() => setEditMember(null)} className="text-[#71717a] hover:text-white text-sm">✕</button>
+      </div>
+      <div className="space-y-3">
+        <div>
+          <div className="text-[#71717a] text-xs mb-1">이름</div>
+          <input
+            type="text"
+            value={editMember.user_name || ""}
+            onChange={(e) => setEditMember({ ...editMember, user_name: e.target.value })}
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+          />
+        </div>
+        <div>
+          <div className="text-[#71717a] text-xs mb-1">이메일</div>
+          <input
+            type="email"
+            value={editMember.user_email || ""}
+            onChange={(e) => setEditMember({ ...editMember, user_email: e.target.value })}
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+          />
+        </div>
+        <div>
+          <div className="text-[#71717a] text-xs mb-1">소속 회사</div>
+          <select
+            value={editMember.company_id || ""}
+            onChange={(e) => setEditMember({ ...editMember, company_id: e.target.value })}
+            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={editMember.is_admin || false}
+            onChange={(e) => setEditMember({ ...editMember, is_admin: e.target.checked })}
+            className="w-4 h-4 accent-[#6366f1]"
+          />
+          <span className="text-[#71717a] text-sm">관리자 권한</span>
+        </label>
+        <button
+          onClick={handleUpdateMember}
+          disabled={editLoading}
+          className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+        >
+          {editLoading ? "수정 중..." : "저장하기"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
