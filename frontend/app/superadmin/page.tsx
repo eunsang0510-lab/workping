@@ -169,6 +169,25 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleResetPassword = async (email: string) => {
+  if (!confirm(`${email}의 비밀번호 재설정 이메일을 발송할까요?`)) return;
+  try {
+    const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: "", email })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`✅ ${data.message}`);
+    } else {
+      alert("발송 실패");
+    }
+  } catch {
+    alert("발송 실패");
+  }
+};
+
   const formatDate = (iso: string) => {
     if (!iso) return "-";
     return new Date(iso).toLocaleDateString("ko-KR");
@@ -181,7 +200,7 @@ export default function SuperAdmin() {
       </div>
     );
   }
-
+   
   return (
     <main className="min-h-screen bg-[#09090b] p-5">
       {/* 헤더 */}
@@ -438,14 +457,20 @@ export default function SuperAdmin() {
                         </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-3">
+                   <button
+                      onClick={() => handleResetPassword(m.user_email)}
+                      className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
+                    >
+                      PW초기화
+                    </button>
                     <button
-                      onClick={() =>
-                        handleDeleteMember(m.id, m.user_name || m.user_email)
-                      }
+                      onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
                       className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
                     >
                       삭제
                     </button>
+                  </div>
                   </div>
                   <div className="text-[#71717a] text-xs mb-1">
                     {m.user_email}

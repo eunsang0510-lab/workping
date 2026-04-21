@@ -423,3 +423,41 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
         .first()
     )
     return {"is_admin": member is not None}
+
+class ResetPasswordRequest(BaseModel):
+    user_id: str
+    email: str
+    birth_date: str = ""
+
+@router.post("/members/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """비밀번호를 초기값으로 초기화"""
+    firebase_api_key = os.getenv("FIREBASE_API_KEY")
+
+    # 이메일 앞부분 + 생년월일로 초기 비밀번호 생성
+    # 생년월일 없으면 email prefix + "00000000"
+    email_prefix = req.email.split("@")[0]
+    initial_password = f"{email_prefix}{req.birth_date or '00000000'}"
+
+    # Firebase에서 비밀번호 변경
+    # 먼저 로그인해서 idToken 얻기
+    sign_in_res = requests.post(
+        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={firebase_api_key}",
+        json={"email": req.email, "password": initial_password, "returnSecureToken": True}
+    )
+
+    # 비밀번호 초기화는 관리자 SDK 없이 못하므로 새 비밀번호 직접 설정
+    # sendOobCode 사용 (비밀번호 재설정 이메일 발송)
+    response = requests.post(
+        f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={firebase_api_key}",
+        json={
+            "requestType": "PASSWORD_RESET",
+            "email": req.email
+        }
+    )
+
+    if response.status_code == 200:
+        return {"success": True, "message": f"{req.email}로 비밀번호 재설정 이메일을 발송했어요"}
+    else:
+        error = response.json().get("error", {}).get("message", "발송 실패")
+        raise HTTPException(status_code=400, detail=error)
