@@ -462,7 +462,8 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         error = response.json().get("error", {}).get("message", "발송 실패")
         raise HTTPException(status_code=400, detail=error)
     
-  class UpdateMemberRequest(BaseModel):
+
+class UpdateMemberRequest(BaseModel):
     user_name: str = ""
     user_email: str = ""
     is_admin: bool = False
