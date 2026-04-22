@@ -36,7 +36,7 @@ export default function Report() {
         setUser(user);
         fetchReport(user.uid, "weekly");
       } else {
-        router.push("/");
+        router.push("/login");
       }
       setLoading(false);
     });
@@ -60,55 +60,45 @@ export default function Report() {
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("ko-KR", {
-      month: "short",
-      day: "numeric",
-      weekday: "short",
-    });
+    return new Date(dateStr).toLocaleDateString("ko-KR", { month: "short", day: "numeric", weekday: "short" });
   };
 
   const getWorkBarWidth = (minutes: number) => {
-    const max = 600;
-    return Math.min((minutes / max) * 100, 100);
+    return Math.min((minutes / 600) * 100, 100);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-        <div className="text-[#6366f1]">로딩 중...</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-[#5b5ef4]">로딩 중...</div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] p-5">
+    <main className="min-h-screen bg-[#f8f8f8] p-5">
       {/* 헤더 */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/dashboard">
-          <div className="w-9 h-9 bg-[#18181b] border border-[#27272a] rounded-xl flex items-center justify-center text-[#71717a] hover:border-[#6366f1] transition-all cursor-pointer">
+          <div className="w-9 h-9 bg-white border border-[#e5e5e5] rounded-xl flex items-center justify-center text-[#6b6b6b] hover:border-[#5b5ef4] transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             ←
           </div>
         </Link>
-        <h1 className="text-white text-lg font-bold">근태 리포트</h1>
+        <h1 className="text-[#0a0a0a] text-lg font-black">근태 리포트</h1>
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-2 mb-5 bg-[#18181b] border border-[#27272a] rounded-xl p-1">
+      <div className="flex gap-2 mb-5 bg-white border border-[#e5e5e5] rounded-xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         {(["weekly", "monthly"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => handleTabChange(tab)}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === tab
-                ? "bg-[#6366f1] text-white"
-                : "text-[#71717a] hover:text-white"
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === tab ? "bg-[#5b5ef4] text-white" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
             }`}
           >
             {tab === "weekly" ? "주간" : "월간"}
@@ -116,41 +106,31 @@ export default function Report() {
         ))}
       </div>
 
-      {/* 요약 카드 */}
       {report && (
         <>
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 mb-4">
-            <div className="text-[#71717a] text-xs mb-1">{report.period}</div>
-            <div className="text-white text-3xl font-bold tracking-tight mb-3">
-              {report.total_work_hours}
-            </div>
+          {/* 요약 카드 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs mb-1">{report.period}</div>
+            <div className="text-[#0a0a0a] text-3xl font-black tracking-tight mb-3">{report.total_work_hours}</div>
             {activeTab === "monthly" && (
-              <div className="flex gap-6 pt-3 border-t border-[#27272a]">
+              <div className="flex gap-6 pt-3 border-t border-[#e5e5e5]">
                 <div>
-                  <div className="text-[#71717a] text-xs mb-1">출근일수</div>
-                  <div className="text-white font-semibold">
-                    {report.work_days}일
-                  </div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">출근일수</div>
+                  <div className="text-[#0a0a0a] font-bold">{report.work_days}일</div>
                 </div>
                 <div>
-                  <div className="text-[#71717a] text-xs mb-1">일평균</div>
-                  <div className="text-white font-semibold">
-                    {report.avg_work_hours}
-                  </div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">일평균</div>
+                  <div className="text-[#0a0a0a] font-bold">{report.avg_work_hours}</div>
                 </div>
               </div>
             )}
           </div>
 
           {/* 일별 기록 */}
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5">
-            <div className="text-[#71717a] text-xs font-semibold mb-4 uppercase tracking-wider">
-              일별 기록
-            </div>
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold mb-4 uppercase tracking-wider">일별 기록</div>
             {Object.keys(report.daily).length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-8">
-                기록이 없어요
-              </div>
+              <div className="text-[#a0a0a0] text-sm text-center py-8">기록이 없어요</div>
             ) : (
               <div className="space-y-4">
                 {Object.entries(report.daily)
@@ -158,33 +138,21 @@ export default function Report() {
                   .map(([date, data]: [string, any]) => (
                     <div key={date}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[#a1a1aa] text-sm">
-                          {formatDate(date)}
-                        </span>
-                        <span className="text-[#6366f1] text-sm font-semibold">
-                          {data.work_hours}
-                        </span>
+                        <span className="text-[#6b6b6b] text-sm">{formatDate(date)}</span>
+                        <span className="text-[#5b5ef4] text-sm font-bold">{data.work_hours}</span>
                       </div>
-                      <div className="bg-[#27272a] rounded-full h-1.5 mb-2">
+                      <div className="bg-[#f0f0f0] rounded-full h-1.5 mb-2">
                         <div
-                          className="bg-[#6366f1] rounded-full h-1.5 transition-all"
-                          style={{
-                            width: `${getWorkBarWidth(data.work_minutes)}%`,
-                          }}
-                        ></div>
+                          className="bg-[#5b5ef4] rounded-full h-1.5 transition-all"
+                          style={{ width: `${getWorkBarWidth(data.work_minutes)}%` }}
+                        />
                       </div>
                       <div className="flex gap-4">
-                        <span className="text-[#71717a] text-xs">
-                          출근{" "}
-                          <span className="text-[#22c55e]">
-                            {formatTime(data.checkin)}
-                          </span>
+                        <span className="text-[#a0a0a0] text-xs">
+                          출근 <span className="text-[#16a34a] font-medium">{formatTime(data.checkin)}</span>
                         </span>
-                        <span className="text-[#71717a] text-xs">
-                          퇴근{" "}
-                          <span className="text-[#ef4444]">
-                            {formatTime(data.checkout)}
-                          </span>
+                        <span className="text-[#a0a0a0] text-xs">
+                          퇴근 <span className="text-[#ef4444] font-medium">{formatTime(data.checkout)}</span>
                         </span>
                       </div>
                     </div>
