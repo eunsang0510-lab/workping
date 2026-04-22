@@ -19,11 +19,15 @@ if not firebase_admin._apps:
     if firebase_creds:
         cred_dict = json.loads(firebase_creds)
         cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
     else:
-        cred = credentials.Certificate(
-            os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json')
-        )
-    firebase_admin.initialize_app(cred)
+        try:
+            cred = credentials.Certificate(
+                os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json')
+            )
+            firebase_admin.initialize_app(cred)
+        except Exception:
+            pass  # 로컬에도 없으면 그냥 스킵
 
 router = APIRouter()
 
