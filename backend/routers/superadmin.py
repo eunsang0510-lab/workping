@@ -140,3 +140,51 @@ def delete_member(member_id: str, db: Session = Depends(get_db)):
     db.delete(member)
     db.commit()
     return {"message": "삭제 완료"}
+
+
+from models.user import User
+
+# 회사 미소속 개인 유저 목록
+@router.get("/users")
+def get_individual_users(db: Session = Depends(get_db)):
+    # company_members에 없는 유저들
+    subquery = db.query(CompanyMember.user_id).subquery()
+    users = db.query(User).filter(
+        User.id.notin_(subquery)
+    ).order_by(User.created_at.desc()).all()
+
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "name": u.name,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ]
+    }
+
+# 개인 유저 근태 초기화
+@router.delete("/user/attendance/{user_id}")
+def reset_user_attendance(user_id: str, db: Session = Depends(get_db)):
+    from routers.attendance import get_work_day_range
+    from models.attendance import Attendance
+    from models.location import Location
+
+    start, end = get_work_day_range()
+
+    db.query(Attendance).filter(
+        Attendance.user_id == user_id,
+        Attendance.recorded_at >= start,
+        Attendance.recorded_at < end,
+    ).delete()
+
+    db.query(Location).filter(
+        Location.user_id == user_id,
+        Location.recorded_at >= start,
+        Location.recorded_at < end,
+    ).delete()
+
+    db.commit()
+    return {"message": "초기화 완료"}

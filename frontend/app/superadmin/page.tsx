@@ -9,7 +9,6 @@ import Link from "next/link";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
-
 interface Company {
   id: string;
   name: string;
@@ -30,6 +29,13 @@ interface Member {
   created_at: string;
 }
 
+interface IndividualUser {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+}
+
 interface Stats {
   total_companies: number;
   total_members: number;
@@ -38,10 +44,11 @@ interface Stats {
 export default function SuperAdmin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"companies" | "members">("companies");
+  const [tab, setTab] = useState<"companies" | "members" | "users">("companies");
   const [stats, setStats] = useState<Stats | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [individualUsers, setIndividualUsers] = useState<IndividualUser[]>([]);
 
   // 회사 추가 폼
   const [showCompanyForm, setShowCompanyForm] = useState(false);
@@ -56,9 +63,11 @@ export default function SuperAdmin() {
   const [newMemberIsAdmin, setNewMemberIsAdmin] = useState(false);
   const [memberLoading, setMemberLoading] = useState(false);
 
-  const router = useRouter();
+  // 수정 모달
   const [editMember, setEditMember] = useState<any | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -75,14 +84,17 @@ export default function SuperAdmin() {
 
   const fetchAll = async () => {
     try {
-      const [statsRes, companiesRes, membersRes] = await Promise.all([
+      const [statsRes, companiesRes, membersRes, usersRes] = await Promise.all([
         fetch(`${API_URL}/api/superadmin/stats`),
         fetch(`${API_URL}/api/superadmin/companies`),
         fetch(`${API_URL}/api/superadmin/members`),
+        fetch(`${API_URL}/api/superadmin/users`),
       ]);
       setStats(await statsRes.json());
       setCompanies(await companiesRes.json());
       setMembers(await membersRes.json());
+      const usersData = await usersRes.json();
+      setIndividualUsers(usersData.users || []);
     } catch (error) {
       console.error("데이터 로딩 실패:", error);
     }
@@ -146,12 +158,9 @@ export default function SuperAdmin() {
   };
 
   const handleDeleteCompany = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`))
-      return;
+    if (!confirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`)) return;
     try {
-      await fetch(`${API_URL}/api/superadmin/company/${id}`, {
-        method: "DELETE",
-      });
+      await fetch(`${API_URL}/api/superadmin/company/${id}`, { method: "DELETE" });
       alert("✅ 삭제 완료");
       fetchAll();
     } catch {
@@ -162,9 +171,7 @@ export default function SuperAdmin() {
   const handleDeleteMember = async (id: string, name: string) => {
     if (!confirm(`"${name}" 직원을 삭제할까요?`)) return;
     try {
-      await fetch(`${API_URL}/api/superadmin/member/${id}`, {
-        method: "DELETE",
-      });
+      await fetch(`${API_URL}/api/superadmin/member/${id}`, { method: "DELETE" });
       alert("✅ 삭제 완료");
       fetchAll();
     } catch {
@@ -173,51 +180,71 @@ export default function SuperAdmin() {
   };
 
   const handleResetPassword = async (email: string) => {
-  if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
-  try {
-    const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
-    const data = await res.json();
-    if (data.success) {
-      alert(`✅ 비밀번호 초기화 완료!\n초기 비밀번호: ${data.initial_password}`);
-    } else {
+    if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ 비밀번호 초기화 완료!\n초기 비밀번호: ${data.initial_password}`);
+      } else {
+        alert("초기화 실패");
+      }
+    } catch {
       alert("초기화 실패");
     }
-  } catch {
-    alert("초기화 실패");
-  }
-};
+  };
 
-const handleUpdateMember = async () => {
-  if (!editMember) return;
-  setEditLoading(true);
-  try {
-    const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_name: editMember.user_name,
-        user_email: editMember.user_email,
-        is_admin: editMember.is_admin,
-        company_id: editMember.company_id,
-      }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      alert("✅ 수정 완료!");
-      setEditMember(null);
+  const handleResetAttendance = async (userId: string, userName: string) => {
+    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
+    try {
+      await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
+      alert("✅ 초기화 완료!");
       fetchAll();
+    } catch {
+      alert("초기화 실패");
     }
-  } catch {
-    alert("수정 실패");
-  } finally {
-    setEditLoading(false);
-  }
-};
+  };
 
+  const handleResetUserAttendance = async (userId: string, userName: string) => {
+    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
+    try {
+      await fetch(`${API_URL}/api/superadmin/user/attendance/${userId}`, { method: "DELETE" });
+      alert("✅ 초기화 완료!");
+    } catch {
+      alert("초기화 실패");
+    }
+  };
+
+  const handleUpdateMember = async () => {
+    if (!editMember) return;
+    setEditLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_name: editMember.user_name,
+          user_email: editMember.user_email,
+          is_admin: editMember.is_admin,
+          company_id: editMember.company_id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ 수정 완료!");
+        setEditMember(null);
+        fetchAll();
+      }
+    } catch {
+      alert("수정 실패");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const formatDate = (iso: string) => {
     if (!iso) return "-";
@@ -231,9 +258,10 @@ const handleUpdateMember = async () => {
       </div>
     );
   }
-   
+
   return (
     <main className="min-h-screen bg-[#09090b] p-5">
+
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -245,51 +273,53 @@ const handleUpdateMember = async () => {
           <h1 className="text-white text-lg font-bold">시스템 관리자</h1>
         </div>
         <div className="bg-[#1e1b4b] border border-[#3730a3] rounded-lg px-2 py-1">
-          <span className="text-[#818cf8] text-xs font-semibold">
-            SUPERADMIN
-          </span>
+          <span className="text-[#818cf8] text-xs font-semibold">SUPERADMIN</span>
         </div>
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 text-center">
-          <div className="text-3xl font-bold text-[#6366f1]">
-            {stats?.total_companies ?? 0}
-          </div>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 text-center">
+          <div className="text-3xl font-bold text-[#6366f1]">{stats?.total_companies ?? 0}</div>
           <div className="text-[#71717a] text-xs mt-1">전체 회사</div>
         </div>
-        <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 text-center">
-          <div className="text-3xl font-bold text-[#22c55e]">
-            {stats?.total_members ?? 0}
-          </div>
+        <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 text-center">
+          <div className="text-3xl font-bold text-[#22c55e]">{stats?.total_members ?? 0}</div>
           <div className="text-[#71717a] text-xs mt-1">전체 직원</div>
+        </div>
+        <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 text-center">
+          <div className="text-3xl font-bold text-[#f59e0b]">{individualUsers.length}</div>
+          <div className="text-[#71717a] text-xs mt-1">개인 유저</div>
         </div>
       </div>
 
       {/* 탭 */}
       <div className="flex gap-2 mb-4">
-        {(["companies", "members"] as const).map((t) => (
+        {(["companies", "members", "users"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all ${
               tab === t
                 ? "bg-[#6366f1] text-white"
                 : "bg-[#18181b] border border-[#27272a] text-[#71717a]"
             }`}
           >
-            {t === "companies"
-              ? `회사 (${companies.length})`
-              : `직원 (${members.length})`}
+            {t === "companies" ? `회사 (${companies.length})` : t === "members" ? `직원 (${members.length})` : `개인 (${individualUsers.length})`}
           </button>
         ))}
+      </div>
+
+      {/* 새로고침 */}
+      <div className="flex justify-end mb-3">
+        <button onClick={fetchAll} className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors">
+          새로고침
+        </button>
       </div>
 
       {/* 회사 탭 */}
       {tab === "companies" && (
         <>
-          {/* 회사 추가 버튼 */}
           <button
             onClick={() => setShowCompanyForm(!showCompanyForm)}
             className="w-full bg-[#18181b] border border-dashed border-[#27272a] hover:border-[#6366f1] text-[#71717a] hover:text-[#6366f1] rounded-2xl py-3 text-sm font-semibold transition-all mb-3"
@@ -297,12 +327,9 @@ const handleUpdateMember = async () => {
             + 회사 추가
           </button>
 
-          {/* 회사 추가 폼 */}
           {showCompanyForm && (
             <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">
-                새 회사 등록
-              </div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 회사 등록</div>
               <input
                 type="text"
                 placeholder="회사 이름"
@@ -320,38 +347,17 @@ const handleUpdateMember = async () => {
             </div>
           )}
 
-          {/* 새로고침 */}
-          <div className="flex justify-end mb-3">
-            <button
-              onClick={fetchAll}
-              className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
-            >
-              새로고침
-            </button>
-          </div>
-
-          {/* 회사 목록 */}
           <div className="space-y-3">
             {companies.length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-12">
-                등록된 회사가 없어요
-              </div>
+              <div className="text-[#52525b] text-sm text-center py-12">등록된 회사가 없어요</div>
             ) : (
               companies.map((c) => (
-                <div
-                  key={c.id}
-                  className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4"
-                >
+                <div key={c.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-white font-semibold">{c.name}</span>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() =>
-                          window.open(
-                            `${API_URL}/api/attendance/export/${c.id}`,
-                            "_blank",
-                          )
-                        }
+                        onClick={() => window.open(`${API_URL}/api/attendance/export/${c.id}`, "_blank")}
                         className="bg-[#052e16] border border-[#166534] text-[#22c55e] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#14532d] transition-all"
                       >
                         📥 엑셀
@@ -365,24 +371,12 @@ const handleUpdateMember = async () => {
                     </div>
                   </div>
                   <div className="flex gap-3 flex-wrap">
-                    <span className="text-[#71717a] text-xs">
-                      직원{" "}
-                      <span className="text-white">{c.member_count}명</span>
-                    </span>
-                    <span className="text-[#71717a] text-xs">
-                      플랜 <span className="text-[#6366f1]">{c.plan}</span>
-                    </span>
-                    <span className="text-[#71717a] text-xs">
-                      생성{" "}
-                      <span className="text-[#52525b]">
-                        {formatDate(c.created_at)}
-                      </span>
-                    </span>
+                    <span className="text-[#71717a] text-xs">직원 <span className="text-white">{c.member_count}명</span></span>
+                    <span className="text-[#71717a] text-xs">플랜 <span className="text-[#6366f1]">{c.plan}</span></span>
+                    <span className="text-[#71717a] text-xs">생성 <span className="text-[#52525b]">{formatDate(c.created_at)}</span></span>
                   </div>
                   <div className="mt-2">
-                    <span className="text-[#52525b] text-xs font-mono">
-                      {c.id.slice(0, 16)}...
-                    </span>
+                    <span className="text-[#52525b] text-xs font-mono">{c.id.slice(0, 16)}...</span>
                   </div>
                 </div>
               ))
@@ -394,7 +388,6 @@ const handleUpdateMember = async () => {
       {/* 직원 탭 */}
       {tab === "members" && (
         <>
-          {/* 멤버 추가 버튼 */}
           <button
             onClick={() => setShowMemberForm(!showMemberForm)}
             className="w-full bg-[#18181b] border border-dashed border-[#27272a] hover:border-[#6366f1] text-[#71717a] hover:text-[#6366f1] rounded-2xl py-3 text-sm font-semibold transition-all mb-3"
@@ -402,12 +395,9 @@ const handleUpdateMember = async () => {
             + 멤버 추가
           </button>
 
-          {/* 멤버 추가 폼 */}
           {showMemberForm && (
             <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 mb-4">
-              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">
-                새 멤버 등록
-              </div>
+              <div className="text-[#71717a] text-xs font-semibold uppercase tracking-wider mb-3">새 멤버 등록</div>
               <div className="space-y-3">
                 <select
                   value={newMemberCompanyId}
@@ -416,9 +406,7 @@ const handleUpdateMember = async () => {
                 >
                   <option value="">회사 선택</option>
                   {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
                 <input
@@ -455,63 +443,47 @@ const handleUpdateMember = async () => {
             </div>
           )}
 
-          {/* 새로고침 */}
-          <div className="flex justify-end mb-3">
-            <button
-              onClick={fetchAll}
-              className="text-[#6366f1] text-xs hover:text-[#818cf8] transition-colors"
-            >
-              새로고침
-            </button>
-          </div>
-
-          {/* 직원 목록 */}
           <div className="space-y-3">
             {members.length === 0 ? (
-              <div className="text-[#52525b] text-sm text-center py-12">
-                등록된 직원이 없어요
-              </div>
+              <div className="text-[#52525b] text-sm text-center py-12">등록된 직원이 없어요</div>
             ) : (
               members.map((m) => (
-                <div
-                  key={m.id}
-                  className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4"
-                >
+                <div key={m.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-white font-semibold">
-                        {m.user_name || "-"}
-                      </span>
+                      <span className="text-white font-semibold">{m.user_name || "-"}</span>
                       {m.is_admin && (
-                        <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">
-                          관리자
-                        </span>
+                        <span className="bg-[#1e1b4b] border border-[#3730a3] text-[#818cf8] text-xs px-2 py-0.5 rounded-lg">관리자</span>
                       )}
                     </div>
-                 <div className="flex items-center gap-3">
-  <button
-    onClick={() => setEditMember(m)}
-    className="text-[#71717a] hover:text-[#818cf8] text-xs transition-colors"
-  >
-    수정
-  </button>
-  <button
-    onClick={() => handleResetPassword(m.user_email)}
-    className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
-  >
-    PW초기화
-  </button>
-  <button
-    onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
-    className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
-  >
-    삭제
-  </button>
-</div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setEditMember(m)}
+                        className="text-[#71717a] hover:text-[#818cf8] text-xs transition-colors"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => handleResetPassword(m.user_email)}
+                        className="text-[#71717a] hover:text-[#6366f1] text-xs transition-colors"
+                      >
+                        PW초기화
+                      </button>
+                      <button
+                        onClick={() => handleResetAttendance(m.user_id, m.user_name || m.user_email)}
+                        className="text-[#71717a] hover:text-[#f59e0b] text-xs transition-colors"
+                      >
+                        출근초기화
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMember(m.id, m.user_name || m.user_email)}
+                        className="text-[#71717a] hover:text-[#ef4444] text-xs transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-[#71717a] text-xs mb-1">
-                    {m.user_email}
-                  </div>
+                  <div className="text-[#71717a] text-xs mb-1">{m.user_email}</div>
                   <div className="text-[#6366f1] text-xs">{m.company_name}</div>
                 </div>
               ))
@@ -519,64 +491,94 @@ const handleUpdateMember = async () => {
           </div>
         </>
       )}
+
+      {/* 개인 유저 탭 */}
+      {tab === "users" && (
+        <div className="space-y-3">
+          {individualUsers.length === 0 ? (
+            <div className="text-[#52525b] text-sm text-center py-12">회사 미소속 유저가 없어요</div>
+          ) : (
+            individualUsers.map((u) => (
+              <div key={u.id} className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-semibold">{u.name || "-"}</span>
+                  </div>
+                  <button
+                    onClick={() => handleResetUserAttendance(u.id, u.name || u.email)}
+                    className="text-[#71717a] hover:text-[#f59e0b] text-xs transition-colors"
+                  >
+                    출근초기화
+                  </button>
+                </div>
+                <div className="text-[#71717a] text-xs mb-1">{u.email}</div>
+                <div className="text-[#52525b] text-xs">가입일 {formatDate(u.created_at)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* 수정 모달 */}
       {editMember && (
-  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-5">
-    <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 w-full max-w-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-white font-semibold">직원 정보 수정</div>
-        <button onClick={() => setEditMember(null)} className="text-[#71717a] hover:text-white text-sm">✕</button>
-      </div>
-      <div className="space-y-3">
-        <div>
-          <div className="text-[#71717a] text-xs mb-1">이름</div>
-          <input
-            type="text"
-            value={editMember.user_name || ""}
-            onChange={(e) => setEditMember({ ...editMember, user_name: e.target.value })}
-            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
-          />
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-5">
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-5 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-white font-semibold">직원 정보 수정</div>
+              <button onClick={() => setEditMember(null)} className="text-[#71717a] hover:text-white text-sm">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-[#71717a] text-xs mb-1">이름</div>
+                <input
+                  type="text"
+                  value={editMember.user_name || ""}
+                  onChange={(e) => setEditMember({ ...editMember, user_name: e.target.value })}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+                />
+              </div>
+              <div>
+                <div className="text-[#71717a] text-xs mb-1">이메일</div>
+                <input
+                  type="email"
+                  value={editMember.user_email || ""}
+                  onChange={(e) => setEditMember({ ...editMember, user_email: e.target.value })}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+                />
+              </div>
+              <div>
+                <div className="text-[#71717a] text-xs mb-1">소속 회사</div>
+                <select
+                  value={editMember.company_id || ""}
+                  onChange={(e) => setEditMember({ ...editMember, company_id: e.target.value })}
+                  className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editMember.is_admin || false}
+                  onChange={(e) => setEditMember({ ...editMember, is_admin: e.target.checked })}
+                  className="w-4 h-4 accent-[#6366f1]"
+                />
+                <span className="text-[#71717a] text-sm">관리자 권한</span>
+              </label>
+              <button
+                onClick={handleUpdateMember}
+                disabled={editLoading}
+                className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                {editLoading ? "수정 중..." : "저장하기"}
+              </button>
+            </div>
+          </div>
         </div>
-        <div>
-          <div className="text-[#71717a] text-xs mb-1">이메일</div>
-          <input
-            type="email"
-            value={editMember.user_email || ""}
-            onChange={(e) => setEditMember({ ...editMember, user_email: e.target.value })}
-            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
-          />
-        </div>
-        <div>
-          <div className="text-[#71717a] text-xs mb-1">소속 회사</div>
-          <select
-            value={editMember.company_id || ""}
-            onChange={(e) => setEditMember({ ...editMember, company_id: e.target.value })}
-            className="w-full bg-[#09090b] border border-[#27272a] text-white rounded-xl px-4 py-3 outline-none focus:border-[#6366f1] transition-all text-sm"
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={editMember.is_admin || false}
-            onChange={(e) => setEditMember({ ...editMember, is_admin: e.target.checked })}
-            className="w-4 h-4 accent-[#6366f1]"
-          />
-          <span className="text-[#71717a] text-sm">관리자 권한</span>
-        </label>
-        <button
-          onClick={handleUpdateMember}
-          disabled={editLoading}
-          className="w-full bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition-all text-sm"
-        >
-          {editLoading ? "수정 중..." : "저장하기"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
     </main>
   );
 }
