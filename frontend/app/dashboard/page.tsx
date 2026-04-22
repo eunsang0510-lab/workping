@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const router = useRouter();
+  const [checkOutLocation, setCheckOutLocation] = useState("-");
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -63,6 +64,7 @@ export default function Dashboard() {
       if (data.checkout) {
         setIsCheckedIn(false);
         setCheckOutTime(data.checkout);
+        setCheckOutLocation(data.checkout_address || "-");  // ← 추가
         const minutes = Math.floor(
           (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
         );
@@ -144,40 +146,41 @@ export default function Dashboard() {
   };
 
   const handleCheckOut = async () => {
-    setGpsLoading(true);
-    try {
-      const position = await getCurrentPosition();
-      const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
-      const address = await getAddressFromCoords(latitude, longitude);
+  setGpsLoading(true);
+  try {
+    const position = await getCurrentPosition();
+    const { latitude, longitude } = position.coords;
+    const nowISO = new Date().toISOString();
+    const address = await getAddressFromCoords(latitude, longitude);
 
-      await fetch(`${API_URL}/api/location/record`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user?.uid,
-          latitude,
-          longitude,
-          timestamp: nowISO,
-          type: "checkout",
-          address,
-        }),
-      });
+    await fetch(`${API_URL}/api/location/record`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user?.uid,
+        latitude,
+        longitude,
+        timestamp: nowISO,
+        type: "checkout",
+        address,
+      }),
+    });
 
-      setIsCheckedIn(false);
-      setCheckOutTime(nowISO);
-      if (checkInTime) {
-        setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
-      }
-      setRecords((prev) => [
-        ...prev,
-        { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" },
-      ]);
-    } catch (error) {
-      alert("GPS 위치를 가져올 수 없어요.");
-    } finally {
-      setGpsLoading(false);
+    setIsCheckedIn(false);
+    setCheckOutTime(nowISO);
+    setCheckOutLocation(address);
+    if (checkInTime) {
+      setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
     }
+    setRecords((prev) => [
+      ...prev,
+      { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" },
+    ]);
+  } catch (error) {
+    alert("GPS 위치를 가져올 수 없어요.");
+  } finally {
+    setGpsLoading(false);
+  }
   };
 
   const formatTime = (isoString: string | null) => {
@@ -335,7 +338,9 @@ export default function Dashboard() {
                 <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
                 <div>
                   <div className="text-white text-sm">퇴근</div>
-                  <div className="text-[#71717a] text-xs">{formatTime(checkOutTime)}</div>
+                  <div className="text-[#71717a] text-xs">
+                    {formatTime(checkOutTime)} · {checkOutLocation !== "-" ? checkOutLocation : "위치 미확인"}
+                  </div>
                 </div>
               </div>
             )}
