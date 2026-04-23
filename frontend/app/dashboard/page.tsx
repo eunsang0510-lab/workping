@@ -310,6 +310,15 @@ export default function Dashboard() {
             </div>
           </div>
         </Link>
+        <Link href="/calendar">
+          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <span className="text-lg">🗓️</span>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-bold">달력</div>
+              <div className="text-[#6b6b6b] text-xs">근로 기록</div>
+            </div>
+          </div>
+        </Link>
         {isAdmin && (
           <Link href="/admin">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">

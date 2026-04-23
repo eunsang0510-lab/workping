@@ -11,11 +11,6 @@ export default function Landing() {
         <h1 className="text-xl font-black tracking-tight">
           Work<span className="text-[#5b5ef4]">Ping</span>
         </h1>
-        <Link href="/login">
-          <button className="bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-all">
-            무료 시작하기
-          </button>
-        </Link>
       </nav>
 
       {/* 히어로 */}
@@ -101,7 +96,7 @@ export default function Landing() {
         <div className="grid grid-cols-2 gap-3">
           {[
             { icon: "📍", title: "GPS 출퇴근", desc: "위치 기반 정확한 출퇴근 기록" },
-            { icon: "🏢", title: "출근 구역 설정", desc: "회사 위치 벗어나면 출근 불가" },
+            { icon: "🏢", title: "출근 구역 설정", desc: "지정된 구역내에서 출퇴근 기능 동작" },
             { icon: "📊", title: "근무 리포트", desc: "주간·월간 자동 리포트 생성" },
             { icon: "📥", title: "엑셀 다운로드", desc: "급여 계산용 데이터 즉시 추출" },
             { icon: "👥", title: "팀 관리", desc: "관리자 페이지로 팀원 현황 파악" },
