@@ -361,3 +361,71 @@ def export_attendance_excel(company_id: str, db: Session = Depends(get_db)):
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         },
     )
+
+@router.get("/month/{user_id}")
+def get_month_dates(user_id: str, year: int, month: int, db: Session = Depends(get_db)):
+    """해당 월에 기록 있는 날짜 목록 반환"""
+    from datetime import date
+    start = datetime(year, month, 1)
+    if month == 12:
+        end = datetime(year + 1, 1, 1)
+    else:
+        end = datetime(year, month + 1, 1)
+
+    records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        )
+        .all()
+    )
+
+    dates = {}
+    for r in records:
+        date_str = r.recorded_at.date().isoformat()
+        dates[date_str] = True
+
+    return {"dates": dates}
+
+
+@router.get("/day/{user_id}")
+def get_day_record(user_id: str, date: str, db: Session = Depends(get_db)):
+    """특정 날짜의 출퇴근 기록 반환 (date: YYYY-MM-DD)"""
+    try:
+        target = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return {"error": "날짜 형식 오류"}
+
+    # 새벽 4시 기준
+    start = target + timedelta(hours=4)
+    end = start + timedelta(hours=24)
+
+    records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
+
+    checkin = next((r for r in records if r.type == "checkin"), None)
+    checkout = next((r for r in records if r.type == "checkout"), None)
+
+    work_minutes = None
+    if checkin and checkout:
+        diff = checkout.recorded_at - checkin.recorded_at
+        work_minutes = int(diff.total_seconds() / 60)
+
+    return {
+        "date": date,
+        "checkin": checkin.recorded_at.isoformat() if checkin else None,
+        "checkout": checkout.recorded_at.isoformat() if checkout else None,
+        "checkin_address": checkin.address if checkin else None,
+        "checkout_address": checkout.address if checkout else None,
+        "work_minutes": work_minutes,
+    }
