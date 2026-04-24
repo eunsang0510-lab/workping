@@ -457,7 +457,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
             db.commit()
             
     except Exception as e:
-        print(f"❌ 비밀번호 변경 실패: Y
+        print(f"비밀번호 변경 실패: {str(e)}")
 
     # Gmail SMTP로 이메일 발송
     try:
