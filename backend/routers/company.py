@@ -428,9 +428,15 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     chars = string.ascii_letters + string.digits
     new_password = "".join(random.choices(chars, k=8))
 
-    # Firebase 비밀번호 변경
+   # Firebase 비밀번호 변경
     try:
+        print(f"🔍 user_id: {member.user_id}")
+        print(f"🔍 email: {member.user_email}")
+        if not member.user_id:
+            raise HTTPException(status_code=400, detail="Firebase UID가 없어요. 슈퍼어드민에서 직원을 다시 등록해주세요.")
         firebase_auth.update_user(member.user_id, password=new_password)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
 
