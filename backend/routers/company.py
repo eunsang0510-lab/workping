@@ -185,14 +185,20 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
         },
     )
 
+    print(f"🔍 Firebase 계정 생성 응답: {response.status_code} {response.text}")
+
     if response.status_code != 200:
         error = response.json().get("error", {}).get("message", "알 수 없는 오류")
         if "EMAIL_EXISTS" in error:
-            uid = ""
+            # 이미 있으면 uid 가져오기
+            user = firebase_auth.get_user_by_email(req.email)
+            uid = user.uid
+            print(f"🔍 기존 Firebase 계정 uid: {uid}")
         else:
             raise HTTPException(status_code=400, detail=f"계정 생성 실패: {error}")
     else:
         uid = response.json().get("localId", "")
+        print(f"🔍 새 Firebase 계정 uid: {uid}")
 
     member = CompanyMember(
         company_id=req.company_id,
@@ -451,8 +457,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
             db.commit()
             
     except Exception as e:
-        print(f"❌ 비밀번호 변경 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
+        print(f"❌ 비밀번호 변경 실패: Y
 
     # Gmail SMTP로 이메일 발송
     try:
