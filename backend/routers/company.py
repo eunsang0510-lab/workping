@@ -17,24 +17,20 @@ from firebase_admin import credentials, auth as firebase_auth
 if not firebase_admin._apps:
     try:
         firebase_creds = os.getenv("FIREBASE_ADMIN_CREDENTIALS")
+        print(f"🔍 환경변수 존재: {firebase_creds is not None}")
+        print(f"🔍 환경변수 길이: {len(firebase_creds) if firebase_creds else 0}")
         if firebase_creds:
             cred_dict = json.loads(firebase_creds.strip())
-            # private_key 개행문자 복원
-            if "private_key" in cred_dict:
-                cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+            cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             print("✅ Firebase Admin 초기화 성공 (환경변수)")
         else:
-            cred = credentials.Certificate(
-                os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json')
-            )
-            firebase_admin.initialize_app(cred)
-            print("✅ Firebase Admin 초기화 성공 (파일)")
+            print("❌ 환경변수 없음")
     except Exception as e:
         print(f"❌ Firebase Admin 초기화 실패: {e}")
 
-        
+
 router = APIRouter()
 
 
