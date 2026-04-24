@@ -428,15 +428,28 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     chars = string.ascii_letters + string.digits
     new_password = "".join(random.choices(chars, k=8))
 
-   # Firebase 비밀번호 변경
+   # Firebase 비밀번호 변경 (REST API 방식)
     try:
-        print(f"🔍 user_id: {member.user_id}")
-        print(f"🔍 email: {member.user_email}")
-        if not member.user_id:
-            raise HTTPException(status_code=400, detail="Firebase UID가 없어요. 슈퍼어드민에서 직원을 다시 등록해주세요.")
-        firebase_auth.update_user(member.user_id, password=new_password)
-    except HTTPException:
-        raise
+        firebase_api_key = os.getenv("FIREBASE_API_KEY")
+
+        # 이메일로 비밀번호 재설정 링크 발송 대신 직접 변경
+        # 먼저 임시로 로그인해서 uid 확인
+        sign_in_res = requests.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={firebase_api_key}",
+            json={"email": req.email, "password": "dummy", "returnSecureToken": True}
+        )
+        
+        # uid로 비밀번호 변경 (Admin SDK)
+        if member.user_id:
+            firebase_auth.update_user(member.user_id, password=new_password)
+        else:
+            # uid 없으면 이메일로 계정 찾아서 변경
+            user = firebase_auth.get_user_by_email(req.email)
+            firebase_auth.update_user(user.uid, password=new_password)
+            # DB에 uid 저장
+            member.user_id = user.uid
+            db.commit()
+            
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
 
