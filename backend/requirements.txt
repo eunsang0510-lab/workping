@@ -7,3 +7,4 @@ pydantic
 requests
 openpyxl
 firebase-admin
+echo sendgrid >> requirements.txt

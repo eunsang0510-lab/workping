@@ -419,9 +419,6 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     import random
     import string
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
 
     member = db.query(CompanyMember).filter(
         CompanyMember.user_email == req.email
@@ -448,15 +445,10 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         print(f"Firebase 비밀번호 변경 실패: {str(e)}")
         raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
 
-    # Gmail SMTP 이메일 발송
+    # SendGrid 이메일 발송
     try:
-        gmail_user = os.getenv("GMAIL_USER")
-        gmail_password = os.getenv("GMAIL_PASSWORD")
-
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "[WorkPing] 임시 비밀번호 안내"
-        msg["From"] = gmail_user
-        msg["To"] = req.email
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
 
         html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
@@ -483,22 +475,20 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
         </div>
         """
 
-        msg.attach(MIMEText(html, "html"))
+        message = Mail(
+            from_email="eunsang0510@gmail.com",
+            to_emails=req.email,
+            subject="[WorkPing] 임시 비밀번호 안내",
+            html_content=html,
+        )
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(gmail_user, gmail_password)
-            server.sendmail(gmail_user, req.email, msg.as_string())
-
-        print(f"이메일 발송 성공: {req.email}")
+        sg = SendGridAPIClient(os.getenv("SENDGRID_API_KEY"))
+        response = sg.send(message)
+        print(f"이메일 발송 성공: {req.email} / 상태: {response.status_code}")
 
     except Exception as e:
         print(f"이메일 발송 실패: {str(e)}")
         raise HTTPException(status_code=500, detail=f"이메일 발송 실패: {str(e)}")
-
-    return {
-        "success": True,
-        "message": f"임시 비밀번호가 {req.email}로 발송됐어요",
-    }
 
 
 @router.put("/members/{member_id}")
