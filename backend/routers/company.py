@@ -13,21 +13,23 @@ import json
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 
-# Firebase Admin 초기화 (한 번만)
+ # Firebase Admin 초기화 (한 번만)
 if not firebase_admin._apps:
-    firebase_creds = os.getenv("FIREBASE_ADMIN_CREDENTIALS")
-    if firebase_creds:
-        cred_dict = json.loads(firebase_creds)
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-    else:
-        try:
+    try:
+        firebase_creds = os.getenv("FIREBASE_ADMIN_CREDENTIALS")
+        if firebase_creds:
+            cred_dict = json.loads(firebase_creds.strip())
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin 초기화 성공 (환경변수)")
+        else:
             cred = credentials.Certificate(
                 os.path.join(os.path.dirname(__file__), '..', 'firebase-admin.json')
             )
             firebase_admin.initialize_app(cred)
-        except Exception:
-            pass  # 로컬에도 없으면 그냥 스킵
+            print("✅ Firebase Admin 초기화 성공 (파일)")
+    except Exception as e:
+        print(f"❌ Firebase Admin 초기화 실패: {e}")
 
 router = APIRouter()
 
@@ -410,6 +412,12 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
 
 @router.post("/members/reset-password")
 def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    import random
+    import string
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_email == req.email
     ).first()
@@ -417,19 +425,68 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
 
-    email_prefix = req.email.split("@")[0]
-    birth = member.birth_date or "00000000"
-    initial_password = f"{email_prefix}{birth}"
+    # 랜덤 비밀번호 생성 (영문 대소문자 + 숫자 8자리)
+    chars = string.ascii_letters + string.digits
+    new_password = "".join(random.choices(chars, k=8))
 
+    # Firebase 비밀번호 변경
     try:
-        firebase_auth.update_user(member.user_id, password=initial_password)
-        return {
-            "success": True,
-            "message": "비밀번호가 초기화됐어요",
-            "initial_password": initial_password,
-        }
+        firebase_auth.update_user(member.user_id, password=new_password)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
+
+    # Gmail SMTP로 이메일 발송
+    try:
+        gmail_user = os.getenv("GMAIL_USER")
+        gmail_password = os.getenv("GMAIL_PASSWORD")
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "[WorkPing] 임시 비밀번호 안내"
+        msg["From"] = gmail_user
+        msg["To"] = req.email
+
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+          <h1 style="font-size: 24px; font-weight: 900; margin-bottom: 4px;">
+            Work<span style="color: #5b5ef4;">Ping</span>
+          </h1>
+          <p style="color: #6b6b6b; font-size: 14px; margin-bottom: 32px;">GPS 기반 스마트 근태관리</p>
+
+          <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">임시 비밀번호 안내</h2>
+          <p style="color: #6b6b6b; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
+            안녕하세요, <strong>{member.user_name or req.email}</strong>님.<br/>
+            임시 비밀번호가 발급됐어요. 로그인 후 반드시 비밀번호를 변경해주세요.
+          </p>
+
+          <div style="background: #f0f0ff; border: 1px solid #c7c8fa; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <p style="color: #a0a0a0; font-size: 12px; margin-bottom: 8px;">임시 비밀번호</p>
+            <p style="color: #5b5ef4; font-size: 28px; font-weight: 900; letter-spacing: 4px; margin: 0;">{new_password}</p>
+          </div>
+
+          <a href="https://workping-kappa.vercel.app/login"
+             style="display: block; background: #5b5ef4; color: white; text-align: center; padding: 16px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 14px; margin-bottom: 24px;">
+            WorkPing 로그인하기 →
+          </a>
+
+          <p style="color: #a0a0a0; font-size: 12px; text-align: center;">
+            본 메일은 발신 전용이에요. 문의: eunsang0510@gmail.com
+          </p>
+        </div>
+        """
+
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(gmail_user, gmail_password)
+            server.sendmail(gmail_user, req.email, msg.as_string())
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이메일 발송 실패: {str(e)}")
+
+    return {
+        "success": True,
+        "message": f"임시 비밀번호가 {req.email}로 발송됐어요",
+    }
 
 
 @router.put("/members/{member_id}")
