@@ -108,28 +108,41 @@ def get_members(db: Session = Depends(get_db)):
     return result
 
 
+# 멤버 추가 스키마
+class MemberCreate(BaseModel):
+    company_id: str
+    user_email: str
+    user_name: Optional[str] = None
+    birth_date: Optional[str] = "00000000"
+    is_admin: Optional[bool] = False
+
 # 멤버 추가
 @router.post("/member")
 def create_member(body: MemberCreate, db: Session = Depends(get_db)):
+    from routers.company import register_member, RegisterMemberRequest
+
     company = db.query(Company).filter(Company.id == body.company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
-    member = CompanyMember(
-        id=str(uuid.uuid4()),
-        company_id=body.company_id,
-        user_id=str(uuid.uuid4()),
-        user_email=body.user_email,
-        user_name=body.user_name,
-        is_admin=body.is_admin,
-    )
-    db.add(member)
-    db.commit()
-    db.refresh(member)
-    return {
-        "success": True,
-        "member": {"id": member.id, "user_email": member.user_email},
-    }
 
+    req = RegisterMemberRequest(
+        company_id=body.company_id,
+        email=body.user_email,
+        name=body.user_name or "",
+        birth_date=body.birth_date or "00000000",
+    )
+    result = register_member(req, db)
+
+    if body.is_admin:
+        member = db.query(CompanyMember).filter(
+            CompanyMember.company_id == body.company_id,
+            CompanyMember.user_email == body.user_email,
+        ).first()
+        if member:
+            member.is_admin = True
+            db.commit()
+
+    return {"success": True, "message": result.get("message"), "email": body.user_email}
 
 # 직원 삭제
 @router.delete("/member/{member_id}")
