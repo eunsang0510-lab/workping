@@ -19,7 +19,7 @@ PLAN_PRICES = {
 
 PLAN_LIMITS = {
     "free": {
-        "max_members": 5,
+        "max_members": 10,
         "location_limit": False,
         "excel": False,
         "report": False,
@@ -136,11 +136,12 @@ def confirm_payment(req: ConfirmPaymentRequest, db: Session = Depends(get_db)):
         error = response.json().get("message", "결제 승인 실패")
         raise HTTPException(status_code=400, detail=error)
 
-    # 결제 기록 업데이트
+   # 결제 기록 업데이트 + 플랜 자동 확인
     payment = db.query(Payment).filter(Payment.order_id == req.order_id).first()
     if payment:
         payment.payment_key = req.payment_key
         payment.status = "done"
+        req.plan = payment.plan  # order_id로 플랜 자동 확인
 
     # 구독 생성/업데이트 (30일)
     sub = Subscription(

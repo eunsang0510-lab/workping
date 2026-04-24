@@ -448,3 +448,21 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
 
     db.commit()
     return {"success": True, "message": "수정 완료"}
+
+@router.get("/my/{user_id}")
+def get_my_company(user_id: str, db: Session = Depends(get_db)):
+    """유저 ID로 소속 회사 정보 반환"""
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id
+    ).first()
+
+    if not member:
+        return {"company_id": None, "company_name": None}
+
+    company = db.query(Company).filter(Company.id == member.company_id).first()
+
+    return {
+        "company_id": member.company_id,
+        "company_name": company.name if company else None,
+        "is_admin": member.is_admin,
+    }
