@@ -430,36 +430,25 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
 
-    # 랜덤 비밀번호 생성 (영문 대소문자 + 숫자 8자리)
+    # 랜덤 비밀번호 생성
     chars = string.ascii_letters + string.digits
     new_password = "".join(random.choices(chars, k=8))
 
-   # Firebase 비밀번호 변경 (REST API 방식)
+    # Firebase 비밀번호 변경
     try:
-        firebase_api_key = os.getenv("FIREBASE_API_KEY")
-
-        # 이메일로 비밀번호 재설정 링크 발송 대신 직접 변경
-        # 먼저 임시로 로그인해서 uid 확인
-        sign_in_res = requests.post(
-            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={firebase_api_key}",
-            json={"email": req.email, "password": "dummy", "returnSecureToken": True}
-        )
-        
-        # uid로 비밀번호 변경 (Admin SDK)
         if member.user_id:
             firebase_auth.update_user(member.user_id, password=new_password)
         else:
-            # uid 없으면 이메일로 계정 찾아서 변경
             user = firebase_auth.get_user_by_email(req.email)
             firebase_auth.update_user(user.uid, password=new_password)
-            # DB에 uid 저장
             member.user_id = user.uid
             db.commit()
-            
+        print(f"Firebase 비밀번호 변경 성공: {req.email}")
     except Exception as e:
-        print(f"비밀번호 변경 실패: {str(e)}")
+        print(f"Firebase 비밀번호 변경 실패: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
 
-    # Gmail SMTP로 이메일 발송
+    # Gmail SMTP 이메일 발송
     try:
         gmail_user = os.getenv("GMAIL_USER")
         gmail_password = os.getenv("GMAIL_PASSWORD")
@@ -475,23 +464,19 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
             Work<span style="color: #5b5ef4;">Ping</span>
           </h1>
           <p style="color: #6b6b6b; font-size: 14px; margin-bottom: 32px;">GPS 기반 스마트 근태관리</p>
-
           <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">임시 비밀번호 안내</h2>
           <p style="color: #6b6b6b; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
             안녕하세요, <strong>{member.user_name or req.email}</strong>님.<br/>
             임시 비밀번호가 발급됐어요. 로그인 후 반드시 비밀번호를 변경해주세요.
           </p>
-
           <div style="background: #f0f0ff; border: 1px solid #c7c8fa; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
             <p style="color: #a0a0a0; font-size: 12px; margin-bottom: 8px;">임시 비밀번호</p>
             <p style="color: #5b5ef4; font-size: 28px; font-weight: 900; letter-spacing: 4px; margin: 0;">{new_password}</p>
           </div>
-
           <a href="https://workping-kappa.vercel.app/login"
              style="display: block; background: #5b5ef4; color: white; text-align: center; padding: 16px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 14px; margin-bottom: 24px;">
             WorkPing 로그인하기 →
           </a>
-
           <p style="color: #a0a0a0; font-size: 12px; text-align: center;">
             본 메일은 발신 전용이에요. 문의: eunsang0510@gmail.com
           </p>
@@ -504,7 +489,10 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
             server.login(gmail_user, gmail_password)
             server.sendmail(gmail_user, req.email, msg.as_string())
 
+        print(f"이메일 발송 성공: {req.email}")
+
     except Exception as e:
+        print(f"이메일 발송 실패: {str(e)}")
         raise HTTPException(status_code=500, detail=f"이메일 발송 실패: {str(e)}")
 
     return {
