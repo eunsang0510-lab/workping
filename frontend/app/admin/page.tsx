@@ -172,18 +172,17 @@ export default function Admin() {
   };
 
  const handleResetPassword = async (email: string) => {
-    console.log("reset password 시작:", email);
+    if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
     try {
       const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
-      console.log("reset password response:", res.status, data);
       if (res.ok) {
-        alert(`✅ 비밀번호 초기화 완료! 이메일로 임시 비밀번호가 발송됐어요.`);
+        alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
       } else {
+        const data = await res.json();
         alert(`초기화 실패: ${data.detail || "알 수 없는 오류"}`);
       }
     } catch (e) {
