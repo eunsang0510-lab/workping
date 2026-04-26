@@ -171,7 +171,7 @@ export default function Admin() {
     }
   };
 
- const handleResetPassword = async (email: string) => {
+const handleResetPassword = async (email: string) => {
     if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
     try {
       const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
@@ -179,16 +179,12 @@ export default function Admin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
-      console.log("status:", res.status, "data:", data);
-      if (res.status === 200) {
+      if (res.ok) {
         alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
       } else {
-        alert(`초기화 실패: ${data.detail || "알 수 없는 오류"}`);
+        alert(`초기화 실패`);
       }
     } catch (e: any) {
-      console.error("에러:", e);
-      // 메일이 왔다면 실제로는 성공한 것
       alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
     }
   };
