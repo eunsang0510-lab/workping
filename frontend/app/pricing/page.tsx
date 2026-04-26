@@ -22,14 +22,16 @@ const PLANS = [
     name: "무료",
     price: 0,
     period: "",
+    priceLabel: "0원",
     features: ["직원 10명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
     highlight: false,
   },
   {
     id: "starter",
     name: "스타터",
-    price: 9900,
-    period: "/ 월",
+    price: 50000,
+    period: "/ 월 (회사별)",
+    priceLabel: "50,000원",
     features: ["직원 20명 이하", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트"],
     highlight: true,
     badge: "인기",
@@ -37,8 +39,9 @@ const PLANS = [
   {
     id: "business",
     name: "비즈니스",
-    price: 29900,
-    period: "/ 월",
+    price: 0,
+    period: "",
+    priceLabel: "협의",
     features: ["직원 무제한", "스타터 기능 전체", "우선 고객 지원"],
     highlight: false,
   },
@@ -194,9 +197,9 @@ export default function PricingPage() {
                 </div>
               </div>
 
-              <div className="flex items-end gap-1 mb-4">
+               <div className="flex items-end gap-1 mb-4">
                 <span className={`text-3xl font-black tracking-tight ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>
-                  {plan.price === 0 ? "0원" : `${plan.price.toLocaleString()}원`}
+                  {plan.priceLabel}
                 </span>
                 <span className={`text-sm mb-1 ${plan.highlight ? "text-white/70" : "text-[#6b6b6b]"}`}>{plan.period}</span>
               </div>
@@ -210,7 +213,13 @@ export default function PricingPage() {
                 ))}
               </div>
 
-              {plan.price > 0 && (
+                {plan.id === "business" ? (
+                <a href="mailto:eunsang0510@gmail.com">
+                  <button className="w-full py-3 rounded-xl text-sm font-bold transition-all bg-[#5b5ef4] text-white hover:bg-[#4a4de0] shadow-[0_4px_16px_rgba(91,94,244,0.3)]">
+                    문의하기
+                  </button>
+                </a>
+              ) : plan.price > 0 && (
                 <button
                   onClick={() => handlePayment(plan)}
                   disabled={isCurrent || payLoading === plan.id}

@@ -392,12 +392,12 @@ export default function Landing() {
                     features: ["직원 10명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
                   },
                   {
-                    name: "스타터", price: "9,900원", period: "/ 월",
+                    name: "스타터", price: "50,000원", period: "/ 월(회사별)",
                     highlight: true, badge: "인기",
                     features: ["직원 20명 이하", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트"],
                   },
                   {
-                    name: "비즈니스", price: "29,900원", period: "/ 월",
+                    name: "비즈니스", price: "협의", period: "/ 월",
                     highlight: false,
                     features: ["직원 무제한", "스타터 기능 전체", "우선 고객 지원"],
                   },
@@ -441,7 +441,7 @@ export default function Landing() {
           Work<span className="text-[#5b5ef4]">Ping</span>
         </h1>
         <p className="text-[#a0a0a0] text-xs mb-1">GPS 기반 스마트 근태관리 서비스</p>
-        <p className="text-[#a0a0a0] text-xs">© 2025 WorkPing. All rights reserved.</p>
+        <p className="text-[#a0a0a0] text-xs">© 2026 WorkPing. All rights reserved.</p>
       </footer>
 
     </main>
