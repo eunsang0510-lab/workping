@@ -180,11 +180,11 @@ export default function SuperAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = await res.json();
-      if (data.success) {
-        alert(`✅ 비밀번호 초기화 완료!\n초기 비밀번호: ${data.initial_password}`);
+      if (res.ok) {
+        alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
       } else {
-        alert("초기화 실패");
+        const data = await res.json();
+        alert(`초기화 실패: ${data.detail || "알 수 없는 오류"}`);
       }
     } catch {
       alert("초기화 실패");
