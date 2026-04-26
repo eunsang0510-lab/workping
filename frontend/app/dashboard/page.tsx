@@ -31,6 +31,10 @@ export default function Dashboard() {
   const [now, setNow] = useState(new Date());
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -156,6 +160,36 @@ export default function Dashboard() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      alert("모든 항목을 입력해주세요");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("새 비밀번호는 6자 이상이어야 해요");
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import("firebase/auth");
+      const credential = EmailAuthProvider.credential(user!.email!, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser!, credential);
+      await updatePassword(auth.currentUser!, newPassword);
+      alert("✅ 비밀번호가 변경됐어요!");
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch (e: any) {
+      if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+        alert("현재 비밀번호가 올바르지 않아요");
+      } else {
+        alert("비밀번호 변경 실패: " + e.message);
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const formatTime = (isoString: string | null) => {
     if (!isoString) return "--:--";
     return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
@@ -194,10 +228,18 @@ export default function Dashboard() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
               <div className="absolute right-0 top-11 bg-white border border-[#e5e5e5] rounded-2xl p-3 w-52 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
-                <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
+               <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
                   <div className="text-[#0a0a0a] text-xs font-bold truncate">{user?.displayName || user?.email}</div>
                   <div className="text-[#6b6b6b] text-xs truncate">{user?.email}</div>
                 </div>
+                {!user?.providerData?.some(p => p.providerId === "google.com") && (
+                  <button
+                    onClick={() => { setShowUserMenu(false); setShowPasswordModal(true); }}
+                    className="w-full text-left px-2 py-2 text-[#5b5ef4] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
+                  >
+                    🔑 비밀번호 변경
+                  </button>
+                )}
                 <button
                   onClick={async () => { await signOut(auth); router.push("/login"); }}
                   className="w-full text-left px-2 py-2 text-[#ef4444] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
@@ -342,6 +384,46 @@ export default function Dashboard() {
           </Link>
         )}
       </div>
+       {/* 비밀번호 변경 모달 */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#0a0a0a] font-black">비밀번호 변경</div>
+              <button onClick={() => { setShowPasswordModal(false); setCurrentPassword(""); setNewPassword(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-[#a0a0a0] text-xs mb-1">현재 비밀번호</div>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="현재 비밀번호 입력"
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                />
+              </div>
+              <div>
+                <div className="text-[#a0a0a0] text-xs mb-1">새 비밀번호</div>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="새 비밀번호 입력 (6자 이상)"
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                />
+              </div>
+              <button
+                onClick={handleChangePassword}
+                disabled={passwordLoading}
+                className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                {passwordLoading ? "변경 중..." : "비밀번호 변경"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
