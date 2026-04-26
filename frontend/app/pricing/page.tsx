@@ -109,10 +109,11 @@ export default function PricingPage() {
         customerName: user?.displayName || "사용자",
       });
     } catch (e: any) {
+      console.error("결제 에러:", e);
       if (e?.code !== "USER_CANCEL") {
-        alert("결제 중 오류가 발생했어요.");
+        alert(`결제 중 오류가 발생했어요.\n${e?.message || e?.code || ""}`);
       }
-    } finally {
+    }finally {
       setPayLoading(null);
     }
   };
