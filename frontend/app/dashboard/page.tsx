@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [planExpired, setPlanExpired] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function Dashboard() {
         setUser(user);
         fetchTodayAttendance(user.uid);
         fetchAdminStatus(user.uid);
+        fetchPlanStatus(user.uid);
       } else {
         router.push("/login");
       }
@@ -88,6 +90,20 @@ export default function Dashboard() {
     }
   };
 
+  const fetchPlanStatus = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/company/my/${userId}`);
+      const data = await res.json();
+      if (data.company_id) {
+        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
+        const subData = await subRes.json();
+        if (subData.status === "expired") {
+          setPlanExpired(true);
+        }
+      }
+    } catch {}
+  };
+
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -114,6 +130,10 @@ export default function Dashboard() {
   };
 
   const handleCheckIn = async () => {
+    if (planExpired) {
+      alert("구독이 만료됐어요. 결제 후 이용해주세요.");
+      return;
+    }
     setGpsLoading(true);
     try {
       const position = await getCurrentPosition();
@@ -137,6 +157,10 @@ export default function Dashboard() {
   };
 
   const handleCheckOut = async () => {
+    if (planExpired) {
+      alert("구독이 만료됐어요. 결제 후 이용해주세요.");
+      return;
+    }
     setGpsLoading(true);
     try {
       const position = await getCurrentPosition();
@@ -228,7 +252,7 @@ export default function Dashboard() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
               <div className="absolute right-0 top-11 bg-white border border-[#e5e5e5] rounded-2xl p-3 w-52 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
-               <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
+                <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
                   <div className="text-[#0a0a0a] text-xs font-bold truncate">{user?.displayName || user?.email}</div>
                   <div className="text-[#6b6b6b] text-xs truncate">{user?.email}</div>
                 </div>
@@ -251,6 +275,21 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* 플랜 만료 알림 */}
+      {planExpired && (
+        <div className="bg-[#fef2f2] border border-[#fecaca] rounded-2xl p-4 mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-[#ef4444] text-sm font-bold mb-0.5">⚠️ 구독이 만료됐어요</div>
+            <div className="text-[#6b6b6b] text-xs">결제 후 출퇴근 기능을 이용할 수 있어요</div>
+          </div>
+          <Link href="/pricing">
+            <button className="bg-[#ef4444] text-white text-xs font-bold px-3 py-2 rounded-xl">
+              결제하기
+            </button>
+          </Link>
+        </div>
+      )}
 
       {/* 메인 카드 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -298,17 +337,17 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={handleCheckIn}
-          disabled={isCheckedIn || !!checkOutTime || gpsLoading}
+          disabled={isCheckedIn || !!checkOutTime || gpsLoading || planExpired}
           className="bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(91,94,244,0.3)]"
         >
-          {gpsLoading ? "⏳ 확인중..." : "📍 출근하기"}
+          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : "📍 출근하기"}
         </button>
         <button
           onClick={handleCheckOut}
-          disabled={!isCheckedIn || gpsLoading}
+          disabled={!isCheckedIn || gpsLoading || planExpired}
           className="bg-white border border-[#e5e5e5] hover:bg-[#f8f8f8] disabled:opacity-40 disabled:cursor-not-allowed text-[#6b6b6b] font-bold py-4 rounded-xl transition-all text-sm shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
         >
-          {gpsLoading ? "⏳ 확인중..." : "🏠 퇴근하기"}
+          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : "🏠 퇴근하기"}
         </button>
       </div>
 
@@ -384,7 +423,8 @@ export default function Dashboard() {
           </Link>
         )}
       </div>
-       {/* 비밀번호 변경 모달 */}
+
+      {/* 비밀번호 변경 모달 */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">

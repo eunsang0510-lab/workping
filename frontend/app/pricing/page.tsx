@@ -53,6 +53,10 @@ export default function PricingPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState<string | null>(null);
+  const [companySearch, setCompanySearch] = useState("");
+  const [searchResults, setSearchResults] = useState<{id: string; name: string}[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<{id: string; name: string} | null>(null);
+  const [searching, setSearching] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -67,12 +71,11 @@ export default function PricingPage() {
 
   const fetchCompanyAndSubscription = async (userId: string) => {
     try {
-      // 회사 정보 가져오기
       const res = await fetch(`${API_URL}/api/company/my/${userId}`);
       const data = await res.json();
       if (data.company_id) {
         setCompanyId(data.company_id);
-        // 구독 정보 가져오기
+        setSelectedCompany({ id: data.company_id, name: data.company_name || "내 회사" });
         const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
         const subData = await subRes.json();
         setSubscription(subData);
@@ -82,14 +85,39 @@ export default function PricingPage() {
     }
   };
 
+  const handleSearchCompany = async () => {
+    if (!companySearch.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company/search?name=${companySearch}`);
+      const data = await res.json();
+      setSearchResults(data.companies || []);
+    } catch {
+      alert("검색 실패");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectCompany = async (company: {id: string; name: string}) => {
+    setSelectedCompany(company);
+    setCompanyId(company.id);
+    setSearchResults([]);
+    setCompanySearch("");
+    try {
+      const subRes = await fetch(`${API_URL}/api/payment/subscription/${company.id}`);
+      const subData = await subRes.json();
+      setSubscription(subData);
+    } catch {}
+  };
+
   const handlePayment = async (plan: { id: string; name: string; price: number }) => {
     if (!companyId) {
-      alert("회사 정보를 찾을 수 없어요. 관리자 계정으로 로그인해주세요.");
+      alert("먼저 회사를 선택해주세요.");
       return;
     }
     setPayLoading(plan.id);
     try {
-      // 주문 ID 생성
       const prepRes = await fetch(`${API_URL}/api/payment/prepare`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,7 +125,6 @@ export default function PricingPage() {
       });
       const { order_id, amount } = await prepRes.json();
 
-      // 토스페이먼츠 결제창 열기
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = tossPayments.payment({ customerKey: companyId });
 
@@ -105,7 +132,7 @@ export default function PricingPage() {
         method: "CARD",
         amount: { currency: "KRW", value: amount },
         orderId: order_id,
-        orderName: `WorkPing ${plan.name} 플랜`,
+        orderName: `WorkPing ${plan.name} 플랜 - ${selectedCompany?.name}`,
         successUrl: `${window.location.origin}/pricing/success`,
         failUrl: `${window.location.origin}/pricing/fail`,
         customerEmail: user?.email || "",
@@ -116,7 +143,7 @@ export default function PricingPage() {
       if (e?.code !== "USER_CANCEL") {
         alert(`결제 중 오류가 발생했어요.\n${e?.message || e?.code || ""}`);
       }
-    }finally {
+    } finally {
       setPayLoading(null);
     }
   };
@@ -152,6 +179,62 @@ export default function PricingPage() {
       <div className="text-center mb-6">
         <div className="text-[#a0a0a0] text-xs uppercase tracking-widest mb-1">Pricing</div>
         <h2 className="text-[#0a0a0a] text-2xl font-black tracking-tight">요금제 선택</h2>
+      </div>
+
+      {/* 회사 선택 */}
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">회사 선택</div>
+        {!selectedCompany ? (
+          <>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="회사 이름 검색"
+                value={companySearch}
+                onChange={(e) => setCompanySearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchCompany()}
+                className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+              <button
+                onClick={handleSearchCompany}
+                disabled={searching}
+                className="bg-[#5b5ef4] hover:bg-[#4a4de0] text-white px-4 rounded-xl transition-all text-sm font-bold disabled:opacity-50"
+              >
+                {searching ? "..." : "검색"}
+              </button>
+            </div>
+            {searchResults.length > 0 && (
+              <div className="bg-white border border-[#e5e5e5] rounded-xl overflow-hidden">
+                {searchResults.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleSelectCompany(c)}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f8f8f8] transition-all border-b border-[#e5e5e5] last:border-0 text-left"
+                  >
+                    <span>🏢</span>
+                    <span className="text-[#0a0a0a] text-sm">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchResults.length === 0 && companySearch && !searching && (
+              <div className="text-[#a0a0a0] text-sm text-center py-3">검색 결과가 없어요</div>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center justify-between bg-[#f0f0ff] border border-[#c7c8fa] rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span>🏢</span>
+              <span className="text-[#0a0a0a] text-sm font-bold">{selectedCompany.name}</span>
+            </div>
+            <button
+              onClick={() => { setSelectedCompany(null); setCompanyId(null); setSubscription(null); }}
+              className="text-[#4a4de0] text-xs hover:text-[#0a0a0a]"
+            >
+              변경
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 현재 구독 상태 */}
@@ -197,7 +280,7 @@ export default function PricingPage() {
                 </div>
               </div>
 
-               <div className="flex items-end gap-1 mb-4">
+              <div className="flex items-end gap-1 mb-4">
                 <span className={`text-3xl font-black tracking-tight ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>
                   {plan.priceLabel}
                 </span>
@@ -213,7 +296,7 @@ export default function PricingPage() {
                 ))}
               </div>
 
-                {plan.id === "business" ? (
+              {plan.id === "business" ? (
                 <a href="mailto:eunsang0510@gmail.com">
                   <button className="w-full py-3 rounded-xl text-sm font-bold transition-all bg-[#5b5ef4] text-white hover:bg-[#4a4de0] shadow-[0_4px_16px_rgba(91,94,244,0.3)]">
                     문의하기
@@ -222,14 +305,14 @@ export default function PricingPage() {
               ) : plan.price > 0 && (
                 <button
                   onClick={() => handlePayment(plan)}
-                  disabled={isCurrent || payLoading === plan.id}
+                  disabled={isCurrent || payLoading === plan.id || !companyId}
                   className={`w-full py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     plan.highlight
                       ? "bg-white text-[#5b5ef4] hover:bg-white/90"
                       : "bg-[#5b5ef4] text-white hover:bg-[#4a4de0] shadow-[0_4px_16px_rgba(91,94,244,0.3)]"
                   }`}
                 >
-                  {payLoading === plan.id ? "처리중..." : isCurrent ? "현재 이용중" : "결제하기"}
+                  {payLoading === plan.id ? "처리중..." : isCurrent ? "현재 이용중" : !companyId ? "회사를 선택해주세요" : "결제하기"}
                 </button>
               )}
             </div>
