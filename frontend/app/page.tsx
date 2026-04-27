@@ -1,5 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { useRouter } from "next/navigation";
+
+function useAuthRedirect() {
+  const router = useRouter();
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) router.push("/dashboard");
+    });
+    return () => unsubscribe();
+  }, [router]);
+}
 
 function AppPreview() {
   const [activeTab, setActiveTab] = useState(0);
@@ -261,6 +275,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function Landing() {
+  useAuthRedirect();
   return (
     <main style={{ fontFamily: "'DM Sans', 'Pretendard', sans-serif" }} className="min-h-screen bg-white text-[#0a0a0a]">
 
