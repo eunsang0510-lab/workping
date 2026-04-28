@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { getAddressFromCoords } from "@/lib/kakao";
 import Link from "next/link";
+import Toast from "@/components/Toast";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -15,6 +16,11 @@ interface LocationRecord {
   timestamp: string;
   place_name: string;
   type: "checkin" | "checkout";
+}
+
+interface ToastState {
+  message: string;
+  type: "success" | "error" | "info";
 }
 
 export default function Dashboard() {
@@ -36,11 +42,27 @@ export default function Dashboard() {
   const [newPassword, setNewPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const router = useRouter();
+
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // GPS 권한 미리 요청
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => {},
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -131,7 +153,7 @@ export default function Dashboard() {
 
   const handleCheckIn = async () => {
     if (planExpired) {
-      alert("구독이 만료됐어요. 결제 후 이용해주세요.");
+      showToast("구독이 만료됐어요. 결제 후 이용해주세요.", "error");
       return;
     }
     setGpsLoading(true);
@@ -149,8 +171,9 @@ export default function Dashboard() {
       setCheckInTime(nowISO);
       setCurrentLocation(address);
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin" }]);
+      showToast("출근 완료!", "success");
     } catch (error) {
-      alert("GPS 위치를 가져올 수 없어요.");
+      showToast("GPS 위치를 가져올 수 없어요.", "error");
     } finally {
       setGpsLoading(false);
     }
@@ -158,7 +181,7 @@ export default function Dashboard() {
 
   const handleCheckOut = async () => {
     if (planExpired) {
-      alert("구독이 만료됐어요. 결제 후 이용해주세요.");
+      showToast("구독이 만료됐어요. 결제 후 이용해주세요.", "error");
       return;
     }
     setGpsLoading(true);
@@ -177,8 +200,9 @@ export default function Dashboard() {
       setCheckOutLocation(address);
       if (checkInTime) setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
+      showToast("퇴근 완료!", "success");
     } catch (error) {
-      alert("GPS 위치를 가져올 수 없어요.");
+      showToast("GPS 위치를 가져올 수 없어요.", "error");
     } finally {
       setGpsLoading(false);
     }
@@ -186,11 +210,11 @@ export default function Dashboard() {
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
-      alert("모든 항목을 입력해주세요");
+      showToast("모든 항목을 입력해주세요", "error");
       return;
     }
     if (newPassword.length < 6) {
-      alert("새 비밀번호는 6자 이상이어야 해요");
+      showToast("새 비밀번호는 6자 이상이어야 해요", "error");
       return;
     }
     setPasswordLoading(true);
@@ -199,15 +223,15 @@ export default function Dashboard() {
       const credential = EmailAuthProvider.credential(user!.email!, currentPassword);
       await reauthenticateWithCredential(auth.currentUser!, credential);
       await updatePassword(auth.currentUser!, newPassword);
-      alert("✅ 비밀번호가 변경됐어요!");
+      showToast("비밀번호가 변경됐어요!", "success");
       setShowPasswordModal(false);
       setCurrentPassword("");
       setNewPassword("");
     } catch (e: any) {
       if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
-        alert("현재 비밀번호가 올바르지 않아요");
+        showToast("현재 비밀번호가 올바르지 않아요", "error");
       } else {
-        alert("비밀번호 변경 실패: " + e.message);
+        showToast("비밀번호 변경 실패: " + e.message, "error");
       }
     } finally {
       setPasswordLoading(false);
@@ -235,6 +259,15 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
+
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
