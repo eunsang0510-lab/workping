@@ -12,7 +12,6 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from routers.deps import get_current_user, limiter
 
-
 load_dotenv()
 
 router = APIRouter()
@@ -69,7 +68,7 @@ def record_location(
 
 @router.get("/address")
 @limiter.limit("30/minute")
-def get_address(lat: float, lng: float):
+def get_address(request: Request, lat: float, lng: float):
     """좌표 → 주소 변환 (카카오 API) - 인증 불필요"""
     try:
         kakao_key = os.getenv("KAKAO_REST_API_KEY")
