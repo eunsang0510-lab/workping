@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from routers import auth, location, attendance, company, superadmin, payment
 from database.connection import engine, Base
 from models import user, location as location_model
@@ -12,9 +15,16 @@ load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
+# Rate Limiter 설정
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0"
 )
+
+# Rate Limit 에러 핸들러 등록
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS - 배포 도메인만 허용
 app.add_middleware(
