@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import Toast from "@/components/Toast";
+import Confirm from "@/components/Confirm";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
@@ -45,6 +47,16 @@ interface EditMember {
   company_id: string;
 }
 
+interface ToastState {
+  message: string;
+  type: "success" | "error" | "info";
+}
+
+interface ConfirmState {
+  message: string;
+  onConfirm: () => void;
+}
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,7 +80,17 @@ export default function Admin() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [editMember, setEditMember] = useState<EditMember | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const router = useRouter();
+
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  }, []);
+
+  const showConfirm = useCallback((message: string, onConfirm: () => void) => {
+    setConfirm({ message, onConfirm });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -132,13 +154,13 @@ export default function Admin() {
       setShowCreateForm(false);
       fetchCompanyInfo(user!.uid);
     } catch {
-      alert("회사 생성 실패");
+      showToast("회사 생성 실패", "error");
     }
   };
 
   const handleRegisterMember = async () => {
     if (!memberName || !memberEmail || !memberBirth) {
-      alert("모든 항목을 입력해주세요");
+      showToast("모든 항목을 입력해주세요", "error");
       return;
     }
     try {
@@ -149,46 +171,49 @@ export default function Admin() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`✅ 등록 완료!\n초기 비밀번호: ${data.initial_password}`);
+        showToast(`등록 완료! 초기 비밀번호: ${data.initial_password}`, "success");
         setMemberName(""); setMemberEmail(""); setMemberBirth("");
         fetchAttendance(company!.id);
       } else {
-        alert(data.message);
+        showToast(data.message, "error");
       }
     } catch {
-      alert("등록 실패");
+      showToast("등록 실패", "error");
     }
   };
 
   const handleResetAttendance = async (userId: string, userName: string) => {
-    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
-    try {
-      await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
-      alert("✅ 초기화 완료!");
-      fetchAttendance(company!.id);
-    } catch {
-      alert("초기화 실패");
-    }
+    showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
+        showToast("초기화 완료!", "success");
+        fetchAttendance(company!.id);
+      } catch {
+        showToast("초기화 실패", "error");
+      }
+    });
   };
 
-const handleResetPassword = async (email: string) => {
-    if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
-    try {
-      const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
-      if (res.ok) {
-        alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
-      } else {
-        const data = await res.json();
-        alert(`초기화 실패: ${data.detail || "알 수 없는 오류"}`);
+  const handleResetPassword = async (email: string) => {
+    showConfirm(`${email}의 비밀번호를 초기화할까요?`, async () => {
+      setConfirm(null);
+      try {
+        const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        if (res.ok) {
+          showToast(`임시 비밀번호가 ${email}로 발송됐어요`, "success");
+        } else {
+          const data = await res.json();
+          showToast(`초기화 실패: ${data.detail || "알 수 없는 오류"}`, "error");
+        }
+      } catch {
+        showToast("초기화 실패", "error");
       }
-    } catch (e) {
-      console.error(e);
-      alert("초기화 실패");
-    }
+    });
   };
 
   const handleUpdateMember = async () => {
@@ -202,12 +227,12 @@ const handleResetPassword = async (email: string) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 수정 완료!");
+        showToast("수정 완료!", "success");
         setEditMember(null);
         fetchAttendance(company!.id);
       }
     } catch {
-      alert("수정 실패");
+      showToast("수정 실패", "error");
     } finally {
       setEditLoading(false);
     }
@@ -234,7 +259,7 @@ const handleResetPassword = async (email: string) => {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         setExcelMembers(XLSX.utils.sheet_to_json<any>(sheet));
       } catch {
-        alert("엑셀 파일을 읽을 수 없어요");
+        showToast("엑셀 파일을 읽을 수 없어요", "error");
       }
     };
     reader.readAsArrayBuffer(file);
@@ -253,12 +278,12 @@ const handleResetPassword = async (email: string) => {
         body: JSON.stringify({ company_id: company.id, members })
       });
       const data = await res.json();
-      alert(`✅ ${data.message}`);
+      showToast(data.message, "success");
       setExcelMembers([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       fetchAttendance(company.id);
     } catch {
-      alert("일괄 등록 실패");
+      showToast("일괄 등록 실패", "error");
     } finally {
       setBulkLoading(false);
     }
@@ -272,13 +297,13 @@ const handleResetPassword = async (email: string) => {
         setLocationLng(position.coords.longitude.toFixed(6));
         setGettingLocation(false);
       },
-      () => { alert("GPS 위치를 가져올 수 없어요"); setGettingLocation(false); }
+      () => { showToast("GPS 위치를 가져올 수 없어요", "error"); setGettingLocation(false); }
     );
   };
 
   const handleAddLocation = async () => {
     if (!locationName || !locationLat || !locationLng) {
-      alert("모든 항목을 입력해주세요"); return;
+      showToast("모든 항목을 입력해주세요", "error"); return;
     }
     setLocationLoading(true);
     try {
@@ -289,26 +314,29 @@ const handleResetPassword = async (email: string) => {
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 위치 등록 완료!");
+        showToast("위치 등록 완료!", "success");
         setLocationName(""); setLocationLat(""); setLocationLng(""); setLocationRadius("100");
         setShowLocationForm(false);
         fetchLocations(company!.id);
       }
     } catch {
-      alert("위치 등록 실패");
+      showToast("위치 등록 실패", "error");
     } finally {
       setLocationLoading(false);
     }
   };
 
   const handleDeleteLocation = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 위치를 삭제할까요?`)) return;
-    try {
-      await fetch(`${API_URL}/api/company/locations/${id}`, { method: "DELETE" });
-      fetchLocations(company!.id);
-    } catch {
-      alert("삭제 실패");
-    }
+    showConfirm(`"${name}" 위치를 삭제할까요?`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/company/locations/${id}`, { method: "DELETE" });
+        showToast("삭제 완료", "success");
+        fetchLocations(company!.id);
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const formatTime = (isoString: string | null) => {
@@ -338,6 +366,9 @@ const handleResetPassword = async (email: string) => {
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {confirm && <Confirm message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
 
       {/* 헤더 */}
       <div className="flex items-center justify-between gap-3 mb-6">
@@ -432,7 +463,7 @@ const handleResetPassword = async (email: string) => {
                           <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.status}</span>
                           <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">수정</button>
                           <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
-                          <button onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">근무기록 초기화</button>
+                          <button onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">초기화</button>
                         </div>
                       </div>
                       <div className="flex gap-4">

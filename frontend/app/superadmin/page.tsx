@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Toast from "@/components/Toast";
+import Confirm from "@/components/Confirm";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
@@ -41,6 +43,16 @@ interface Stats {
   total_members: number;
 }
 
+interface ToastState {
+  message: string;
+  type: "success" | "error" | "info";
+}
+
+interface ConfirmState {
+  message: string;
+  onConfirm: () => void;
+}
+
 export default function SuperAdmin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,11 +68,22 @@ export default function SuperAdmin() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberCompanyId, setNewMemberCompanyId] = useState("");
+  const [newMemberBirthDate, setNewMemberBirthDate] = useState("");
   const [newMemberIsAdmin, setNewMemberIsAdmin] = useState(false);
   const [memberLoading, setMemberLoading] = useState(false);
   const [editMember, setEditMember] = useState<any | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const router = useRouter();
+
+  const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ message, type });
+  }, []);
+
+  const showConfirm = useCallback((message: string, onConfirm: () => void) => {
+    setConfirm({ message, onConfirm });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -104,13 +127,13 @@ export default function SuperAdmin() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 회사 추가 완료!");
+        showToast("회사 추가 완료!", "success");
         setNewCompanyName("");
         setShowCompanyForm(false);
         fetchAll();
       }
     } catch {
-      alert("회사 추가 실패");
+      showToast("회사 추가 실패", "error");
     } finally {
       setCompanyLoading(false);
     }
@@ -118,7 +141,7 @@ export default function SuperAdmin() {
 
   const handleCreateMember = async () => {
     if (!newMemberEmail || !newMemberCompanyId) {
-      alert("회사와 이메일을 입력해주세요");
+      showToast("회사와 이메일을 입력해주세요", "error");
       return;
     }
     setMemberLoading(true);
@@ -130,85 +153,97 @@ export default function SuperAdmin() {
           company_id: newMemberCompanyId,
           user_email: newMemberEmail,
           user_name: newMemberName,
+          birth_date: newMemberBirthDate || "00000000",
           is_admin: newMemberIsAdmin,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 멤버 추가 완료!");
+        showToast("멤버 추가 완료!", "success");
         setNewMemberEmail("");
         setNewMemberName("");
         setNewMemberCompanyId("");
+        setNewMemberBirthDate("");
         setNewMemberIsAdmin(false);
         setShowMemberForm(false);
         fetchAll();
       }
     } catch {
-      alert("멤버 추가 실패");
+      showToast("멤버 추가 실패", "error");
     } finally {
       setMemberLoading(false);
     }
   };
 
   const handleDeleteCompany = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`)) return;
-    try {
-      await fetch(`${API_URL}/api/superadmin/company/${id}`, { method: "DELETE" });
-      alert("✅ 삭제 완료");
-      fetchAll();
-    } catch {
-      alert("삭제 실패");
-    }
+    showConfirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/superadmin/company/${id}`, { method: "DELETE" });
+        showToast("삭제 완료", "success");
+        fetchAll();
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const handleDeleteMember = async (id: string, name: string) => {
-    if (!confirm(`"${name}" 직원을 삭제할까요?`)) return;
-    try {
-      await fetch(`${API_URL}/api/superadmin/member/${id}`, { method: "DELETE" });
-      alert("✅ 삭제 완료");
-      fetchAll();
-    } catch {
-      alert("삭제 실패");
-    }
+    showConfirm(`"${name}" 직원을 삭제할까요?`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/superadmin/member/${id}`, { method: "DELETE" });
+        showToast("삭제 완료", "success");
+        fetchAll();
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const handleResetPassword = async (email: string) => {
-    if (!confirm(`${email}의 비밀번호를 초기화할까요?`)) return;
-    try {
-      const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (res.ok) {
-        alert(`✅ 비밀번호 초기화 완료!\n임시 비밀번호가 ${email}로 발송됐어요.`);
-      } else {
-        const data = await res.json();
-        alert(`초기화 실패: ${data.detail || "알 수 없는 오류"}`);
+    showConfirm(`${email}의 비밀번호를 초기화할까요?`, async () => {
+      setConfirm(null);
+      try {
+        const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (res.ok) {
+          showToast(`임시 비밀번호가 ${email}로 발송됐어요`, "success");
+        } else {
+          const data = await res.json();
+          showToast(`초기화 실패: ${data.detail || "알 수 없는 오류"}`, "error");
+        }
+      } catch {
+        showToast("초기화 실패", "error");
       }
-    } catch {
-      alert("초기화 실패");
-    }
+    });
   };
 
   const handleResetAttendance = async (userId: string, userName: string) => {
-    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
-    try {
-      await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
-      alert("✅ 초기화 완료!");
-    } catch {
-      alert("초기화 실패");
-    }
+    showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
+        showToast("초기화 완료!", "success");
+      } catch {
+        showToast("초기화 실패", "error");
+      }
+    });
   };
 
   const handleResetUserAttendance = async (userId: string, userName: string) => {
-    if (!confirm(`${userName}의 오늘 기록을 초기화할까요?`)) return;
-    try {
-      await fetch(`${API_URL}/api/superadmin/user/attendance/${userId}`, { method: "DELETE" });
-      alert("✅ 초기화 완료!");
-    } catch {
-      alert("초기화 실패");
-    }
+    showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
+      setConfirm(null);
+      try {
+        await fetch(`${API_URL}/api/superadmin/user/attendance/${userId}`, { method: "DELETE" });
+        showToast("초기화 완료!", "success");
+      } catch {
+        showToast("초기화 실패", "error");
+      }
+    });
   };
 
   const handleUpdateMember = async () => {
@@ -227,12 +262,12 @@ export default function SuperAdmin() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("✅ 수정 완료!");
+        showToast("수정 완료!", "success");
         setEditMember(null);
         fetchAll();
       }
     } catch {
-      alert("수정 실패");
+      showToast("수정 실패", "error");
     } finally {
       setEditLoading(false);
     }
@@ -253,6 +288,9 @@ export default function SuperAdmin() {
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {confirm && <Confirm message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
 
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
@@ -302,7 +340,6 @@ export default function SuperAdmin() {
         ))}
       </div>
 
-      {/* 새로고침 */}
       <div className="flex justify-end mb-3">
         <button onClick={fetchAll} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">새로고침</button>
       </div>
@@ -388,6 +425,9 @@ export default function SuperAdmin() {
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                 />
                 <input type="email" placeholder="이메일" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                />
+                <input type="text" placeholder="생년월일 (예: 19901225)" value={newMemberBirthDate} onChange={(e) => setNewMemberBirthDate(e.target.value)}
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                 />
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -491,7 +531,6 @@ export default function SuperAdmin() {
           </div>
         </div>
       )}
-
     </main>
   );
 }
