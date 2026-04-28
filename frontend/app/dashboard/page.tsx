@@ -10,6 +10,14 @@ import Toast from "@/components/Toast";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+const getAuthHeader = async () => {
+  const token = await auth.currentUser?.getIdToken();
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+  };
+};
+
 interface LocationRecord {
   latitude: number;
   longitude: number;
@@ -164,7 +172,7 @@ export default function Dashboard() {
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getAuthHeader(),
         body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type: "checkin", address }),
       });
       setIsCheckedIn(true);
@@ -192,7 +200,7 @@ export default function Dashboard() {
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getAuthHeader(),
         body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type: "checkout", address }),
       });
       setIsCheckedIn(false);
