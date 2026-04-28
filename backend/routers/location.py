@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.attendance import Attendance
 from models.location import Location
+from routers.deps import get_current_user
 import requests
 import os
 
@@ -24,10 +25,20 @@ class LocationData(BaseModel):
 
 
 @router.post("/record")
-def record_location(data: LocationData, db: Session = Depends(get_db)):
-    """위치 기록 및 DB 저장"""
+def record_location(
+    data: LocationData,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """위치 기록 및 DB 저장 - 인증 필요"""
 
-    # Location 테이블 저장
+    # 토큰의 uid와 요청의 user_id가 일치하는지 검증
+    if current_user["uid"] != data.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="본인의 기록만 저장할 수 있어요"
+        )
+
     location = Location(
         user_id=data.user_id,
         latitude=data.latitude,
@@ -37,7 +48,6 @@ def record_location(data: LocationData, db: Session = Depends(get_db)):
     )
     db.add(location)
 
-    # Attendance 테이블 저장
     attendance = Attendance(
         user_id=data.user_id,
         type=data.type,
@@ -56,7 +66,7 @@ def record_location(data: LocationData, db: Session = Depends(get_db)):
 
 @router.get("/address")
 def get_address(lat: float, lng: float):
-    """좌표 → 주소 변환 (카카오 API)"""
+    """좌표 → 주소 변환 (카카오 API) - 인증 불필요"""
     try:
         kakao_key = os.getenv("KAKAO_REST_API_KEY")
         response = requests.get(
@@ -77,8 +87,20 @@ def get_address(lat: float, lng: float):
 
 
 @router.get("/history/{user_id}")
-def get_location_history(user_id: str, db: Session = Depends(get_db)):
-    """사용자 위치 기록 조회"""
+def get_location_history(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    print(f"🔍 history 호출됨 - user_id: {user_id}, current_user: {current_user}")
+    """사용자 위치 기록 조회 - 인증 필요"""
+
+    if current_user["uid"] != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="본인의 기록만 조회할 수 있어요"
+        )
+
     records = (
         db.query(Attendance)
         .filter(Attendance.user_id == user_id)
