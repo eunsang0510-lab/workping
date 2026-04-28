@@ -415,7 +415,7 @@ export default function Admin() {
                   <span className="text-[#4a4de0] text-xs font-mono">코드: {company.id.slice(0, 8)}</span>
                 </div>
               </div>
-           <button
+          <button
   onClick={async () => {
     try {
       const token = await auth.currentUser?.getIdToken();
