@@ -16,10 +16,15 @@ app = FastAPI(
     title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0"
 )
 
+# CORS - 배포 도메인만 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://workping-kappa.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
