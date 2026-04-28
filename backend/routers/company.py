@@ -12,6 +12,7 @@ import math
 import json
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
+from routers.deps import get_current_user
 
 if not firebase_admin._apps:
     try:
@@ -162,7 +163,7 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/members/register")
-def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db)):
+def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     existing = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_email == req.email,
@@ -346,7 +347,7 @@ def get_locations(company_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/locations/add")
-def add_location(req: LocationCreateRequest, db: Session = Depends(get_db)):
+def add_location(req: LocationCreateRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     location = CompanyLocation(
         company_id=req.company_id,
         name=req.name,
@@ -361,7 +362,7 @@ def add_location(req: LocationCreateRequest, db: Session = Depends(get_db)):
 
 
 @router.delete("/locations/{location_id}")
-def delete_location(location_id: str, db: Session = Depends(get_db)):
+def delete_location(location_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     location = db.query(CompanyLocation).filter(CompanyLocation.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="위치를 찾을 수 없습니다")
@@ -416,7 +417,7 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/members/reset-password")
-def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     import random
     import string
 

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
 from models.subscription import Subscription, Payment
+from routers.deps import get_current_user
 from datetime import datetime, timedelta
 import requests
 import os
@@ -13,8 +14,8 @@ router = APIRouter()
 TOSS_SECRET_KEY = os.getenv("TOSS_SECRET_KEY")
 
 PLAN_PRICES = {
-    "starter": 9900,
-    "business": 29900,
+    "starter": 50000,
+    "business": 50000,
 }
 
 PLAN_LIMITS = {
@@ -52,9 +53,12 @@ class ConfirmPaymentRequest(BaseModel):
     plan: str
 
 
-# 현재 구독 조회
 @router.get("/subscription/{company_id}")
-def get_subscription(company_id: str, db: Session = Depends(get_db)):
+def get_subscription(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == company_id)
@@ -70,7 +74,6 @@ def get_subscription(company_id: str, db: Session = Depends(get_db)):
             "limits": PLAN_LIMITS["free"],
         }
 
-    # 만료 체크
     if sub.expires_at and sub.expires_at < datetime.now():
         sub.status = "expired"
         db.commit()
@@ -89,9 +92,12 @@ def get_subscription(company_id: str, db: Session = Depends(get_db)):
     }
 
 
-# 결제 준비 (주문 ID 생성)
 @router.post("/prepare")
-def prepare_payment(req: PreparePaymentRequest, db: Session = Depends(get_db)):
+def prepare_payment(
+    req: PreparePaymentRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     if req.plan not in PLAN_PRICES:
         raise HTTPException(status_code=400, detail="잘못된 플랜이에요")
 
@@ -111,16 +117,18 @@ def prepare_payment(req: PreparePaymentRequest, db: Session = Depends(get_db)):
     return {"order_id": order_id, "amount": amount, "plan": req.plan}
 
 
-# 결제 승인
 @router.post("/confirm")
-def confirm_payment(req: ConfirmPaymentRequest, db: Session = Depends(get_db)):
-    # 토스페이먼츠 결제 승인 API 호출
+def confirm_payment(
+    req: ConfirmPaymentRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     import base64
 
     secret = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
 
     response = requests.post(
-        f"https://api.tosspayments.com/v1/payments/confirm",
+        "https://api.tosspayments.com/v1/payments/confirm",
         headers={
             "Authorization": f"Basic {secret}",
             "Content-Type": "application/json",
@@ -136,14 +144,12 @@ def confirm_payment(req: ConfirmPaymentRequest, db: Session = Depends(get_db)):
         error = response.json().get("message", "결제 승인 실패")
         raise HTTPException(status_code=400, detail=error)
 
-   # 결제 기록 업데이트 + 플랜 자동 확인
     payment = db.query(Payment).filter(Payment.order_id == req.order_id).first()
     if payment:
         payment.payment_key = req.payment_key
         payment.status = "done"
-        req.plan = payment.plan  # order_id로 플랜 자동 확인
+        req.plan = payment.plan
 
-    # 구독 생성/업데이트 (30일)
     sub = Subscription(
         company_id=req.company_id,
         plan=req.plan,
@@ -157,9 +163,12 @@ def confirm_payment(req: ConfirmPaymentRequest, db: Session = Depends(get_db)):
     return {"success": True, "plan": req.plan, "expires_at": sub.expires_at.isoformat()}
 
 
-# 플랜 한도 체크
 @router.get("/limits/{company_id}")
-def get_limits(company_id: str, db: Session = Depends(get_db)):
+def get_limits(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == company_id, Subscription.status == "active")
