@@ -239,8 +239,8 @@ export default function Login() {
           </div>
         )}
 
-         <p className="text-[#a0a0a0] text-xs text-center mt-6">
-          로그인 시 서비스 이용약관 및 개인정보처리방침에 동의합니다
+        <p className="text-[#a0a0a0] text-xs text-center mt-6">
+          로그인 시 <Link href="/terms" className="text-[#5b5ef4] hover:underline">서비스 이용약관</Link> 및 <Link href="/privacy" className="text-[#5b5ef4] hover:underline">개인정보처리방침</Link>에 동의합니다
         </p>
         {mode === "company" && !selectedCompany && (
           <p className="text-[#a0a0a0] text-xs text-center mt-2">

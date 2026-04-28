@@ -455,7 +455,12 @@ export default function Landing() {
         <h1 className="text-lg font-black mb-2">
           Work<span className="text-[#5b5ef4]">Ping</span>
         </h1>
-        <p className="text-[#a0a0a0] text-xs mb-1">GPS 기반 스마트 근태관리 서비스</p>
+        <p className="text-[#a0a0a0] text-xs mb-3">GPS 기반 스마트 근태관리 서비스</p>
+        <div className="flex items-center justify-center gap-4 mb-3">
+          <Link href="/terms" className="text-[#a0a0a0] text-xs hover:text-[#5b5ef4] transition-colors">서비스 이용약관</Link>
+          <span className="text-[#e5e5e5]">|</span>
+          <Link href="/privacy" className="text-[#a0a0a0] text-xs hover:text-[#5b5ef4] transition-colors">개인정보처리방침</Link>
+        </div>
         <p className="text-[#a0a0a0] text-xs">© 2026 WorkPing. All rights reserved.</p>
       </footer>
 
