@@ -379,11 +379,27 @@ export default function SuperAdmin() {
                     <span className="text-[#0a0a0a] font-black">{c.name}</span>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => window.open(`${API_URL}/api/attendance/export/${c.id}`, "_blank")}
-                        className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
-                      >
-                        📥 엑셀
-                      </button>
+  onClick={async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/attendance/export/${c.id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${c.name}_근무기록.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showToast("다운로드 실패", "error");
+    }
+  }}
+  className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
+>
+  📥 엑셀
+</button>
                       <button onClick={() => handleDeleteCompany(c.id, c.name)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                     </div>
                   </div>

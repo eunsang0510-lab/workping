@@ -415,12 +415,28 @@ export default function Admin() {
                   <span className="text-[#4a4de0] text-xs font-mono">코드: {company.id.slice(0, 8)}</span>
                 </div>
               </div>
-              <button
-                onClick={() => window.open(`${API_URL}/api/attendance/export/${company.id}`, "_blank")}
-                className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
-              >
-                📥 엑셀 다운
-              </button>
+           <button
+  onClick={async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/attendance/export/${company.id}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${company.name}_근무기록.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showToast("다운로드 실패", "error");
+    }
+  }}
+  className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
+>
+  📥 엑셀 다운
+</button>
             </div>
           </div>
 
