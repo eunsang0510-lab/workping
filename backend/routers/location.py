@@ -9,6 +9,9 @@ from models.location import Location
 from routers.deps import get_current_user
 import requests
 import os
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from routers.deps import get_current_user, limiter
+
 
 load_dotenv()
 
@@ -65,6 +68,7 @@ def record_location(
 
 
 @router.get("/address")
+@limiter.limit("30/minute")
 def get_address(lat: float, lng: float):
     """좌표 → 주소 변환 (카카오 API) - 인증 불필요"""
     try:

@@ -1,8 +1,13 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from firebase_admin import auth as firebase_auth
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 security = HTTPBearer(auto_error=False)
+
+# 공유 limiter
+limiter = Limiter(key_func=get_remote_address)
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -32,7 +37,6 @@ async def get_current_user(
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> dict | None:
-    """토큰이 없어도 허용 (선택적 인증)"""
     if not credentials:
         return None
     try:
