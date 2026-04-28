@@ -8,6 +8,11 @@ import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+const getAuthHeader = async () => {
+  const token = await auth.currentUser?.getIdToken();
+  return { "Authorization": `Bearer ${token}` };
+};
+
 interface DailyData {
   checkin: string | null;
   checkout: string | null;
@@ -43,9 +48,11 @@ export default function Report() {
     return () => unsubscribe();
   }, [router]);
 
-  const fetchReport = async (userId: string, type: "weekly" | "monthly") => {
+   const fetchReport = async (userId: string, type: "weekly" | "monthly") => {
     try {
-      const res = await fetch(`${API_URL}/api/attendance/${type}/${userId}`);
+      const res = await fetch(`${API_URL}/api/attendance/${type}/${userId}`, {
+        headers: await getAuthHeader(),
+      });
       const data = await res.json();
       setReport(data);
     } catch (error) {

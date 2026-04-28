@@ -8,6 +8,11 @@ import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
+const getAuthHeader = async () => {
+  const token = await auth.currentUser?.getIdToken();
+  return { "Authorization": `Bearer ${token}` };
+};
+
 interface DayRecord {
   checkin: string | null;
   checkout: string | null;
@@ -45,21 +50,25 @@ export default function CalendarPage() {
     try {
       const year = month.getFullYear();
       const m = month.getMonth() + 1;
-      const res = await fetch(`${API_URL}/api/attendance/month/${userId}?year=${year}&month=${m}`);
+      const res = await fetch(`${API_URL}/api/attendance/month/${userId}?year=${year}&month=${m}`, {
+        headers: await getAuthHeader(),
+      });
       const data = await res.json();
-      // { "2025-04-01": true, "2025-04-03": true, ... } 형태
       setMonthRecords(data.dates || {});
     } catch {
       setMonthRecords({});
     }
   };
 
+
   // 특정 날짜 기록 가져오기
   const fetchDayRecord = async (userId: string, dateStr: string) => {
     setRecordLoading(true);
     setSelectedRecord(null);
     try {
-      const res = await fetch(`${API_URL}/api/attendance/day/${userId}?date=${dateStr}`);
+      const res = await fetch(`${API_URL}/api/attendance/day/${userId}?date=${dateStr}`, {
+        headers: await getAuthHeader(),
+      });
       const data = await res.json();
       setSelectedRecord(data);
     } catch {

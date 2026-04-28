@@ -90,7 +90,9 @@ export default function Dashboard() {
 
   const fetchTodayAttendance = async (userId: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`);
+      const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`, {
+        headers: await getAuthHeader(),
+      });
       const data = await res.json();
       if (data.checkin) {
         setCheckInTime(data.checkin);
