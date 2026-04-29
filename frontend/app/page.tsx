@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   alternates: { canonical: "https://workping-kappa.vercel.app" },
+  verification: {
+    google: "AqSfQyOtx5O7uCyRg5xReyUFl4AY",
+  },
 };
 
 export default function Page() {
