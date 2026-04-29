@@ -415,7 +415,7 @@ export default function Landing() {
                   {
                     name: "비즈니스", price: "협의", period: "/ 월",
                     highlight: false,
-                    features: ["직원 무제한", "스타터 기능 전체", "사내 시스템 API 연동 지원", "급여 시스템 연동 지원", "우선 고객 지원"],
+                    features: ["직원 무제한", "스타터 기능 전체",  "우선 고객 지원"],
                   },
           ].map((plan, i) => (
             <div key={i} className={`rounded-2xl p-5 border-2 ${
