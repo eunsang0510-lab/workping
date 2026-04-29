@@ -246,7 +246,7 @@ export default function Login() {
           <p className="text-[#a0a0a0] text-xs text-center mt-2">
             회사 등록 문의 :{" "}
             <a href="mailto:eunsang0510@gmail.com" className="text-[#5b5ef4] hover:underline">
-              eunsang0510@gmail.com
+              workpingofficial@gmail.com
             </a>
           </p>
         )}
