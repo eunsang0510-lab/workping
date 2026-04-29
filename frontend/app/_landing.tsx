@@ -383,6 +383,7 @@ export default function Landing() {
             { icon: "📥", title: "엑셀 다운로드", desc: "급여 계산용 데이터 즉시 추출" },
             { icon: "👥", title: "팀 관리", desc: "관리자 페이지로 팀원 현황 파악" },
             { icon: "📱", title: "모바일 앱", desc: "스마트폰에 설치해서 사용 가능" },
+            { icon: "🔗", title: "API 연동", desc: "급여·ERP 등 사내 시스템과 연동 가능" },
           ].map((item, i) => (
             <div key={i} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <div className="text-2xl mb-2">{item.icon}</div>
@@ -409,12 +410,12 @@ export default function Landing() {
                   {
                     name: "스타터", price: "50,000원", period: "/ 월(회사별)",
                     highlight: true, badge: "인기",
-                    features: ["직원 20명 이하", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트"],
+                    features: ["직원 20명 이하", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "사내 시스템 API 연동 지원", "급여 시스템 연동 지원"],
                   },
                   {
                     name: "비즈니스", price: "협의", period: "/ 월",
                     highlight: false,
-                    features: ["직원 무제한", "스타터 기능 전체", "우선 고객 지원"],
+                    features: ["직원 무제한", "스타터 기능 전체", "사내 시스템 API 연동 지원", "급여 시스템 연동 지원", "우선 고객 지원"],
                   },
           ].map((plan, i) => (
             <div key={i} className={`rounded-2xl p-5 border-2 ${
