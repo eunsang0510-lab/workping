@@ -25,7 +25,6 @@ class LocationData(BaseModel):
     type: str = "checkin"
     address: str = ""
 
-
 @router.post("/record")
 def record_location(
     data: LocationData,
@@ -38,12 +37,17 @@ def record_location(
             detail="본인의 기록만 저장할 수 있어요"
         )
 
+    if data.timestamp:
+        ts = data.timestamp.astimezone(KST)
+    else:
+        ts = datetime.now(KST)
+
     location = Location(
         user_id=data.user_id,
         latitude=data.latitude,
         longitude=data.longitude,
         place_name=data.address,
-        recorded_at=data.timestamp or datetime.now(KST),
+        recorded_at=ts,
     )
     db.add(location)
 
@@ -53,12 +57,12 @@ def record_location(
         latitude=data.latitude,
         longitude=data.longitude,
         address=data.address,
-        recorded_at=data.timestamp or datetime.now(KST),
+        recorded_at=ts,
     )
     db.add(attendance)
     db.commit()
 
-    print(f"✅ DB 저장 완료: {data.user_id} - {data.type} - {data.address}")
+    print(f"✅ DB 저장 완료: {data.user_id} - {data.type} - {data.address} - {ts}")
 
     return {"message": "위치 기록 완료", "data": data}
 
