@@ -152,9 +152,10 @@ export default function Dashboard() {
   };
 
   const calcWorkMinutes = (checkIn: string) => {
-    const start = new Date(checkIn);
-    return Math.floor((now.getTime() - start.getTime()) / 1000 / 60);
-  };
+  const start = new Date(checkIn);
+  const nowUTC = new Date(); // 둘 다 UTC 기준으로 비교
+  return Math.floor((nowUTC.getTime() - start.getTime()) / 1000 / 60);
+};
 
   const formatWorkTime = (minutes: number) => {
     const h = Math.floor(minutes / 60);
@@ -171,7 +172,8 @@ export default function Dashboard() {
     try {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
+      const nowISO = new Date().toISOString(); // 그대로 UTC
+      setCheckInTime(nowISO); // 로컬 상태도 UTC로 저장
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
@@ -199,7 +201,8 @@ export default function Dashboard() {
     try {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
+      const nowISO = new Date().toISOString(); // 그대로 UTC
+      setCheckInTime(nowISO); // 로컬 상태도 UTC로 저장
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
@@ -251,12 +254,12 @@ export default function Dashboard() {
 
   const formatTime = (isoString: string | null) => {
   if (!isoString) return "--:--";
-  // DB가 UTC로 저장되므로 +9시간 해서 표시
-  const date = new Date(isoString + "Z"); // UTC로 파싱
-  return date.toLocaleTimeString("ko-KR", {
+  // DB UTC값에 9시간 더해서 KST로 표시
+  const date = new Date(isoString);
+  const kstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return kstDate.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Asia/Seoul",
   });
 };
 
