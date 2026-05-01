@@ -251,12 +251,14 @@ export default function Dashboard() {
 
   const formatTime = (isoString: string | null) => {
   if (!isoString) return "--:--";
-  return new Date(isoString).toLocaleTimeString("ko-KR", {
+  // DB가 UTC로 저장되므로 +9시간 해서 표시
+  const date = new Date(isoString + "Z"); // UTC로 파싱
+  return date.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   });
-  };
+};
 
   const formatDate = () => {
     return now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
