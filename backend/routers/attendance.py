@@ -6,22 +6,24 @@ from models.attendance import Attendance
 from models.location import Location
 from models.company import CompanyMember
 from routers.deps import get_current_user
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 router = APIRouter()
 
+KST = timezone(timedelta(hours=9))
+
 
 def get_work_day_range():
-    now = datetime.now()
+    now = datetime.now(KST)
     if now.hour < 4:
         start = (
-            datetime(now.year, now.month, now.day)
+            datetime(now.year, now.month, now.day, tzinfo=KST)
             - timedelta(days=1)
             + timedelta(hours=4)
         )
     else:
-        start = datetime(now.year, now.month, now.day) + timedelta(hours=4)
+        start = datetime(now.year, now.month, now.day, tzinfo=KST) + timedelta(hours=4)
     end = start + timedelta(hours=24)
     return start, end
 
@@ -73,7 +75,7 @@ def get_company_attendance(
     current_user: dict = Depends(get_current_user)
 ):
     start, end = get_work_day_range()
-    now = datetime.now()
+    now = datetime.now(KST)
 
     members = (
         db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
@@ -138,7 +140,7 @@ def get_weekly_report(
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
-    today = datetime.now().date()
+    today = datetime.now(KST).date()
     week_ago = today - timedelta(days=7)
 
     records = (
@@ -189,7 +191,7 @@ def get_monthly_report(
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
-    today = datetime.now().date()
+    today = datetime.now(KST).date()
     month_ago = today - timedelta(days=30)
 
     records = (
@@ -284,7 +286,7 @@ def export_attendance_excel(
         db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
     )
 
-    end_date = datetime.now().date()
+    end_date = datetime.now(KST).date()
     start_date = end_date - timedelta(days=30)
 
     wb = openpyxl.Workbook()
@@ -368,11 +370,11 @@ def get_month_dates(
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
-    start = datetime(year, month, 1)
+    start = datetime(year, month, 1, tzinfo=KST)
     if month == 12:
-        end = datetime(year + 1, 1, 1)
+        end = datetime(year + 1, 1, 1, tzinfo=KST)
     else:
-        end = datetime(year, month + 1, 1)
+        end = datetime(year, month + 1, 1, tzinfo=KST)
 
     records = (
         db.query(Attendance)
@@ -403,7 +405,7 @@ def get_day_record(
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
     try:
-        target = datetime.strptime(date, "%Y-%m-%d")
+        target = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=KST)
     except ValueError:
         return {"error": "날짜 형식 오류"}
 
