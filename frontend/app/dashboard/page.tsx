@@ -152,7 +152,11 @@ export default function Dashboard() {
   };
 
   const calcWorkMinutes = (checkIn: string) => {
-  const start = new Date(checkIn);
+  // DB에서 오는 값은 timezone 없는 UTC → "Z" 붙여서 UTC로 파싱
+  const str = checkIn.endsWith("Z") || checkIn.includes("+") 
+    ? checkIn 
+    : checkIn + "Z";
+  const start = new Date(str);
   const nowUTC = new Date();
   return Math.floor((nowUTC.getTime() - start.getTime()) / 1000 / 60);
   };
