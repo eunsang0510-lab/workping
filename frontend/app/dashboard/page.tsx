@@ -177,9 +177,6 @@ export default function Dashboard() {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
       const nowISO = new Date().toISOString();
-      console.log("nowISO:", nowISO);
-      console.log("formatted:", formatTime(nowISO));
-      setCheckInTime(nowISO); // 로컬 상태도 UTC로 저장
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
