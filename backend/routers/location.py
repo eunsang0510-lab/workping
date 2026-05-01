@@ -38,9 +38,9 @@ def record_location(
         )
 
     if data.timestamp:
-        ts = data.timestamp.astimezone(KST)
+     ts = data.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
     else:
-        ts = datetime.now(KST)
+     ts = datetime.utcnow()
 
     location = Location(
         user_id=data.user_id,

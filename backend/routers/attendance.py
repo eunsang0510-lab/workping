@@ -15,12 +15,14 @@ KST = timezone(timedelta(hours=9))
 
 
 def get_work_day_range():
-    now = datetime.now(KST)
-    # 오늘 자정부터 내일 자정까지 (단순하게)
-    start = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=KST)
-    end = start + timedelta(hours=24)
-    return start, end
-
+    # DB는 UTC 저장 → 조회도 UTC 기준으로
+    now_utc = datetime.utcnow()
+    now_kst = now_utc + timedelta(hours=9)
+    # KST 오늘 자정을 UTC로 변환
+    kst_start = datetime(now_kst.year, now_kst.month, now_kst.day, 0, 0, 0)
+    utc_start = kst_start - timedelta(hours=9)
+    utc_end = utc_start + timedelta(hours=24)
+    return utc_start, utc_end
 
 @router.get("/summary/{user_id}")
 def get_attendance_summary(
