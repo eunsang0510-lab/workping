@@ -16,14 +16,8 @@ KST = timezone(timedelta(hours=9))
 
 def get_work_day_range():
     now = datetime.now(KST)
-    if now.hour < 4:
-        start = (
-            datetime(now.year, now.month, now.day, tzinfo=KST)
-            - timedelta(days=1)
-            + timedelta(hours=4)
-        )
-    else:
-        start = datetime(now.year, now.month, now.day, tzinfo=KST) + timedelta(hours=4)
+    # 오늘 자정부터 내일 자정까지 (단순하게)
+    start = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=KST)
     end = start + timedelta(hours=24)
     return start, end
 
