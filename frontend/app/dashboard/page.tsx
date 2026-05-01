@@ -252,14 +252,20 @@ export default function Dashboard() {
     }
   };
 
-  const formatTime = (isoString: string | null) => {
+ const formatTime = (isoString: string | null) => {
   if (!isoString) return "--:--";
-  // DB UTC값에 9시간 더해서 KST로 표시
-  const date = new Date(isoString);
-  const kstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return kstDate.toLocaleTimeString("ko-KR", {
+  // DB에서 오는 값: "2026-05-01T07:28:41.688" (UTC, timezone 없음)
+  // 버튼 클릭 시 값: "2026-05-01T16:28:41.688Z" (UTC ISO)
+  // 둘 다 UTC로 파싱 후 KST 변환
+  const str = isoString.endsWith("Z") || isoString.includes("+") 
+    ? isoString 
+    : isoString + "Z";
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return "--:--";
+  return date.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Seoul",
   });
 };
 
