@@ -449,6 +449,9 @@ export default function Landing() {
             지금 무료로 시작하기 →
           </button>
         </Link>
+        <p className="text-[#a0a0a0] text-xs mt-3">
+         🔒 이름 · 이메일만 있으면 돼요. 개인정보 걱정 없이 시작하세요.
+        </p>
       </section>
 
       {/* 푸터 */}
