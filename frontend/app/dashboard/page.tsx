@@ -171,7 +171,9 @@ export default function Dashboard() {
     try {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
+      const now = new Date();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const nowISO = new Date(now.getTime() + kstOffset).toISOString().replace('Z', '+09:00');
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
@@ -199,7 +201,9 @@ export default function Dashboard() {
     try {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
+      const now = new Date();
+      const kstOffset = 9 * 60 * 60 * 1000;
+      const nowISO = new Date(now.getTime() + kstOffset).toISOString().replace('Z', '+09:00');
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
@@ -250,8 +254,12 @@ export default function Dashboard() {
   };
 
   const formatTime = (isoString: string | null) => {
-    if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  if (!isoString) return "--:--";
+  return new Date(isoString).toLocaleTimeString("ko-KR", { 
+    hour: "2-digit", 
+    minute: "2-digit",
+    timeZone: "Asia/Seoul" // ✅ 이거 추가
+  });
   };
 
   const formatDate = () => {
