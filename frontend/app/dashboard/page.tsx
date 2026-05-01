@@ -89,28 +89,29 @@ export default function Dashboard() {
   }, [router]);
 
   const fetchTodayAttendance = async (userId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`, {
-        headers: await getAuthHeader(),
-      });
-      const data = await res.json();
-      if (data.checkin) {
-        setCheckInTime(data.checkin);
-        setCurrentLocation(data.checkin_address || "-");
-      }
-      if (data.checkout) {
-        setIsCheckedIn(false);
-        setCheckOutTime(data.checkout);
-        setCheckOutLocation(data.checkout_address || "-");
-        const minutes = Math.floor(
-          (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
-        );
-        setWorkHours(formatWorkTime(minutes));
-      }
-    } catch (error) {
-      console.error("오늘 기록 로딩 실패:", error);
+  try {
+    const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`, {
+      headers: await getAuthHeader(),
+    });
+    const data = await res.json();
+    if (data.checkin) {
+      setCheckInTime(data.checkin);
+      setCurrentLocation(data.checkin_address || "-");
+      setIsCheckedIn(true); // ✅ 이거 추가!
     }
-  };
+    if (data.checkout) {
+      setIsCheckedIn(false);
+      setCheckOutTime(data.checkout);
+      setCheckOutLocation(data.checkout_address || "-");
+      const minutes = Math.floor(
+        (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
+      );
+      setWorkHours(formatWorkTime(minutes));
+    }
+  } catch (error) {
+    console.error("오늘 기록 로딩 실패:", error);
+  }
+ };
 
   const fetchAdminStatus = async (userId: string) => {
     try {
