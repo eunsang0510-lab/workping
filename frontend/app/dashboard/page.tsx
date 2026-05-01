@@ -153,9 +153,9 @@ export default function Dashboard() {
 
   const calcWorkMinutes = (checkIn: string) => {
   const start = new Date(checkIn);
-  const nowUTC = new Date(); // 둘 다 UTC 기준으로 비교
+  const nowUTC = new Date();
   return Math.floor((nowUTC.getTime() - start.getTime()) / 1000 / 60);
-};
+  };
 
   const formatWorkTime = (minutes: number) => {
     const h = Math.floor(minutes / 60);
