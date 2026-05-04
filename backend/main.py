@@ -4,12 +4,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from routers import auth, location, attendance, company, superadmin, payment
+from routers import auth, location, attendance, company, superadmin, payment, notice
 from database.connection import engine, Base
 from models import user, location as location_model
 from models import attendance as attendance_model
 from models import company as company_model
 from models import subscription as subscription_model
+from models import notice as notice_model
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -44,6 +45,7 @@ app.include_router(attendance.router, prefix="/api/attendance", tags=["근태"])
 app.include_router(company.router, prefix="/api/company", tags=["기업"])
 app.include_router(superadmin.router, prefix="/api/superadmin", tags=["시스템관리자"])
 app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
+app.include_router(notice.router, prefix="/api/notice", tags=["공지사항"])
 
 
 @app.get("/")
