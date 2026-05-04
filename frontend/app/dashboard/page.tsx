@@ -31,6 +31,14 @@ interface ToastState {
   type: "success" | "error" | "info";
 }
 
+interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  notice_type: string;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +59,9 @@ export default function Dashboard() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
+  const [showNoticePopup, setShowNoticePopup] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -62,7 +73,6 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // GPS 권한 미리 요청
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -80,6 +90,7 @@ export default function Dashboard() {
         fetchTodayAttendance(user.uid);
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
+        fetchUnreadNotices(user.uid);
       } else {
         router.push("/login");
       }
@@ -88,30 +99,71 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, [router]);
 
+  const fetchUnreadNotices = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/notice/unread/${userId}`, {
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      if (data.notices && data.notices.length > 0) {
+        setNotices(data.notices);
+        setCurrentNoticeIndex(0);
+        setShowNoticePopup(true);
+      }
+    } catch (error) {
+      console.error("공지 로딩 실패:", error);
+    }
+  };
+
+  const handleNoticeRead = async (noticeId: string) => {
+    try {
+      await fetch(`${API_URL}/api/notice/read/${noticeId}?user_id=${user?.uid}`, {
+        method: "POST",
+        headers: await getAuthHeader(),
+      });
+    } catch (error) {
+      console.error("읽음 처리 실패:", error);
+    }
+  };
+
+  const handleNextNotice = async () => {
+    await handleNoticeRead(notices[currentNoticeIndex].id);
+    if (currentNoticeIndex < notices.length - 1) {
+      setCurrentNoticeIndex(currentNoticeIndex + 1);
+    } else {
+      setShowNoticePopup(false);
+    }
+  };
+
+  const handleCloseNotice = async () => {
+    await handleNoticeRead(notices[currentNoticeIndex].id);
+    setShowNoticePopup(false);
+  };
+
   const fetchTodayAttendance = async (userId: string) => {
-  try {
-    const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`, {
-      headers: await getAuthHeader(),
-    });
-    const data = await res.json();
-    if (data.checkin) {
-      setCheckInTime(data.checkin);
-      setCurrentLocation(data.checkin_address || "-");
-      setIsCheckedIn(true); // ✅ 이거 추가!
+    try {
+      const res = await fetch(`${API_URL}/api/attendance/summary/${userId}`, {
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      if (data.checkin) {
+        setCheckInTime(data.checkin);
+        setCurrentLocation(data.checkin_address || "-");
+        setIsCheckedIn(true);
+      }
+      if (data.checkout) {
+        setIsCheckedIn(false);
+        setCheckOutTime(data.checkout);
+        setCheckOutLocation(data.checkout_address || "-");
+        const minutes = Math.floor(
+          (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
+        );
+        setWorkHours(formatWorkTime(minutes));
+      }
+    } catch (error) {
+      console.error("오늘 기록 로딩 실패:", error);
     }
-    if (data.checkout) {
-      setIsCheckedIn(false);
-      setCheckOutTime(data.checkout);
-      setCheckOutLocation(data.checkout_address || "-");
-      const minutes = Math.floor(
-        (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
-      );
-      setWorkHours(formatWorkTime(minutes));
-    }
-  } catch (error) {
-    console.error("오늘 기록 로딩 실패:", error);
-  }
- };
+  };
 
   const fetchAdminStatus = async (userId: string) => {
     try {
@@ -152,13 +204,12 @@ export default function Dashboard() {
   };
 
   const calcWorkMinutes = (checkIn: string) => {
-  // DB에서 오는 값은 timezone 없는 UTC → "Z" 붙여서 UTC로 파싱
-  const str = checkIn.endsWith("Z") || checkIn.includes("+") 
-    ? checkIn 
-    : checkIn + "Z";
-  const start = new Date(str);
-  const nowUTC = new Date();
-  return Math.floor((nowUTC.getTime() - start.getTime()) / 1000 / 60);
+    const str = checkIn.endsWith("Z") || checkIn.includes("+")
+      ? checkIn
+      : checkIn + "Z";
+    const start = new Date(str);
+    const nowUTC = new Date();
+    return Math.floor((nowUTC.getTime() - start.getTime()) / 1000 / 60);
   };
 
   const formatWorkTime = (minutes: number) => {
@@ -205,8 +256,6 @@ export default function Dashboard() {
       const position = await getCurrentPosition();
       const { latitude, longitude } = position.coords;
       const nowISO = new Date().toISOString();
-      console.log("nowISO:", nowISO);
-      console.log("formatted:", formatTime(nowISO));
       const address = await getAddressFromCoords(latitude, longitude);
       await fetch(`${API_URL}/api/location/record`, {
         method: "POST",
@@ -256,22 +305,19 @@ export default function Dashboard() {
     }
   };
 
- const formatTime = (isoString: string | null) => {
-  if (!isoString) return "--:--";
-  // DB에서 오는 값: "2026-05-01T07:28:41.688" (UTC, timezone 없음)
-  // 버튼 클릭 시 값: "2026-05-01T16:28:41.688Z" (UTC ISO)
-  // 둘 다 UTC로 파싱 후 KST 변환
-  const str = isoString.endsWith("Z") || isoString.includes("+") 
-    ? isoString 
-    : isoString + "Z";
-  const date = new Date(str);
-  if (isNaN(date.getTime())) return "--:--";
-  return date.toLocaleTimeString("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Seoul",
-  });
-};
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return "--:--";
+    const str = isoString.endsWith("Z") || isoString.includes("+")
+      ? isoString
+      : isoString + "Z";
+    const date = new Date(str);
+    if (isNaN(date.getTime())) return "--:--";
+    return date.toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Seoul",
+    });
+  };
 
   const formatDate = () => {
     return now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
@@ -297,6 +343,53 @@ export default function Dashboard() {
           type={toast.type}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {/* 공지사항 팝업 */}
+      {showNoticePopup && notices.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden">
+            {/* 헤더 */}
+            <div className={`px-5 py-4 flex items-center justify-between ${
+              notices[currentNoticeIndex].notice_type === "system"
+                ? "bg-[#5b5ef4]"
+                : "bg-[#0a0a0a]"
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-sm font-bold">
+                  {notices[currentNoticeIndex].notice_type === "system" ? "📢 시스템 공지" : "🏢 회사 공지"}
+                </span>
+                {notices.length > 1 && (
+                  <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
+                    {currentNoticeIndex + 1}/{notices.length}
+                  </span>
+                )}
+              </div>
+              <button onClick={handleCloseNotice} className="text-white/70 hover:text-white text-lg">✕</button>
+            </div>
+            {/* 내용 */}
+            <div className="p-5">
+              <div className="text-[#0a0a0a] font-black text-base mb-3">
+                {notices[currentNoticeIndex].title}
+              </div>
+              <div className="text-[#6b6b6b] text-sm leading-relaxed whitespace-pre-wrap">
+                {notices[currentNoticeIndex].content}
+              </div>
+              <div className="text-[#a0a0a0] text-xs mt-3">
+                {new Date(notices[currentNoticeIndex].created_at).toLocaleDateString("ko-KR")}
+              </div>
+            </div>
+            {/* 버튼 */}
+            <div className="px-5 pb-5">
+              <button
+                onClick={handleNextNotice}
+                className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                {currentNoticeIndex < notices.length - 1 ? "다음 공지 보기 →" : "확인"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 헤더 */}
@@ -460,6 +553,15 @@ export default function Dashboard() {
             <div>
               <div className="text-[#0a0a0a] text-sm font-bold">달력</div>
               <div className="text-[#6b6b6b] text-xs">근로 기록</div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/notice">
+          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <span className="text-lg">📢</span>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-bold">공지사항</div>
+              <div className="text-[#6b6b6b] text-xs">전체 공지 보기</div>
             </div>
           </div>
         </Link>

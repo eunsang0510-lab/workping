@@ -53,10 +53,18 @@ interface ConfirmState {
   onConfirm: () => void;
 }
 
+interface Notice {
+  id: string;
+  title: string;
+  content: string;
+  notice_type: string;
+  created_at: string;
+}
+
 export default function SuperAdmin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"companies" | "members" | "users">("companies");
+  const [tab, setTab] = useState<"companies" | "members" | "users" | "notice">("companies");
   const [stats, setStats] = useState<Stats | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -75,6 +83,10 @@ export default function SuperAdmin() {
   const [editLoading, setEditLoading] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [noticeTitle, setNoticeTitle] = useState("");
+  const [noticeContent, setNoticeContent] = useState("");
+  const [noticeLoading, setNoticeLoading] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -114,6 +126,67 @@ export default function SuperAdmin() {
     } catch (error) {
       console.error("데이터 로딩 실패:", error);
     }
+  };
+
+  const fetchNotices = async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/notice/list/${user?.uid}`, {
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      setNotices(data.notices || []);
+    } catch (error) {
+      console.error("공지 로딩 실패:", error);
+    }
+  };
+
+  const handleCreateNotice = async () => {
+    if (!noticeTitle.trim() || !noticeContent.trim()) {
+      showToast("제목과 내용을 입력해주세요", "error");
+      return;
+    }
+    setNoticeLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/notice/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          title: noticeTitle,
+          content: noticeContent,
+          notice_type: "system",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("공지 등록 완료!", "success");
+        setNoticeTitle("");
+        setNoticeContent("");
+        fetchNotices();
+      }
+    } catch {
+      showToast("공지 등록 실패", "error");
+    } finally {
+      setNoticeLoading(false);
+    }
+  };
+
+  const handleDeleteNotice = async (id: string) => {
+    showConfirm("이 공지를 삭제할까요?", async () => {
+      setConfirm(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/notice/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        showToast("삭제 완료", "success");
+        fetchNotices();
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const handleCreateCompany = async () => {
@@ -285,7 +358,6 @@ export default function SuperAdmin() {
       </div>
     );
   }
-
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
 
@@ -325,17 +397,17 @@ export default function SuperAdmin() {
 
       {/* 탭 */}
       <div className="flex gap-2 mb-4">
-        {(["companies", "members", "users"] as const).map((t) => (
+        {(["companies", "members", "users", "notice"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); if (t === "notice") fetchNotices(); }}
             className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
               tab === t
                 ? "bg-[#5b5ef4] text-white shadow-[0_4px_12px_rgba(91,94,244,0.3)]"
                 : "bg-white border border-[#e5e5e5] text-[#6b6b6b] shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
             }`}
           >
-            {t === "companies" ? `회사 (${companies.length})` : t === "members" ? `직원 (${members.length})` : `개인 (${individualUsers.length})`}
+            {t === "companies" ? `회사 (${companies.length})` : t === "members" ? `직원 (${members.length})` : t === "users" ? `개인 (${individualUsers.length})` : "공지"}
           </button>
         ))}
       </div>
@@ -353,7 +425,6 @@ export default function SuperAdmin() {
           >
             + 회사 추가
           </button>
-
           {showCompanyForm && (
             <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">새 회사 등록</div>
@@ -368,7 +439,6 @@ export default function SuperAdmin() {
               </button>
             </div>
           )}
-
           <div className="space-y-3">
             {companies.length === 0 ? (
               <div className="text-[#a0a0a0] text-sm text-center py-12">등록된 회사가 없어요</div>
@@ -379,27 +449,27 @@ export default function SuperAdmin() {
                     <span className="text-[#0a0a0a] font-black">{c.name}</span>
                     <div className="flex items-center gap-3">
                       <button
-  onClick={async () => {
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_URL}/api/attendance/export/${c.id}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${c.name}_근무기록.xlsx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      showToast("다운로드 실패", "error");
-    }
-  }}
-  className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
->
-  📥 엑셀
-</button>
+                        onClick={async () => {
+                          try {
+                            const token = await auth.currentUser?.getIdToken();
+                            const res = await fetch(`${API_URL}/api/attendance/export/${c.id}`, {
+                              headers: { "Authorization": `Bearer ${token}` }
+                            });
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${c.name}_근무기록.xlsx`;
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                          } catch {
+                            showToast("다운로드 실패", "error");
+                          }
+                        }}
+                        className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
+                      >
+                        📥 엑셀
+                      </button>
                       <button onClick={() => handleDeleteCompany(c.id, c.name)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                     </div>
                   </div>
@@ -427,7 +497,6 @@ export default function SuperAdmin() {
           >
             + 멤버 추가
           </button>
-
           {showMemberForm && (
             <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">새 멤버 등록</div>
@@ -457,7 +526,6 @@ export default function SuperAdmin() {
               </div>
             </div>
           )}
-
           <div className="space-y-3">
             {members.length === 0 ? (
               <div className="text-[#a0a0a0] text-sm text-center py-12">등록된 직원이 없어요</div>
@@ -501,6 +569,52 @@ export default function SuperAdmin() {
                 </div>
                 <div className="text-[#6b6b6b] text-xs mb-1">{u.email}</div>
                 <div className="text-[#a0a0a0] text-xs">가입일 {formatDate(u.created_at)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* 공지 탭 */}
+      {tab === "notice" && (
+        <div className="space-y-4">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">시스템 공지 작성</div>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="공지 제목"
+                value={noticeTitle}
+                onChange={(e) => setNoticeTitle(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+              <textarea
+                placeholder="공지 내용"
+                value={noticeContent}
+                onChange={(e) => setNoticeContent(e.target.value)}
+                rows={4}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] resize-none"
+              />
+              <button
+                onClick={handleCreateNotice}
+                disabled={noticeLoading}
+                className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                {noticeLoading ? "등록 중..." : "공지 등록"}
+              </button>
+            </div>
+          </div>
+          {notices.length === 0 ? (
+            <div className="text-[#a0a0a0] text-sm text-center py-12">등록된 공지가 없어요</div>
+          ) : (
+            notices.map((n) => (
+              <div key={n.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="text-[#0a0a0a] font-bold text-sm">{n.title}</div>
+                  <button onClick={() => handleDeleteNotice(n.id)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors shrink-0">삭제</button>
+                </div>
+                <div className="text-[#6b6b6b] text-xs leading-relaxed mb-2 whitespace-pre-wrap">{n.content}</div>
+                <div className="text-[#a0a0a0] text-xs">{new Date(n.created_at).toLocaleDateString("ko-KR")}</div>
               </div>
             ))
           )}
