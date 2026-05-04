@@ -261,7 +261,11 @@ export default function Admin() {
     showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
       setConfirm(null);
       try {
-        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { method: "DELETE" });
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { 
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
         showToast("초기화 완료!", "success");
         fetchAttendance(company!.id);
       } catch {
@@ -274,9 +278,13 @@ export default function Admin() {
     showConfirm(`${email}의 비밀번호를 초기화할까요?`, async () => {
       setConfirm(null);
       try {
+        const token = await auth.currentUser?.getIdToken();
         const res = await fetch(`${API_URL}/api/company/members/reset-password`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
           body: JSON.stringify({ email })
         });
         if (res.ok) {
