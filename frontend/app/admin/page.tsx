@@ -57,6 +57,14 @@ interface ConfirmState {
   onConfirm: () => void;
 }
 
+interface CompanyNotice {
+  id: string;
+  title: string;
+  content: string;
+  notice_type: string;
+  created_at: string;
+}
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +90,10 @@ export default function Admin() {
   const [editLoading, setEditLoading] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [noticeTitle, setNoticeTitle] = useState("");
+  const [noticeContent, setNoticeContent] = useState("");
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const [companyNotices, setCompanyNotices] = useState<CompanyNotice[]>([]);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -115,6 +127,7 @@ export default function Admin() {
         setCompany(data.company);
         fetchAttendance(data.company.id);
         fetchLocations(data.company.id);
+        fetchCompanyNotices(userId);
       } else {
         setShowCreateForm(true);
       }
@@ -141,6 +154,68 @@ export default function Admin() {
     } catch (error) {
       console.error("위치 로딩 실패:", error);
     }
+  };
+
+  const fetchCompanyNotices = async (userId: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/notice/list/${userId}`, {
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      setCompanyNotices(data.notices?.filter((n: any) => n.notice_type === "company") || []);
+    } catch (error) {
+      console.error("공지 로딩 실패:", error);
+    }
+  };
+
+  const handleCreateCompanyNotice = async () => {
+    if (!noticeTitle.trim() || !noticeContent.trim()) {
+      showToast("제목과 내용을 입력해주세요", "error");
+      return;
+    }
+    setNoticeLoading(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/notice/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          title: noticeTitle,
+          content: noticeContent,
+          notice_type: "company",
+          company_id: company?.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("공지 등록 완료!", "success");
+        setNoticeTitle("");
+        setNoticeContent("");
+        fetchCompanyNotices(user!.uid);
+      }
+    } catch {
+      showToast("공지 등록 실패", "error");
+    } finally {
+      setNoticeLoading(false);
+    }
+  };
+
+  const handleDeleteCompanyNotice = async (id: string) => {
+    showConfirm("이 공지를 삭제할까요?", async () => {
+      setConfirm(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/notice/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        showToast("삭제 완료", "success");
+        fetchCompanyNotices(user!.uid);
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const handleCreateCompany = async () => {
@@ -363,7 +438,6 @@ export default function Admin() {
   const checkoutCount = attendance.filter(m => m.status === "퇴근").length;
   const absentCount = attendance.filter(m => m.status === "미출근").length;
   const missingCount = attendance.filter(m => m.status === "미퇴근").length;
-
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
 
@@ -415,28 +489,28 @@ export default function Admin() {
                   <span className="text-[#4a4de0] text-xs font-mono">코드: {company.id.slice(0, 8)}</span>
                 </div>
               </div>
-          <button
-  onClick={async () => {
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_URL}/api/attendance/export/${company.id}`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${company.name}_근무기록.xlsx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      showToast("다운로드 실패", "error");
-    }
-  }}
-  className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
->
-  📥 엑셀 다운
-</button>
+              <button
+                onClick={async () => {
+                  try {
+                    const token = await auth.currentUser?.getIdToken();
+                    const res = await fetch(`${API_URL}/api/attendance/export/${company.id}`, {
+                      headers: { "Authorization": `Bearer ${token}` }
+                    });
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${company.name}_근무기록.xlsx`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                  } catch {
+                    showToast("다운로드 실패", "error");
+                  }
+                }}
+                className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
+              >
+                📥 엑셀 다운
+              </button>
             </div>
           </div>
 
@@ -552,7 +626,7 @@ export default function Admin() {
           </div>
 
           {/* 출근 위치 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">출근 위치 관리</div>
               <button onClick={() => setShowLocationForm(!showLocationForm)} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">+ 위치 추가</button>
@@ -606,6 +680,55 @@ export default function Admin() {
                       <span className="text-[#a0a0a0] text-xs font-mono">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</span>
                       <span className="text-[#4a4de0] text-xs">반경 {loc.radius}m</span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 회사 공지 관리 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">회사 공지 관리</div>
+            <div className="space-y-3 mb-4">
+              <input
+                type="text"
+                placeholder="공지 제목"
+                value={noticeTitle}
+                onChange={(e) => setNoticeTitle(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+              <textarea
+                placeholder="공지 내용"
+                value={noticeContent}
+                onChange={(e) => setNoticeContent(e.target.value)}
+                rows={3}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] resize-none"
+              />
+              <button
+                onClick={handleCreateCompanyNotice}
+                disabled={noticeLoading}
+                className="w-full bg-[#0a0a0a] hover:bg-[#1a1a1a] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                {noticeLoading ? "등록 중..." : "🏢 회사 공지 등록"}
+              </button>
+            </div>
+            {companyNotices.length === 0 ? (
+              <div className="text-[#a0a0a0] text-sm text-center py-6">등록된 공지가 없어요</div>
+            ) : (
+              <div className="space-y-3">
+                {companyNotices.map((n) => (
+                  <div key={n.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="text-[#0a0a0a] font-bold text-sm">{n.title}</div>
+                      <button
+                        onClick={() => handleDeleteCompanyNotice(n.id)}
+                        className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors shrink-0"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    <div className="text-[#6b6b6b] text-xs leading-relaxed whitespace-pre-wrap mb-2">{n.content}</div>
+                    <div className="text-[#a0a0a0] text-xs">{new Date(n.created_at).toLocaleDateString("ko-KR")}</div>
                   </div>
                 ))}
               </div>
