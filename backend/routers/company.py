@@ -533,7 +533,9 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == member.company_id).first()
 
     return {
-        "company_id": member.company_id,
-        "company_name": company.name if company else None,
-        "is_admin": member.is_admin,
+           "company_id": member.company_id,
+           "company_name": company.name if company else None,
+          "is_admin": member.is_admin,
+          "is_manager": member.is_manager,
+          "leave_enabled": company.leave_enabled if company else False,
     }
