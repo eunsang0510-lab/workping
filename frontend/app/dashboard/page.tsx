@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [newPassword, setNewPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
+  const [leaveEnabled, setLeaveEnabled] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
@@ -175,20 +176,22 @@ export default function Dashboard() {
     }
   };
 
-  const fetchPlanStatus = async (userId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/company/my/${userId}`);
-      const data = await res.json();
-      if (data.company_id) {
-        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
-        const subData = await subRes.json();
-        if (subData.status === "expired") {
-          setPlanExpired(true);
-        }
+const fetchPlanStatus = async (userId: string) => {
+  try {
+    const res = await fetch(`${API_URL}/api/company/my/${userId}`);
+    const data = await res.json();
+    if (data.company_id) {
+      const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
+      const subData = await subRes.json();
+      if (subData.status === "expired") {
+        setPlanExpired(true);
       }
-    } catch {}
-  };
-
+      if (data.leave_enabled) {
+        setLeaveEnabled(true);
+      }
+    }
+  } catch {}
+};
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -556,7 +559,18 @@ export default function Dashboard() {
             </div>
           </div>
         </Link>
-        <Link href="/notice">
+        {leaveEnabled && (
+        <Link href="/leave">
+          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <span className="text-lg">🏖️</span>
+            <div>
+        <div className="text-[#0a0a0a] text-sm font-bold">연차관리</div>
+        <div className="text-[#6b6b6b] text-xs">신청 및 내역</div>
+            </div>
+          </div>
+        </Link>
+      )}
+       <Link href="/notice">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <span className="text-lg">📢</span>
             <div>
