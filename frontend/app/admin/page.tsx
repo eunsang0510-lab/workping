@@ -469,20 +469,7 @@ export default function Admin() {
         )}
       </div>
 
-      {/* 회사 생성 폼 */}
-      {showCreateForm && (
-        <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <div className="text-[#0a0a0a] font-black mb-4">회사 등록</div>
-          <input
-            type="text" placeholder="회사 이름 입력" value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 mb-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
-          />
-          <button onClick={handleCreateCompany} className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm">
-            등록하기
-          </button>
-        </div>
-      )}
+      
 
       {company && (
         <>
