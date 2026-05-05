@@ -18,6 +18,7 @@ interface Company {
   plan: string;
   member_count: number;
   created_at: string;
+  leave_enabled: boolean;
 }
 
 interface Member {
@@ -247,6 +248,24 @@ export default function SuperAdmin() {
       setMemberLoading(false);
     }
   };
+
+  const handleToggleCompanyLeave = async (companyId: string, currentEnabled: boolean) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/leave/toggle/${companyId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ leave_enabled: !currentEnabled }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`연차 기능 ${!currentEnabled ? "활성화" : "비활성화"} 완료!`, "success");
+      fetchAll();
+    }
+  } catch {
+    showToast("설정 변경 실패", "error");
+  }
+}; 
 
   const handleDeleteCompany = async (id: string, name: string) => {
     showConfirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`, async () => {
@@ -482,6 +501,16 @@ export default function SuperAdmin() {
                       >
                         📥 엑셀
                       </button>
+                         <button
+                            onClick={() => handleToggleCompanyLeave(c.id, c.leave_enabled)}
+                            className={`text-xs font-bold px-2 py-1 rounded-lg border transition-all ${
+                           c.leave_enabled
+                           ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]"
+                           : "bg-[#f8f8f8] text-[#a0a0a0] border-[#e5e5e5]"
+                            }`}
+                            >
+                            연차 {c.leave_enabled ? "ON" : "OFF"}
+                        </button>
                       <button onClick={() => handleDeleteCompany(c.id, c.name)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                     </div>
                   </div>

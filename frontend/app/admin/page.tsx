@@ -65,6 +65,30 @@ interface CompanyNotice {
   created_at: string;
 }
 
+interface LeaveBalance {
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  is_manager: boolean;
+  total_days: number;
+  used_days: number;
+  remaining_days: number;
+}
+
+interface LeaveItem {
+  id: string;
+  user_id: string;
+  user_name: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  days: number;
+  is_half: boolean;
+  reason: string;
+  status: string;
+  created_at: string;
+}
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +118,11 @@ export default function Admin() {
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [companyNotices, setCompanyNotices] = useState<CompanyNotice[]>([]);
+  const [leaveEnabled, setLeaveEnabled] = useState(false);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
+  const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
+  const [isManager, setIsManager] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -120,20 +149,21 @@ export default function Admin() {
   const isSystemAdmin = user?.email === SYSTEM_ADMIN_EMAIL;
 
   const fetchCompanyInfo = async (userId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/company/info/${userId}`);
-      const data = await res.json();
-      if (data.company) {
-        setCompany(data.company);
-        fetchAttendance(data.company.id);
-        fetchLocations(data.company.id);
-        fetchCompanyNotices(userId);
-      } else {
-        setShowCreateForm(true);
-      }
-    } catch (error) {
-      console.error("회사 정보 로딩 실패:", error);
+   try {
+    const res = await fetch(`${API_URL}/api/company/info/${userId}`);
+    const data = await res.json();
+    if (data.company) {
+      setCompany(data.company);
+      fetchAttendance(data.company.id);
+      fetchLocations(data.company.id);
+      fetchCompanyNotices(userId);
+      fetchLeaveData(data.company.id, userId);
+    } else {
+      setShowCreateForm(true);
     }
+   } catch (error) {
+    console.error("회사 정보 로딩 실패:", error);
+   }
   };
 
   const fetchAttendance = async (companyId: string) => {
@@ -216,6 +246,107 @@ export default function Admin() {
         showToast("삭제 실패", "error");
       }
     });
+  };
+
+  const fetchLeaveData = async (companyId: string, userId: string) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+
+    // 연차 기능 ON/OFF 확인
+    const myRes = await fetch(`${API_URL}/api/company/my/${userId}`);
+    const myData = await myRes.json();
+    setLeaveEnabled(myData.leave_enabled || false);
+    setIsManager(myData.is_manager || false);
+
+    if (!myData.leave_enabled) return;
+
+    // 연차 신청 목록
+    const leavesRes = await fetch(`${API_URL}/api/leave/company/${companyId}`, { headers });
+    const leavesData = await leavesRes.json();
+    setLeaveRequests(leavesData.leaves || []);
+
+    // 연차 잔여 현황
+    const balanceRes = await fetch(`${API_URL}/api/leave/balance/company/${companyId}`, { headers });
+    const balanceData = await balanceRes.json();
+    setLeaveBalances(balanceData.balances || []);
+  } catch (error) {
+    console.error("연차 데이터 로딩 실패:", error);
+  }
+};
+
+  const handleApproveLeave = async (leaveId: string, status: "approved" | "rejected") => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/leave/approve/${leaveId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(status === "approved" ? "승인 완료!" : "반려 완료!", "success");
+      fetchLeaveData(company!.id, user!.uid);
+    }
+  } catch {
+    showToast("처리 실패", "error");
+  }
+  };
+
+  const handleSetLeaveBalance = async (userId: string, days: number) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/leave/balance/set`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ company_id: company?.id, user_id: userId, total_days: days }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("연차 부여 완료!", "success");
+      fetchLeaveData(company!.id, user!.uid);
+    }
+  } catch {
+    showToast("연차 부여 실패", "error");
+  }
+  };
+
+  const handleToggleLeave = async () => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/leave/toggle/${company?.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ leave_enabled: !leaveEnabled }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setLeaveEnabled(!leaveEnabled);
+      showToast(`연차 기능 ${!leaveEnabled ? "활성화" : "비활성화"} 완료!`, "success");
+    }
+  } catch {
+    showToast("설정 변경 실패", "error");
+  }
+  };
+
+  const handleSetManager = async (memberId: string, isManager: boolean, memberName: string) => {
+  showConfirm(`${memberName}을 ${isManager ? "팀장으로 지정" : "팀장 해제"}할까요?`, async () => {
+    setConfirm(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/leave/manager/${memberId}?is_manager=${isManager}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(isManager ? "팀장 지정 완료!" : "팀장 해제 완료!", "success");
+        fetchLeaveData(company!.id, user!.uid);
+      }
+    } catch {
+      showToast("처리 실패", "error");
+    }
+  });
   };
 
   const handleCreateCompany = async () => {
@@ -731,6 +862,147 @@ export default function Admin() {
           </div>
         </>
       )}
+
+{/* 연차 관리 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#6b6b6b]">{leaveEnabled ? "사용중" : "미사용"}</span>
+                <div
+                  onClick={handleToggleLeave}
+                  className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveEnabled ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveEnabled ? "left-7" : "left-1"}`} />
+                </div>
+              </div>
+            </div>
+
+            {leaveEnabled && (
+              <>
+                {/* 탭 */}
+                <div className="flex gap-2 mb-4">
+                  {(["requests", "balances"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setLeaveTab(t)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                        leaveTab === t
+                          ? "bg-[#5b5ef4] text-white"
+                          : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b]"
+                      }`}
+                    >
+                      {t === "requests" ? `신청 현황 (${leaveRequests.filter(l => l.status === "pending").length})` : "연차 현황"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 신청 현황 탭 */}
+                {leaveTab === "requests" && (
+                  <div className="space-y-3">
+                    {leaveRequests.length === 0 ? (
+                      <div className="text-[#a0a0a0] text-sm text-center py-6">연차 신청이 없어요</div>
+                    ) : (
+                      leaveRequests.map((leave) => (
+                        <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="text-[#0a0a0a] text-sm font-bold">
+                                {leave.user_name} · {leave.is_half ? "반차" : `연차 ${leave.days}일`}
+                              </div>
+                              <div className="text-[#6b6b6b] text-xs mt-0.5">
+                                {leave.start_date} ~ {leave.end_date}
+                              </div>
+                              {leave.reason && (
+                                <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
+                              )}
+                            </div>
+                            <div className={`text-xs font-bold px-2 py-1 rounded-lg border ${
+                              leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
+                              leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
+                              "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
+                            }`}>
+                              {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
+                            </div>
+                          </div>
+                          {leave.status === "pending" && (
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handleApproveLeave(leave.id, "approved")}
+                                className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
+                              >
+                                승인
+                              </button>
+                              <button
+                                onClick={() => handleApproveLeave(leave.id, "rejected")}
+                                className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
+                              >
+                                반려
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* 연차 현황 탭 */}
+                {leaveTab === "balances" && (
+                  <div className="space-y-3">
+                    {leaveBalances.length === 0 ? (
+                      <div className="text-[#a0a0a0] text-sm text-center py-6">직원이 없어요</div>
+                    ) : (
+                      leaveBalances.map((b) => (
+                        <div key={b.user_id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#0a0a0a] text-sm font-bold">{b.user_name}</span>
+                              {b.is_manager && (
+                                <span className="bg-[#f0f0ff] border border-[#c7c8fa] text-[#4a4de0] text-xs px-2 py-0.5 rounded-lg">팀장</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleSetManager(b.user_id, !b.is_manager, b.user_name)}
+                                className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors"
+                              >
+                                {b.is_manager ? "팀장해제" : "팀장지정"}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-[#a0a0a0] text-xs">총 <span className="text-[#0a0a0a] font-bold">{b.total_days}일</span></span>
+                            <span className="text-[#a0a0a0] text-xs">사용 <span className="text-[#ef4444] font-bold">{b.used_days}일</span></span>
+                            <span className="text-[#a0a0a0] text-xs">잔여 <span className="text-[#16a34a] font-bold">{b.remaining_days}일</span></span>
+                          </div>
+                          {/* 연차 부여 인풋 */}
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              defaultValue={b.total_days}
+                              id={`balance-${b.user_id}`}
+                              className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-lg px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-xs"
+                              placeholder="연차 일수"
+                            />
+                            <button
+                              onClick={() => {
+                                const input = document.getElementById(`balance-${b.user_id}`) as HTMLInputElement;
+                                handleSetLeaveBalance(b.user_id, parseInt(input.value));
+                              }}
+                              className="bg-[#5b5ef4] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#4a4de0] transition-all"
+                            >
+                              부여
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
       {/* 수정 모달 */}
       {editMember && (
