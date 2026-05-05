@@ -53,6 +53,7 @@ def get_companies(db: Session = Depends(get_db)):
                 "admin_id": c.admin_id,
                 "plan": c.plan,
                 "member_count": member_count,
+                 "leave_enabled": c.leave_enabled,
                 "created_at": c.created_at,
             }
         )

@@ -363,14 +363,14 @@ def toggle_leave(
 
 
 # ── 팀장 지정/해제 (관리자/superadmin) ────────────────
-@router.put("/manager/{member_id}")
+@router.put("/manager/{user_id}")
 def set_manager(
-    member_id: str,
-    is_manager: bool,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    target = db.query(CompanyMember).filter(CompanyMember.id == member_id).first()
+      user_id: str,
+      is_manager: bool,
+      db: Session = Depends(get_db),
+      current_user: dict = Depends(get_current_user)
+    ):
+    target = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없어요")
 
