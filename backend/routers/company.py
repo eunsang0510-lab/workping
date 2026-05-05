@@ -125,7 +125,18 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
 
 @router.get("/info/{admin_id}")
 def get_company_info(admin_id: str, db: Session = Depends(get_db)):
+    # 먼저 company 생성자(admin_id)로 찾기
     company = db.query(Company).filter(Company.admin_id == admin_id).first()
+    
+    # 없으면 CompanyMember에서 is_admin=True인 경우로 찾기
+    if not company:
+        member = db.query(CompanyMember).filter(
+            CompanyMember.user_id == admin_id,
+            CompanyMember.is_admin == True
+        ).first()
+        if member:
+            company = db.query(Company).filter(Company.id == member.company_id).first()
+    
     if not company:
         return {"company": None}
 
