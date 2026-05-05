@@ -10,6 +10,7 @@ class Company(Base):
     name       = Column(String, nullable=False)
     admin_id   = Column(String, nullable=False)
     plan       = Column(String, default="team")
+    leave_enabled  = Column(Boolean, default=False)  # 연차 기능 ON/OFF
     created_at = Column(DateTime, default=datetime.now)
 
 class CompanyMember(Base):
@@ -22,6 +23,7 @@ class CompanyMember(Base):
     user_name  = Column(String, nullable=True)
     birth_date = Column(String, nullable=True)   # ← 추가
     is_admin   = Column(Boolean, default=False)
+    is_manager = Column(Boolean, default=False)  # 팀장 권한
     created_at = Column(DateTime, default=datetime.now)
 
 class CompanyLocation(Base):
