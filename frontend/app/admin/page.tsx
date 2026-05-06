@@ -89,6 +89,15 @@ interface LeaveItem {
   created_at: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  manager_id: string | null;
+  manager_name: string | null;
+  member_count: number;
+  members: string[];
+}
+
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +127,10 @@ export default function Admin() {
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [companyNotices, setCompanyNotices] = useState<CompanyNotice[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
   const [leaveEnabled, setLeaveEnabled] = useState(false);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
@@ -158,6 +171,7 @@ export default function Admin() {
       fetchLocations(data.company.id);
       fetchCompanyNotices(userId);
       fetchLeaveData(data.company.id, userId);
+      fetchTeams(data.company.id);
     } else {
       setShowCreateForm(true);
     }
@@ -247,6 +261,118 @@ export default function Admin() {
       }
     });
   };
+
+  const fetchTeams = async (companyId: string) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/team/company/${companyId}`, {
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    setTeams(data.teams || []);
+  } catch (error) {
+    console.error("팀 로딩 실패:", error);
+  }
+};
+
+const handleCreateTeam = async () => {
+  if (!newTeamName.trim()) {
+    showToast("팀 이름을 입력해주세요", "error");
+    return;
+  }
+  setTeamLoading(true);
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/team/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ company_id: company?.id, name: newTeamName }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("팀 생성 완료!", "success");
+      setNewTeamName("");
+      setShowTeamForm(false);
+      fetchTeams(company!.id);
+    }
+  } catch {
+    showToast("팀 생성 실패", "error");
+  } finally {
+    setTeamLoading(false);
+  }
+};
+
+const handleDeleteTeam = async (teamId: string, teamName: string) => {
+  showConfirm(`"${teamName}" 팀을 삭제할까요?`, async () => {
+    setConfirm(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch(`${API_URL}/api/team/${teamId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      showToast("삭제 완료", "success");
+      fetchTeams(company!.id);
+    } catch {
+      showToast("삭제 실패", "error");
+    }
+  });
+};
+
+const handleSetTeamManager = async (teamId: string, managerId: string) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/team/${teamId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ manager_id: managerId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("팀장 지정 완료!", "success");
+      fetchTeams(company!.id);
+    }
+  } catch {
+    showToast("팀장 지정 실패", "error");
+  }
+};
+
+const handleAddTeamMember = async (teamId: string, userId: string) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/team/member/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ team_id: teamId, user_id: userId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast("팀원 추가 완료!", "success");
+      fetchTeams(company!.id);
+    } else {
+      showToast(data.message, "info");
+    }
+  } catch {
+    showToast("팀원 추가 실패", "error");
+  }
+};
+
+const handleRemoveTeamMember = async (teamId: string, userId: string, userName: string) => {
+  showConfirm(`${userName}을 팀에서 제거할까요?`, async () => {
+    setConfirm(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch(`${API_URL}/api/team/member/${teamId}/${userId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      showToast("팀원 제거 완료", "success");
+      fetchTeams(company!.id);
+    } catch {
+      showToast("팀원 제거 실패", "error");
+    }
+  });
+};
 
   const fetchLeaveData = async (companyId: string, userId: string) => {
   try {
@@ -815,6 +941,150 @@ export default function Admin() {
                       <span className="text-[#a0a0a0] text-xs font-mono">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</span>
                       <span className="text-[#4a4de0] text-xs">반경 {loc.radius}m</span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 팀 관리 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">팀 관리</div>
+              <button
+                onClick={() => setShowTeamForm(!showTeamForm)}
+                className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors"
+              >
+                + 팀 추가
+              </button>
+            </div>
+
+            {/* 팀 생성 폼 */}
+            {showTeamForm && (
+              <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4 mb-4 space-y-3">
+                <input
+                  type="text"
+                  placeholder="팀 이름 (예: 개발팀, 영업팀)"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                />
+                <button
+                  onClick={handleCreateTeam}
+                  disabled={teamLoading}
+                  className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+                >
+                  {teamLoading ? "생성 중..." : "팀 생성"}
+                </button>
+              </div>
+            )}
+
+            {/* 팀 목록 */}
+            {teams.length === 0 ? (
+              <div className="text-[#a0a0a0] text-sm text-center py-6">
+                등록된 팀이 없어요<br />
+                <span className="text-xs">팀을 만들고 팀장과 팀원을 배정해보세요</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {teams.map((team) => (
+                  <div key={team.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                    {/* 팀 헤더 */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#0a0a0a] font-black text-sm">🏷️ {team.name}</span>
+                        <span className="text-[#a0a0a0] text-xs">{team.member_count}명</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTeam(team.id, team.name)}
+                        className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+
+                    {/* 팀장 설정 */}
+                    <div className="mb-3">
+                      <div className="text-[#a0a0a0] text-xs mb-1">팀장</div>
+                      <div className="flex gap-2">
+                        <select
+                          defaultValue={team.manager_id || ""}
+                          onChange={(e) => {
+                            if (e.target.value) handleSetTeamManager(team.id, e.target.value);
+                          }}
+                          className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-lg px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-xs"
+                        >
+                          <option value="">팀장 선택</option>
+                          {attendance.map((m) => (
+                            <option key={m.user_id} value={m.user_id}>
+                              {m.user_name || m.user_email}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {team.manager_name && (
+                        <div className="mt-1 text-xs text-[#5b5ef4] font-medium">
+                          현재 팀장: {team.manager_name}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 팀원 추가 */}
+                    <div className="mb-3">
+                      <div className="text-[#a0a0a0] text-xs mb-1">팀원 추가</div>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAddTeamMember(team.id, e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-lg px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-xs"
+                      >
+                        <option value="">팀원 선택해서 추가</option>
+                        {attendance
+                          .filter((m) => !team.members.includes(m.user_id))
+                          .map((m) => (
+                            <option key={m.user_id} value={m.user_id}>
+                              {m.user_name || m.user_email}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* 현재 팀원 목록 */}
+                    {team.members.length > 0 && (
+                      <div>
+                        <div className="text-[#a0a0a0] text-xs mb-2">현재 팀원</div>
+                        <div className="space-y-1">
+                          {team.members.map((userId) => {
+                            const memberInfo = attendance.find(m => m.user_id === userId);
+                            return (
+                              <div key={userId} className="flex items-center justify-between bg-white border border-[#e5e5e5] rounded-lg px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-5 h-5 bg-[#f0f0ff] rounded-full flex items-center justify-center text-xs font-bold text-[#5b5ef4]">
+                                    {(memberInfo?.user_name || memberInfo?.user_email || "?")[0]}
+                                  </div>
+                                  <span className="text-[#0a0a0a] text-xs font-medium">
+                                    {memberInfo?.user_name || memberInfo?.user_email || userId}
+                                  </span>
+                                  {userId === team.manager_id && (
+                                    <span className="bg-[#f0f0ff] border border-[#c7c8fa] text-[#4a4de0] text-xs px-1.5 py-0.5 rounded-md">팀장</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveTeamMember(team.id, userId, memberInfo?.user_name || userId)}
+                                  className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors"
+                                >
+                                  제거
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
