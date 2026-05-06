@@ -7,6 +7,7 @@ from models.company import Company, CompanyMember
 from routers.deps import get_current_user
 from datetime import datetime
 from typing import Optional
+from models.team import Team, TeamMember
 
 router = APIRouter()
 
@@ -176,9 +177,26 @@ def get_company_leaves(
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
-    leaves = db.query(Leave).filter(
-        Leave.company_id == company_id
-    ).order_by(Leave.created_at.desc()).all()
+    # 팀장이면 본인 팀원만 조회
+    is_manager_only = member and member.is_manager and not member.is_admin
+
+    if is_manager_only and not is_superadmin:
+        managed_teams = db.query(Team).filter(
+            Team.manager_id == current_user["uid"]
+        ).all()
+        managed_team_ids = [t.id for t in managed_teams]
+        team_member_rows = db.query(TeamMember.user_id).filter(
+            TeamMember.team_id.in_(managed_team_ids)
+        ).all()
+        managed_user_ids = [uid for (uid,) in team_member_rows]
+        leaves = db.query(Leave).filter(
+            Leave.company_id == company_id,
+            Leave.user_id.in_(managed_user_ids)
+        ).order_by(Leave.created_at.desc()).all()
+    else:
+        leaves = db.query(Leave).filter(
+            Leave.company_id == company_id
+        ).order_by(Leave.created_at.desc()).all()
 
     return {
         "leaves": [
@@ -310,9 +328,26 @@ def get_company_balances(
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
     year = datetime.now().year
-    members = db.query(CompanyMember).filter(
-        CompanyMember.company_id == company_id
-    ).all()
+    # 팀장이면 본인 팀원만 조회
+    is_manager_only = member and member.is_manager and not member.is_admin
+
+    if is_manager_only and not is_superadmin:
+        managed_teams = db.query(Team).filter(
+            Team.manager_id == current_user["uid"]
+        ).all()
+        managed_team_ids = [t.id for t in managed_teams]
+        team_member_rows = db.query(TeamMember.user_id).filter(
+            TeamMember.team_id.in_(managed_team_ids)
+        ).all()
+        managed_user_ids = [uid for (uid,) in team_member_rows]
+        members = db.query(CompanyMember).filter(
+            CompanyMember.company_id == company_id,
+            CompanyMember.user_id.in_(managed_user_ids)
+        ).all()
+    else:
+        members = db.query(CompanyMember).filter(
+            CompanyMember.company_id == company_id
+        ).all()
 
     result = []
     for m in members:
