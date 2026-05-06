@@ -11,7 +11,8 @@ class LeaveBalance(Base):
     company_id    = Column(String, nullable=False)
     user_id       = Column(String, nullable=False)
     total_days    = Column(Integer, default=15)   # 부여된 총 연차
-    used_days     = Column(Integer, default=0)    # 사용한 연차
+    from sqlalchemy import Float
+    used_days     = Column(Float, default=0)
     year          = Column(Integer, default=lambda: datetime.now().year)
     created_at    = Column(DateTime, default=datetime.now)
     updated_at    = Column(DateTime, default=datetime.now, onupdate=datetime.now)

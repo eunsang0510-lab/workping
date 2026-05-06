@@ -37,12 +37,12 @@ class ToggleLeaveRequest(BaseModel):
     leave_enabled: bool
 
 
-def calc_days(start_date: str, end_date: str, is_half: bool) -> int:
+def calc_days(start_date: str, end_date: str, is_half: bool) -> float:
     if is_half:
-        return 1  # 반차는 내부적으로 1로 저장 (표시만 0.5)
+        return 0.5
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
-    return (end - start).days + 1
+    return float((end - start).days + 1)
 
 
 # ── 연차 신청 ──────────────────────────────────────────
@@ -55,12 +55,10 @@ def apply_leave(
     if current_user["uid"] != req.user_id:
         raise HTTPException(status_code=403, detail="본인만 신청할 수 있어요")
 
-    # 회사 연차 기능 ON 확인
     company = db.query(Company).filter(Company.id == req.company_id).first()
     if not company or not company.leave_enabled:
         raise HTTPException(status_code=400, detail="연차 기능이 비활성화되어 있어요")
 
-    # 잔여 연차 확인
     year = datetime.now().year
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.company_id == req.company_id,
@@ -73,9 +71,8 @@ def apply_leave(
 
     days = calc_days(req.start_date, req.end_date, req.is_half)
     remaining = balance.total_days - balance.used_days
-    required = 0.5 if req.is_half else days
 
-    if remaining < required:
+    if remaining < days:
         raise HTTPException(status_code=400, detail=f"잔여 연차가 부족해요 (잔여: {remaining}일)")
 
     leave = Leave(
@@ -169,12 +166,14 @@ def get_company_leaves(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    # 팀장 또는 관리자 확인
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
     ).first()
-    if not member or (not member.is_admin and not member.is_manager):
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
+    if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
     leaves = db.query(Leave).filter(
@@ -213,12 +212,14 @@ def approve_leave(
     if not leave:
         raise HTTPException(status_code=404, detail="연차 신청을 찾을 수 없어요")
 
-    # 팀장 또는 관리자 확인
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == leave.company_id,
     ).first()
-    if not member or (not member.is_admin and not member.is_manager):
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
+    if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 승인할 수 있어요")
 
     if req.status not in ["approved", "rejected"]:
@@ -229,28 +230,22 @@ def approve_leave(
     leave.approved_by = current_user["uid"]
     leave.approved_at = datetime.now()
 
+    year = datetime.now().year
+    balance = db.query(LeaveBalance).filter(
+        LeaveBalance.user_id == leave.user_id,
+        LeaveBalance.company_id == leave.company_id,
+        LeaveBalance.year == year,
+    ).first()
+
     # 승인 시 연차 차감
     if req.status == "approved" and prev_status != "approved":
-        year = datetime.now().year
-        balance = db.query(LeaveBalance).filter(
-            LeaveBalance.user_id == leave.user_id,
-            LeaveBalance.company_id == leave.company_id,
-            LeaveBalance.year == year,
-        ).first()
         if balance:
-            used = 0.5 if leave.is_half else leave.days
-            balance.used_days = balance.used_days + (1 if leave.is_half else leave.days)
+            balance.used_days = balance.used_days + (0.5 if leave.is_half else leave.days)
 
     # 반려 시 연차 복구 (이전에 승인됐다가 반려된 경우)
     if req.status == "rejected" and prev_status == "approved":
-        year = datetime.now().year
-        balance = db.query(LeaveBalance).filter(
-            LeaveBalance.user_id == leave.user_id,
-            LeaveBalance.company_id == leave.company_id,
-            LeaveBalance.year == year,
-        ).first()
         if balance:
-            balance.used_days = max(0, balance.used_days - (1 if leave.is_half else leave.days))
+            balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
 
     db.commit()
     return {"success": True, "status": req.status}
@@ -263,13 +258,15 @@ def set_leave_balance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    # 관리자 확인
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == req.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    if not member:
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
+    if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 연차를 부여할 수 있어요")
 
     year = req.year or datetime.now().year
@@ -295,7 +292,7 @@ def set_leave_balance(
     return {"success": True, "total_days": req.total_days, "year": year}
 
 
-# ── 회사 직원별 연차 현황 (관리자용) ──────────────────
+# ── 회사 직원별 연차 현황 (관리자/팀장용) ─────────────
 @router.get("/balance/company/{company_id}")
 def get_company_balances(
     company_id: str,
@@ -306,7 +303,10 @@ def get_company_balances(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
     ).first()
-    if not member or (not member.is_admin and not member.is_manager):
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
+    if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
     year = datetime.now().year
@@ -346,13 +346,13 @@ def toggle_leave(
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
 
-    # 관리자 또는 superadmin 확인
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
 
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 설정할 수 있어요")
@@ -365,22 +365,22 @@ def toggle_leave(
 # ── 팀장 지정/해제 (관리자/superadmin) ────────────────
 @router.put("/manager/{user_id}")
 def set_manager(
-      user_id: str,
-      is_manager: bool,
-      db: Session = Depends(get_db),
-      current_user: dict = Depends(get_current_user)
-    ):
+    user_id: str,
+    is_manager: bool,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     target = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없어요")
 
-    # 관리자 또는 superadmin 확인
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == target.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
 
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 팀장을 지정할 수 있어요")
