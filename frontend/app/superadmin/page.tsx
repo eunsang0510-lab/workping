@@ -249,6 +249,20 @@ export default function SuperAdmin() {
     }
   };
 
+  const formatTime = (isoString: string | null) => {
+  if (!isoString) return "--:--";
+  const str = isoString.endsWith("Z") || isoString.includes("+")
+    ? isoString
+    : isoString + "Z";
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return "--:--";
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  });
+};
+
   const handleToggleCompanyLeave = async (companyId: string, currentEnabled: boolean) => {
   try {
     const token = await auth.currentUser?.getIdToken();

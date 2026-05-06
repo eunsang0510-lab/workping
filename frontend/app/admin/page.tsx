@@ -554,9 +554,18 @@ export default function Admin() {
   };
 
   const formatTime = (isoString: string | null) => {
-    if (!isoString) return "--:--";
-    return new Date(isoString).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-  };
+  if (!isoString) return "--:--";
+  const str = isoString.endsWith("Z") || isoString.includes("+")
+    ? isoString
+    : isoString + "Z";
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return "--:--";
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  });
+};
 
   const statusConfig = {
     "출근중": { bg: "bg-[#f0fdf4]", text: "text-[#16a34a]", border: "border-[#bbf7d0]", dot: "bg-[#16a34a]" },
