@@ -491,16 +491,20 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
   };
 
   const handleRegisterMember = async () => {
-    if (!memberName || !memberEmail || !memberBirth) {
-      showToast("모든 항목을 입력해주세요", "error");
-      return;
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/company/members/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth })
-      });
+  if (!memberName || !memberEmail || !memberBirth) {
+    showToast("모든 항목을 입력해주세요", "error");
+    return;
+  }
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/company/members/register`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth })
+    });
       const data = await res.json();
       if (data.success) {
         showToast(`등록 완료! 초기 비밀번호: ${data.initial_password}`, "success");
