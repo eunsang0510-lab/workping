@@ -31,9 +31,9 @@ export default function DeleteAccount() {
             본문에 가입 시 사용한 이메일 주소를 함께 기재해주세요.
           </p>
           
-            href="mailto:workpingofficial@gmail.com?subject=[계정삭제] 가입 이메일 주소&body=삭제 요청 이메일: "
-            className="block w-full bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-3 rounded-xl text-sm text-center transition-all"\
-            <a>
+           href="mailto:workpingofficial@gmail.com"
+            className="block w-full bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-3 rounded-xl text-sm text-center transition-all"
+          <a>
             ✉️ 계정 삭제 요청 이메일 보내기
           </a>
         </div>
