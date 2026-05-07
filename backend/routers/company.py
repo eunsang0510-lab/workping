@@ -539,3 +539,30 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
           "is_manager": member.is_manager,
           "leave_enabled": company.leave_enabled if company else False,
     }
+
+@router.delete("/members/by-user/{user_id}")
+def delete_member_by_user_id(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # 관리자 또는 superadmin 확인
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == member.company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있어요")
+
+    db.delete(member)
+    db.commit()
+    return {"success": True, "message": "삭제 완료"}
