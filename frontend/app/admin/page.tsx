@@ -1165,10 +1165,8 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
               </div>
             )}
           </div>
-        </>
-      )}
-
-{/* 연차 관리 */}
+          
+        {/* 연차 관리 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
@@ -1308,6 +1306,9 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
               </>
             )}
           </div>
+        </>
+      )}
+
 
       {/* 수정 모달 */}
       {editMember && (
