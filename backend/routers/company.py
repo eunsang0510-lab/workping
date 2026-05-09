@@ -566,3 +566,22 @@ def delete_member_by_user_id(
     db.delete(member)
     db.commit()
     return {"success": True, "message": "삭제 완료"}
+
+
+@router.get("/list")
+def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    if not is_superadmin:
+        raise HTTPException(status_code=403, detail="시스템 관리자만 조회할 수 있어요")
+    
+    companies = db.query(Company).all()
+    result = []
+    for c in companies:
+        member_count = db.query(CompanyMember).filter(CompanyMember.company_id == c.id).count()
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "member_count": member_count,
+            "company_code": c.id[:8],
+        })
+    return {"companies": result}
