@@ -136,6 +136,8 @@ export default function Admin() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
   const [isManager, setIsManager] = useState(false);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);         // ✅ 추가
+  const [showCompanySelector, setShowCompanySelector] = useState(false);   // ✅ 추가
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -147,38 +149,51 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        fetchCompanyInfo(user.uid);
-      } else {
-        router.push("/login");
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router]);
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      setUser(user);
+      fetchCompanyInfo(user.uid, user.email ?? undefined); // ✅ email 전달
+    } else {
+      router.push("/login");
+    }
+    setLoading(false);
+  });
+  return () => unsubscribe();
+}, [router]);
 
   const isSystemAdmin = user?.email === SYSTEM_ADMIN_EMAIL;
 
-  const fetchCompanyInfo = async (userId: string) => {
-   try {
+  const fetchCompanyInfo = async (userId: string, email?: string) => {
+  try {
+    // ✅ 시스템 관리자면 회사 목록 불러오고 선택 대기
+    if (email === SYSTEM_ADMIN_EMAIL) {
+      const res = await fetch(`${API_URL}/api/company/list`);
+      const data = await res.json();
+      setAllCompanies(data.companies || []);
+      setShowCompanySelector(true);
+      return;
+    }
     const res = await fetch(`${API_URL}/api/company/info/${userId}`);
     const data = await res.json();
     if (data.company) {
-      setCompany(data.company);
-      fetchAttendance(data.company.id);
-      fetchLocations(data.company.id);
-      fetchCompanyNotices(userId);
-      fetchLeaveData(data.company.id, userId);
-      fetchTeams(data.company.id);
+      loadCompanyData(data.company);
     } else {
       setShowCreateForm(true);
     }
-   } catch (error) {
+  } catch (error) {
     console.error("회사 정보 로딩 실패:", error);
-   }
-  };
+  }
+};
+
+// ✅ 회사 데이터 로드 공통 함수로 분리
+const loadCompanyData = (companyData: Company) => {
+  setCompany(companyData);
+  fetchAttendance(companyData.id);
+  fetchLocations(companyData.id);
+  fetchCompanyNotices(companyData.id);  // userId 대신 companyId 기반으로 변경
+  fetchLeaveData(companyData.id, auth.currentUser!.uid);
+  fetchTeams(companyData.id);
+};
 
   const fetchAttendance = async (companyId: string) => {
     try {
@@ -767,13 +782,56 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
           <h1 className="text-[#0a0a0a] text-lg font-black">관리자</h1>
         </div>
         {isSystemAdmin && (
-          <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
-            <span className="text-[#4a4de0] text-xs font-bold">시스템 관리자</span>
-          </div>
-        )}
+  <div className="flex items-center gap-2">
+    <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
+      <span className="text-[#4a4de0] text-xs font-bold">시스템 관리자</span>
+    </div>
+    {company && (
+      <button
+        onClick={() => {
+          setCompany(null);
+          setShowCompanySelector(true);
+        }}
+        className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs border border-[#e5e5e5] rounded-lg px-2 py-1 transition-colors"
+      >
+        회사 변경
+      </button>
+    )}
+  </div>
+)}
       </div>
 
       
+
+      {/* ✅ 시스템 관리자 회사 선택 화면 */}
+      {showCompanySelector && !company && (
+        <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">
+            🏢 관리할 회사 선택
+          </div>
+          {allCompanies.length === 0 ? (
+            <div className="text-[#a0a0a0] text-sm text-center py-8">등록된 회사가 없어요</div>
+          ) : (
+            <div className="space-y-3">
+              {allCompanies.map((c) => (
+                <div
+                  key={c.id}
+                  onClick={() => {
+                    setShowCompanySelector(false);
+                    loadCompanyData(c);
+                  }}
+                  className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all"
+                >
+                  <div className="text-[#0a0a0a] font-bold text-sm">{c.name}</div>
+                  <div className="text-[#a0a0a0] text-xs mt-1">
+                    코드: {c.id.slice(0, 8)} · 팀원 {c.member_count}명
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {company && (
         <>
@@ -1217,7 +1275,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
           </div>
 
           {/* 회사 공지 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">회사 공지 관리</div>
             <div className="space-y-3 mb-4">
               <input
