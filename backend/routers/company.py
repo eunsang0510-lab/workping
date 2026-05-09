@@ -137,6 +137,7 @@ def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depen
             "name": c.name,
             "member_count": member_count,
             "company_code": c.id[:8],
+             "leave_enabled": c.leave_enabled,  # ✅ 추가
         })
     return {"companies": result}
 
