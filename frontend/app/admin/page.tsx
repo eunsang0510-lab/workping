@@ -438,9 +438,10 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
   };
 
   const handleToggleLeave = async () => {
+  if (!company?.id) return;  // ✅ 추가: company 없으면 실행 안 함
   try {
     const token = await auth.currentUser?.getIdToken();
-    const res = await fetch(`${API_URL}/api/leave/toggle/${company?.id}`, {
+    const res = await fetch(`${API_URL}/api/leave/toggle/${company.id}`, {  // ✅ company.id로 변경
       method: "PUT",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ leave_enabled: !leaveEnabled }),
@@ -449,11 +450,12 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     if (data.success) {
       setLeaveEnabled(!leaveEnabled);
       showToast(`연차 기능 ${!leaveEnabled ? "활성화" : "비활성화"} 완료!`, "success");
+      fetchLeaveData(company.id, user!.uid);  // ✅ 추가: 토글 후 데이터 새로고침
     }
   } catch {
     showToast("설정 변경 실패", "error");
   }
-  };
+};
 
   const handleSetManager = async (memberId: string, isManager: boolean, memberName: string) => {
   showConfirm(`${memberName}을 ${isManager ? "팀장으로 지정" : "팀장 해제"}할까요?`, async () => {
@@ -815,6 +817,148 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
             ))}
           </div>
 
+
+        {/* 연차 관리 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#6b6b6b]">{leaveEnabled ? "사용중" : "미사용"}</span>
+                <div
+                  onClick={handleToggleLeave}
+                  className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveEnabled ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveEnabled ? "left-7" : "left-1"}`} />
+                </div>
+              </div>
+            </div>
+
+            {leaveEnabled && (
+              <>
+                {/* 탭 */}
+                <div className="flex gap-2 mb-4">
+                  {(["requests", "balances"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setLeaveTab(t)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                        leaveTab === t
+                          ? "bg-[#5b5ef4] text-white"
+                          : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b]"
+                      }`}
+                    >
+                      {t === "requests" ? `신청 현황 (${leaveRequests.filter(l => l.status === "pending").length})` : "연차 현황"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 신청 현황 탭 */}
+                {leaveTab === "requests" && (
+                  <div className="space-y-3">
+                    {leaveRequests.length === 0 ? (
+                      <div className="text-[#a0a0a0] text-sm text-center py-6">연차 신청이 없어요</div>
+                    ) : (
+                      leaveRequests.map((leave) => (
+                        <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="text-[#0a0a0a] text-sm font-bold">
+                                {leave.user_name} · {leave.is_half ? "반차" : `연차 ${leave.days}일`}
+                              </div>
+                              <div className="text-[#6b6b6b] text-xs mt-0.5">
+                                {leave.start_date} ~ {leave.end_date}
+                              </div>
+                              {leave.reason && (
+                                <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
+                              )}
+                            </div>
+                            <div className={`text-xs font-bold px-2 py-1 rounded-lg border ${
+                              leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
+                              leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
+                              "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
+                            }`}>
+                              {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
+                            </div>
+                          </div>
+                          {leave.status === "pending" && (
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => handleApproveLeave(leave.id, "approved")}
+                                className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
+                              >
+                                승인
+                              </button>
+                              <button
+                                onClick={() => handleApproveLeave(leave.id, "rejected")}
+                                className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
+                              >
+                                반려
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* 연차 현황 탭 */}
+                {leaveTab === "balances" && (
+                  <div className="space-y-3">
+                    {leaveBalances.length === 0 ? (
+                      <div className="text-[#a0a0a0] text-sm text-center py-6">직원이 없어요</div>
+                    ) : (
+                      leaveBalances.map((b) => (
+                        <div key={b.user_id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#0a0a0a] text-sm font-bold">{b.user_name}</span>
+                              {b.is_manager && (
+                                <span className="bg-[#f0f0ff] border border-[#c7c8fa] text-[#4a4de0] text-xs px-2 py-0.5 rounded-lg">팀장</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleSetManager(b.user_id, !b.is_manager, b.user_name)}
+                                className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors"
+                              >
+                                {b.is_manager ? "팀장해제" : "팀장지정"}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-[#a0a0a0] text-xs">총 <span className="text-[#0a0a0a] font-bold">{b.total_days}일</span></span>
+                            <span className="text-[#a0a0a0] text-xs">사용 <span className="text-[#ef4444] font-bold">{b.used_days}일</span></span>
+                            <span className="text-[#a0a0a0] text-xs">잔여 <span className="text-[#16a34a] font-bold">{b.remaining_days}일</span></span>
+                          </div>
+                          {/* 연차 부여 인풋 */}
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              defaultValue={b.total_days}
+                              id={`balance-${b.user_id}`}
+                              className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-lg px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-xs"
+                              placeholder="연차 일수"
+                            />
+                            <button
+                              onClick={() => {
+                                const input = document.getElementById(`balance-${b.user_id}`) as HTMLInputElement;
+                                handleSetLeaveBalance(b.user_id, parseInt(input.value));
+                              }}
+                              className="bg-[#5b5ef4] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#4a4de0] transition-all"
+                            >
+                              부여
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* 팀원 목록 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
@@ -854,63 +998,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
               </div>
             )}
           </div>
-
-          {/* 직원 개별 등록 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">직원 등록</div>
-            <div className="space-y-3">
-              {[
-                { placeholder: "이름", value: memberName, onChange: setMemberName, type: "text" },
-                { placeholder: "회사 이메일", value: memberEmail, onChange: setMemberEmail, type: "email" },
-                { placeholder: "생년월일 (예: 19901225)", value: memberBirth, onChange: setMemberBirth, type: "text" },
-              ].map((field, i) => (
-                <input key={i} type={field.type} placeholder={field.placeholder} value={field.value}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
-                />
-              ))}
-              <button onClick={handleRegisterMember} className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm">
-                직원 등록하기
-              </button>
-            </div>
-          </div>
-
-          {/* 엑셀 일괄 등록 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">
-                엑셀 일괄 등록 {isSystemAdmin && <span className="ml-2 text-[#4a4de0]">(회사코드 포함)</span>}
-              </div>
-              <button onClick={handleDownloadTemplate} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">양식 다운로드</button>
-            </div>
-            <div onClick={() => fileInputRef.current?.click()}
-              className="border border-dashed border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-6 text-center cursor-pointer transition-all mb-3 bg-[#f8f8f8]">
-              <div className="text-2xl mb-2">📂</div>
-              <div className="text-[#0a0a0a] text-sm font-medium">엑셀 파일 업로드</div>
-              <div className="text-[#a0a0a0] text-xs mt-1">{isSystemAdmin ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요" : "이름, 이메일, 생년월일 컬럼 필요"}</div>
-            </div>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelUpload} className="hidden" />
-            {excelMembers.length > 0 && (
-              <>
-                <div className="text-[#a0a0a0] text-xs mb-2">{excelMembers.length}명 확인됨</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
-                  {excelMembers.map((m, i) => (
-                    <div key={i} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-lg px-3 py-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {m.회사코드 && <span className="text-[#4a4de0] text-xs font-mono">{m.회사코드}</span>}
-                        <span className="text-[#0a0a0a] text-xs font-medium">{m.이름}</span>
-                      </div>
-                      <span className="text-[#6b6b6b] text-xs">{m.이메일}</span>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={handleBulkRegister} disabled={bulkLoading}
-                  className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm">
-                  {bulkLoading ? "등록 중..." : `${excelMembers.length}명 일괄 등록`}
-                </button>
-              </>
-            )}
-          </div>
+          
 
           {/* 출근 위치 관리 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -1166,146 +1254,64 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
             )}
           </div>
           
-        {/* 연차 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#6b6b6b]">{leaveEnabled ? "사용중" : "미사용"}</span>
-                <div
-                  onClick={handleToggleLeave}
-                  className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveEnabled ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveEnabled ? "left-7" : "left-1"}`} />
-                </div>
-              </div>
-            </div>
 
-            {leaveEnabled && (
+          {/* 직원 개별 등록 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">직원 등록</div>
+            <div className="space-y-3">
+              {[
+                { placeholder: "이름", value: memberName, onChange: setMemberName, type: "text" },
+                { placeholder: "회사 이메일", value: memberEmail, onChange: setMemberEmail, type: "email" },
+                { placeholder: "생년월일 (예: 19901225)", value: memberBirth, onChange: setMemberBirth, type: "text" },
+              ].map((field, i) => (
+                <input key={i} type={field.type} placeholder={field.placeholder} value={field.value}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                />
+              ))}
+              <button onClick={handleRegisterMember} className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm">
+                직원 등록하기
+              </button>
+            </div>
+          </div>
+
+          {/* 엑셀 일괄 등록 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">
+                엑셀 일괄 등록 {isSystemAdmin && <span className="ml-2 text-[#4a4de0]">(회사코드 포함)</span>}
+              </div>
+              <button onClick={handleDownloadTemplate} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">양식 다운로드</button>
+            </div>
+            <div onClick={() => fileInputRef.current?.click()}
+              className="border border-dashed border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-6 text-center cursor-pointer transition-all mb-3 bg-[#f8f8f8]">
+              <div className="text-2xl mb-2">📂</div>
+              <div className="text-[#0a0a0a] text-sm font-medium">엑셀 파일 업로드</div>
+              <div className="text-[#a0a0a0] text-xs mt-1">{isSystemAdmin ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요" : "이름, 이메일, 생년월일 컬럼 필요"}</div>
+            </div>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelUpload} className="hidden" />
+            {excelMembers.length > 0 && (
               <>
-                {/* 탭 */}
-                <div className="flex gap-2 mb-4">
-                  {(["requests", "balances"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setLeaveTab(t)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                        leaveTab === t
-                          ? "bg-[#5b5ef4] text-white"
-                          : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b]"
-                      }`}
-                    >
-                      {t === "requests" ? `신청 현황 (${leaveRequests.filter(l => l.status === "pending").length})` : "연차 현황"}
-                    </button>
+                <div className="text-[#a0a0a0] text-xs mb-2">{excelMembers.length}명 확인됨</div>
+                <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
+                  {excelMembers.map((m, i) => (
+                    <div key={i} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-lg px-3 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {m.회사코드 && <span className="text-[#4a4de0] text-xs font-mono">{m.회사코드}</span>}
+                        <span className="text-[#0a0a0a] text-xs font-medium">{m.이름}</span>
+                      </div>
+                      <span className="text-[#6b6b6b] text-xs">{m.이메일}</span>
+                    </div>
                   ))}
                 </div>
-
-                {/* 신청 현황 탭 */}
-                {leaveTab === "requests" && (
-                  <div className="space-y-3">
-                    {leaveRequests.length === 0 ? (
-                      <div className="text-[#a0a0a0] text-sm text-center py-6">연차 신청이 없어요</div>
-                    ) : (
-                      leaveRequests.map((leave) => (
-                        <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <div className="text-[#0a0a0a] text-sm font-bold">
-                                {leave.user_name} · {leave.is_half ? "반차" : `연차 ${leave.days}일`}
-                              </div>
-                              <div className="text-[#6b6b6b] text-xs mt-0.5">
-                                {leave.start_date} ~ {leave.end_date}
-                              </div>
-                              {leave.reason && (
-                                <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
-                              )}
-                            </div>
-                            <div className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                              leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
-                              leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
-                              "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
-                            }`}>
-                              {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
-                            </div>
-                          </div>
-                          {leave.status === "pending" && (
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => handleApproveLeave(leave.id, "approved")}
-                                className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
-                              >
-                                승인
-                              </button>
-                              <button
-                                onClick={() => handleApproveLeave(leave.id, "rejected")}
-                                className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
-                              >
-                                반려
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {/* 연차 현황 탭 */}
-                {leaveTab === "balances" && (
-                  <div className="space-y-3">
-                    {leaveBalances.length === 0 ? (
-                      <div className="text-[#a0a0a0] text-sm text-center py-6">직원이 없어요</div>
-                    ) : (
-                      leaveBalances.map((b) => (
-                        <div key={b.user_id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[#0a0a0a] text-sm font-bold">{b.user_name}</span>
-                              {b.is_manager && (
-                                <span className="bg-[#f0f0ff] border border-[#c7c8fa] text-[#4a4de0] text-xs px-2 py-0.5 rounded-lg">팀장</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleSetManager(b.user_id, !b.is_manager, b.user_name)}
-                                className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors"
-                              >
-                                {b.is_manager ? "팀장해제" : "팀장지정"}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="text-[#a0a0a0] text-xs">총 <span className="text-[#0a0a0a] font-bold">{b.total_days}일</span></span>
-                            <span className="text-[#a0a0a0] text-xs">사용 <span className="text-[#ef4444] font-bold">{b.used_days}일</span></span>
-                            <span className="text-[#a0a0a0] text-xs">잔여 <span className="text-[#16a34a] font-bold">{b.remaining_days}일</span></span>
-                          </div>
-                          {/* 연차 부여 인풋 */}
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              defaultValue={b.total_days}
-                              id={`balance-${b.user_id}`}
-                              className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-lg px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-xs"
-                              placeholder="연차 일수"
-                            />
-                            <button
-                              onClick={() => {
-                                const input = document.getElementById(`balance-${b.user_id}`) as HTMLInputElement;
-                                handleSetLeaveBalance(b.user_id, parseInt(input.value));
-                              }}
-                              className="bg-[#5b5ef4] text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-[#4a4de0] transition-all"
-                            >
-                              부여
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                <button onClick={handleBulkRegister} disabled={bulkLoading}
+                  className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm">
+                  {bulkLoading ? "등록 중..." : `${excelMembers.length}명 일괄 등록`}
+                </button>
               </>
             )}
           </div>
+
         </>
       )}
 
