@@ -392,18 +392,28 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
   });
 };
 
-  const fetchLeaveData = async (companyId: string, userId: string) => {
+ const fetchLeaveData = async (companyId: string, userId: string) => {
   try {
     const token = await auth.currentUser?.getIdToken();
     const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 
-    // 연차 기능 ON/OFF 확인
-    const myRes = await fetch(`${API_URL}/api/company/my/${userId}`);
-    const myData = await myRes.json();
-    setLeaveEnabled(myData.leave_enabled || false);
-    setIsManager(myData.is_manager || false);
-
-    if (!myData.leave_enabled) return;
+    // ✅ 시스템 관리자는 company API에서 직접 leave_enabled 읽기
+    if (user?.email === SYSTEM_ADMIN_EMAIL) {
+      const companyRes = await fetch(`${API_URL}/api/company/list`, {
+        headers,
+      });
+      const companyData = await companyRes.json();
+      const currentCompany = companyData.companies?.find((c: any) => c.id === companyId);
+      setLeaveEnabled(currentCompany?.leave_enabled || false);
+      setIsManager(false);
+      if (!currentCompany?.leave_enabled) return;
+    } else {
+      const myRes = await fetch(`${API_URL}/api/company/my/${userId}`);
+      const myData = await myRes.json();
+      setLeaveEnabled(myData.leave_enabled || false);
+      setIsManager(myData.is_manager || false);
+      if (!myData.leave_enabled) return;
+    }
 
     // 연차 신청 목록
     const leavesRes = await fetch(`${API_URL}/api/leave/company/${companyId}`, { headers });
