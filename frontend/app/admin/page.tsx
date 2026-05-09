@@ -438,19 +438,30 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
   };
 
   const handleToggleLeave = async () => {
-  if (!company?.id) return;  // ✅ 추가: company 없으면 실행 안 함
+  if (!company?.id) return;
+  const newValue = !leaveEnabled;  // ✅ 먼저 새 값 저장
   try {
     const token = await auth.currentUser?.getIdToken();
-    const res = await fetch(`${API_URL}/api/leave/toggle/${company.id}`, {  // ✅ company.id로 변경
+    const res = await fetch(`${API_URL}/api/leave/toggle/${company.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ leave_enabled: !leaveEnabled }),
+      body: JSON.stringify({ leave_enabled: newValue }),
     });
     const data = await res.json();
     if (data.success) {
-      setLeaveEnabled(!leaveEnabled);
-      showToast(`연차 기능 ${!leaveEnabled ? "활성화" : "비활성화"} 완료!`, "success");
-      fetchLeaveData(company.id, user!.uid);  // ✅ 추가: 토글 후 데이터 새로고침
+      setLeaveEnabled(newValue);  // ✅ 저장해둔 값으로 세팅
+      showToast(`연차 기능 ${newValue ? "활성화" : "비활성화"} 완료!`, "success");
+      // ✅ fetchLeaveData 제거 - 토글 ON일 때만 데이터 로드
+      if (newValue) {
+        const token2 = await auth.currentUser?.getIdToken();
+        const headers = { "Authorization": `Bearer ${token2}`, "Content-Type": "application/json" };
+        const leavesRes = await fetch(`${API_URL}/api/leave/company/${company.id}`, { headers });
+        const leavesData = await leavesRes.json();
+        setLeaveRequests(leavesData.leaves || []);
+        const balanceRes = await fetch(`${API_URL}/api/leave/balance/company/${company.id}`, { headers });
+        const balanceData = await balanceRes.json();
+        setLeaveBalances(balanceData.balances || []);
+      }
     }
   } catch {
     showToast("설정 변경 실패", "error");
@@ -819,7 +830,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
 
 
         {/* 연차 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
               <div className="flex items-center gap-2">
@@ -1062,7 +1073,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
           </div>
 
           {/* 팀 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">팀 관리</div>
               <button
