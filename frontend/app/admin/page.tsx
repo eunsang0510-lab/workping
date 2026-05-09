@@ -167,8 +167,11 @@ export default function Admin() {
   try {
     // ✅ 시스템 관리자면 회사 목록 불러오고 선택 대기
     if (email === SYSTEM_ADMIN_EMAIL) {
-      const res = await fetch(`${API_URL}/api/company/list`);
-      const data = await res.json();
+  const token = await auth.currentUser?.getIdToken();  // ✅ 토큰 추가
+  const res = await fetch(`${API_URL}/api/company/list`, {
+    headers: { "Authorization": `Bearer ${token}` },   // ✅ 헤더 추가
+  });
+  const data = await res.json();
       setAllCompanies(data.companies || []);
       setShowCompanySelector(true);
       return;
