@@ -122,6 +122,24 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
         "company_code": company.id[:8],
     }
 
+@router.get("/list")
+def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    if not is_superadmin:
+        raise HTTPException(status_code=403, detail="시스템 관리자만 조회할 수 있어요")
+    
+    companies = db.query(Company).all()
+    result = []
+    for c in companies:
+        member_count = db.query(CompanyMember).filter(CompanyMember.company_id == c.id).count()
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "member_count": member_count,
+            "company_code": c.id[:8],
+        })
+    return {"companies": result}
+
 
 @router.get("/info/{admin_id}")
 def get_company_info(admin_id: str, db: Session = Depends(get_db)):
@@ -568,20 +586,3 @@ def delete_member_by_user_id(
     return {"success": True, "message": "삭제 완료"}
 
 
-@router.get("/list")
-def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
-    if not is_superadmin:
-        raise HTTPException(status_code=403, detail="시스템 관리자만 조회할 수 있어요")
-    
-    companies = db.query(Company).all()
-    result = []
-    for c in companies:
-        member_count = db.query(CompanyMember).filter(CompanyMember.company_id == c.id).count()
-        result.append({
-            "id": c.id,
-            "name": c.name,
-            "member_count": member_count,
-            "company_code": c.id[:8],
-        })
-    return {"companies": result}
