@@ -63,7 +63,8 @@ export default function Dashboard() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
   const [showNoticePopup, setShowNoticePopup] = useState(false);
-  const router = useRouter();
+const [gpsPermission, setGpsPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown"); // ✅ 추가
+const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
     setToast({ message, type });
@@ -75,14 +76,29 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        () => {},
-        () => {},
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
-      );
-    }
-  }, []);
+  // ✅ Permissions API로 먼저 상태 확인
+  if (navigator.permissions) {
+    navigator.permissions.query({ name: "geolocation" }).then((result) => {
+      setGpsPermission(result.state as "granted" | "denied" | "prompt");
+      result.onchange = () => {
+        setGpsPermission(result.state as "granted" | "denied" | "prompt");
+      };
+    });
+  }
+
+  // ✅ 앱 진입 시 바로 권한 요청 (팝업 뜨게)
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      () => { setGpsPermission("granted"); },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setGpsPermission("denied");
+        }
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+}, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -491,6 +507,34 @@ const fetchPlanStatus = async (userId: string) => {
           </div>
         </div>
       </div>
+
+      {/* 출퇴근 버튼 */}
+      {/* ✅ GPS 권한 거부 안내 */}
+      {gpsPermission === "denied" && (
+        <div className="bg-[#fef2f2] border border-[#fecaca] rounded-2xl p-4 mb-4">
+          <div className="text-[#ef4444] text-sm font-bold mb-1">📍 GPS 권한이 필요해요</div>
+          <div className="text-[#6b6b6b] text-xs leading-relaxed mb-3">
+            출퇴근 기록을 위해 위치 권한이 필요해요.<br />
+            아래 방법으로 권한을 허용해주세요.
+          </div>
+          <div className="bg-white border border-[#fecaca] rounded-xl p-3 space-y-1 mb-3">
+            <div className="text-[#0a0a0a] text-xs font-bold">📱 안드로이드 설정 방법</div>
+            <div className="text-[#6b6b6b] text-xs">설정 → 앱 → WorkPing → 권한 → 위치 → 허용</div>
+          </div>
+          <button
+            onClick={() => {
+              // 권한 재요청 시도
+              navigator.geolocation.getCurrentPosition(
+                () => setGpsPermission("granted"),
+                () => {},
+              );
+            }}
+            className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-bold py-2.5 rounded-xl transition-all"
+          >
+            권한 다시 요청하기
+          </button>
+        </div>
+      )}
 
       {/* 출퇴근 버튼 */}
       <div className="grid grid-cols-2 gap-3 mb-4">
