@@ -150,6 +150,7 @@ export default function Admin() {
   const [locationInputMode, setLocationInputMode] = useState<"gps" | "address">("gps");
   const [locationSearchAddress, setLocationSearchAddress] = useState("");
   const [addressSearchLoading, setAddressSearchLoading] = useState(false);
+  const [subscription, setSubscription] = useState<{ plan: string; status: string } | null>(null);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -200,14 +201,23 @@ export default function Admin() {
   }
 };
 
+const fetchSubscription = async (companyId: string) => {
+  try {
+    const res = await fetch(`${API_URL}/api/payment/subscription/${companyId}`);
+    const data = await res.json();
+    setSubscription(data);
+  } catch {}
+};
+
 // ✅ 회사 데이터 로드 공통 함수로 분리
 const loadCompanyData = (companyData: Company) => {
   setCompany(companyData);
   fetchAttendance(companyData.id);
   fetchLocations(companyData.id);
-  fetchCompanyNotices(companyData.id);  // userId 대신 companyId 기반으로 변경
+  fetchCompanyNotices(companyData.id);
   fetchLeaveData(companyData.id, auth.currentUser!.uid);
   fetchTeams(companyData.id);
+  fetchSubscription(companyData.id);
 };
 
   const fetchAttendance = async (companyId: string) => {
@@ -548,6 +558,14 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     showToast("모든 항목을 입력해주세요", "error");
     return;
   }
+  const isFree = !subscription || subscription.plan === "free";
+  if (isFree && company && company.member_count >= 20) {
+    showConfirm(
+      "무료 플랜은 최대 20명까지 등록할 수 있어요.\n유료 결제 페이지로 이동할까요?",
+      () => { setConfirm(null); router.push("/pricing"); }
+    );
+    return;
+  }
   try {
     const token = await auth.currentUser?.getIdToken();
     const res = await fetch(`${API_URL}/api/company/members/register`, {
@@ -685,6 +703,15 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
 
   const handleBulkRegister = async () => {
     if (!excelMembers.length || !company?.id) return;
+    const isFree = !subscription || subscription.plan === "free";
+    if (isFree && company.member_count + excelMembers.length > 20) {
+      const remaining = Math.max(0, 20 - company.member_count);
+      showConfirm(
+        `무료 플랜은 최대 20명까지 등록할 수 있어요.\n현재 ${company.member_count}명 등록됨, 추가 가능 인원: ${remaining}명.\n유료 결제 페이지로 이동할까요?`,
+        () => { setConfirm(null); router.push("/pricing"); }
+      );
+      return;
+    }
     setBulkLoading(true);
     try {
       const members = excelMembers.map((m: any) => ({

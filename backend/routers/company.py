@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from database.connection import get_db
 from models.company import Company, CompanyMember, CompanyLocation
 from models.attendance import Attendance
+from models.subscription import Subscription
 from datetime import datetime
+
+FREE_MEMBER_LIMIT = 20
 import requests
 import os
 import math
@@ -202,6 +205,17 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
 @router.post("/members/register")
 def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # 플랜별 멤버 수 제한 체크
+    current_count = db.query(CompanyMember).filter(CompanyMember.company_id == req.company_id).count()
+    sub = db.query(Subscription).filter(Subscription.company_id == req.company_id).first()
+    is_paid = sub and sub.status == "active" and (not sub.expires_at or sub.expires_at > datetime.now())
+    if not is_paid and current_count >= FREE_MEMBER_LIMIT:
+        return {
+            "message": f"무료 플랜은 최대 {FREE_MEMBER_LIMIT}명까지 등록할 수 있어요. 유료 플랜으로 업그레이드해주세요.",
+            "success": False,
+            "limit_exceeded": True,
+        }
+
     existing = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_email == req.email,
@@ -259,6 +273,19 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
 
 @router.post("/members/bulk-register")
 def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db)):
+    # 플랜별 멤버 수 제한 사전 체크
+    if req.company_id:
+        current_count = db.query(CompanyMember).filter(CompanyMember.company_id == req.company_id).count()
+        sub = db.query(Subscription).filter(Subscription.company_id == req.company_id).first()
+        is_paid = sub and sub.status == "active" and (not sub.expires_at or sub.expires_at > datetime.now())
+        if not is_paid and current_count + len(req.members) > FREE_MEMBER_LIMIT:
+            remaining = max(0, FREE_MEMBER_LIMIT - current_count)
+            return {
+                "message": f"무료 플랜 한도 초과예요. 현재 {current_count}명 등록됨, 최대 {FREE_MEMBER_LIMIT}명까지 가능해요. (추가 가능: {remaining}명)",
+                "results": [],
+                "limit_exceeded": True,
+            }
+
     results = []
     for member_data in req.members:
         if member_data.company_code:

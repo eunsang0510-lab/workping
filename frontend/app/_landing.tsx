@@ -135,17 +135,17 @@ export default function Landing() {
             {
               name: "무료", price: "0원", period: "",
               highlight: false,
-              features: ["직원 10명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
+              features: ["직원 20명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
             },
             {
-              name: "스타터", price: "50,000원", period: "/ 월(회사별)",
+              name: "유료", price: "50,000원", period: "/ 월(회사별)",
               highlight: true, badge: "인기",
-              features: ["직원 20명 이하", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)", "사내 시스템 API 연동 지원"],
+              features: ["직원 21명 이상", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)", "사내 시스템 API 연동 지원"],
             },
             {
               name: "비즈니스", price: "협의", period: "/ 월",
               highlight: false,
-              features: ["직원 무제한", "스타터 기능 전체", "우선 고객 지원"],
+              features: ["직원 무제한", "유료 기능 전체", "우선 고객 지원"],
             },
           ].map((plan, i) => (
             <div key={i} className={`rounded-2xl p-5 border-2 ${

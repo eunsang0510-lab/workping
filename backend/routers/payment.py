@@ -20,13 +20,13 @@ PLAN_PRICES = {
 
 PLAN_LIMITS = {
     "free": {
-        "max_members": 10,
+        "max_members": 20,
         "location_limit": False,
         "excel": False,
         "report": False,
     },
     "starter": {
-        "max_members": 20,
+        "max_members": 999,
         "location_limit": True,
         "excel": True,
         "report": True,
