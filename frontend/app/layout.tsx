@@ -14,13 +14,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WorkPing - GPS 근태관리",
-  description: "중소기업을 위한 무료 GPS 기반 근태관리 앱",
+  title: "WorkPing - 중소기업 무료 GPS 근태관리",
+  description: "GPS 기반 출퇴근 기록, 연차관리, 팀 근태현황을 무료로. 중소기업을 위한 스마트 근태관리 앱.",
+  keywords: "근태관리, GPS출퇴근, 중소기업, 무료근태관리, 출퇴근앱, 연차관리",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "WorkPing",
+  },
+  openGraph: {
+    title: "WorkPing - 중소기업 무료 GPS 근태관리",
+    description: "GPS 기반 출퇴근 기록, 연차관리, 팀 근태현황을 무료로.",
+    url: "https://workping-kappa.vercel.app",
+    siteName: "WorkPing",
+    locale: "ko_KR",
+    type: "website",
   },
 };
 
