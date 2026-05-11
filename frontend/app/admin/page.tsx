@@ -147,6 +147,9 @@ export default function Admin() {
   const [homeLocationLoading, setHomeLocationLoading] = useState(false);
   const [geocodeLoading, setGeocodeLoading] = useState(false);
   const [locationAddress, setLocationAddress] = useState("");
+  const [locationInputMode, setLocationInputMode] = useState<"gps" | "address">("gps");
+  const [locationSearchAddress, setLocationSearchAddress] = useState("");
+  const [addressSearchLoading, setAddressSearchLoading] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -811,13 +814,42 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     });
   };
 
+  const handleSearchAddress = async () => {
+    if (!locationSearchAddress.trim()) {
+      showToast("주소를 입력해주세요", "error"); return;
+    }
+    setAddressSearchLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company/geocode?address=${encodeURIComponent(locationSearchAddress)}`);
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.message || "주소를 찾을 수 없어요", "error"); return;
+      }
+      setLocationLat(data.latitude.toFixed(6));
+      setLocationLng(data.longitude.toFixed(6));
+      setLocationAddress(data.address);
+    } catch {
+      showToast("주소 검색 실패", "error");
+    } finally {
+      setAddressSearchLoading(false);
+    }
+  };
+
   const handleDeleteLocation = async (id: string, name: string) => {
     showConfirm(`"${name}" 위치를 삭제할까요?`, async () => {
       setConfirm(null);
       try {
-        await fetch(`${API_URL}/api/company/locations/${id}`, { method: "DELETE" });
-        showToast("삭제 완료", "success");
-        fetchLocations(company!.id);
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetch(`${API_URL}/api/company/locations/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (res.ok) {
+          showToast("삭제 완료", "success");
+          fetchLocations(company!.id);
+        } else {
+          showToast("삭제 실패", "error");
+        }
       } catch {
         showToast("삭제 실패", "error");
       }
@@ -1178,20 +1210,40 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
                   onChange={(e) => setLocationName(e.target.value)}
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                 />
-                <button onClick={handleGetCurrentLocation} disabled={gettingLocation}
-                  className="w-full bg-white border border-dashed border-[#e5e5e5] hover:border-[#5b5ef4] text-[#6b6b6b] hover:text-[#5b5ef4] rounded-xl py-3 text-sm transition-all">
-                  {gettingLocation ? "⏳ 위치 가져오는 중..." : "📍 현재 위치 가져오기"}
-                </button>
+                {/* 입력 방식 토글 */}
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="위도" value={locationLat} onChange={(e) => setLocationLat(e.target.value)}
-                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
-                  />
-                  <input type="text" placeholder="경도" value={locationLng} onChange={(e) => setLocationLng(e.target.value)}
-                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
-                  />
+                  <button
+                    onClick={() => { setLocationInputMode("gps"); setLocationLat(""); setLocationLng(""); setLocationAddress(""); }}
+                    className={`py-2 rounded-xl text-sm font-medium transition-all ${locationInputMode === "gps" ? "bg-[#5b5ef4] text-white" : "bg-white border border-[#e5e5e5] text-[#6b6b6b]"}`}
+                  >📍 현재 위치</button>
+                  <button
+                    onClick={() => { setLocationInputMode("address"); setLocationLat(""); setLocationLng(""); setLocationAddress(""); }}
+                    className={`py-2 rounded-xl text-sm font-medium transition-all ${locationInputMode === "address" ? "bg-[#5b5ef4] text-white" : "bg-white border border-[#e5e5e5] text-[#6b6b6b]"}`}
+                  >🔍 주소 입력</button>
                 </div>
+                {locationInputMode === "gps" ? (
+                  <button onClick={handleGetCurrentLocation} disabled={gettingLocation}
+                    className="w-full bg-white border border-dashed border-[#e5e5e5] hover:border-[#5b5ef4] text-[#6b6b6b] hover:text-[#5b5ef4] rounded-xl py-3 text-sm transition-all">
+                    {gettingLocation ? "⏳ 위치 가져오는 중..." : "📍 현재 위치 가져오기"}
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="예: 서울 강남구 테헤란로 123" value={locationSearchAddress}
+                      onChange={(e) => setLocationSearchAddress(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSearchAddress(); }}
+                      className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                    />
+                    <button onClick={handleSearchAddress} disabled={addressSearchLoading}
+                      className="bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white text-sm font-bold px-4 rounded-xl transition-all whitespace-nowrap">
+                      {addressSearchLoading ? "..." : "검색"}
+                    </button>
+                  </div>
+                )}
                 {locationAddress && (
-                  <div className="text-[#5b5ef4] text-xs px-1">📍 {locationAddress}</div>
+                  <div className="bg-white border border-[#5b5ef4]/30 rounded-xl px-3 py-2 text-[#5b5ef4] text-xs">📍 {locationAddress}</div>
+                )}
+                {locationLat && locationLng && (
+                  <div className="text-[#a0a0a0] text-xs px-1 font-mono">{locationLat}, {locationLng}</div>
                 )}
                 <div className="flex items-center gap-3">
                   <input type="number" placeholder="허용 반경 (미터)" value={locationRadius} onChange={(e) => setLocationRadius(e.target.value)}
