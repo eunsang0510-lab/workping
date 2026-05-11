@@ -1,5 +1,7 @@
 import { MetadataRoute } from 'next'
 
+export const revalidate = 0
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://workping-kappa.vercel.app'
 
