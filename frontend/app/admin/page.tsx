@@ -733,15 +733,19 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     }
     setLocationLoading(true);
     try {
-      const addr = locationAddress || await (async () => {
-        const r = await fetch(`${API_URL}/api/location/address?lat=${locationLat}&lng=${locationLng}`);
-        const d = await r.json();
-        return d.address || "";
-      })();
+      let addr = locationAddress;
+      if (!addr) {
+        try {
+          const r = await fetch(`${API_URL}/api/location/address?lat=${locationLat}&lng=${locationLng}`);
+          const d = await r.json();
+          addr = d.address || "";
+        } catch { addr = ""; }
+      }
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/company/locations/add`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: company?.id, name: locationName, latitude: parseFloat(locationLat), longitude: parseFloat(locationLng), radius: parseInt(locationRadius), address: addr }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ company_id: company?.id, name: locationName, latitude: parseFloat(locationLat), longitude: parseFloat(locationLng), radius: parseInt(locationRadius) || 100, address: addr }),
       });
       const data = await res.json();
       if (data.success) {
