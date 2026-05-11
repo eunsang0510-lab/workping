@@ -63,8 +63,10 @@ export default function Dashboard() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
   const [showNoticePopup, setShowNoticePopup] = useState(false);
-const [gpsPermission, setGpsPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown"); // ✅ 추가
-const router = useRouter();
+  const [gpsPermission, setGpsPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown");
+  const [isRemote, setIsRemote] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
     setToast({ message, type });
@@ -167,6 +169,7 @@ const router = useRouter();
         setCheckInTime(data.checkin);
         setCurrentLocation(data.checkin_address || "-");
         setIsCheckedIn(true);
+        setIsRemote(data.is_remote || false);
       }
       if (data.checkout) {
         setIsCheckedIn(false);
@@ -197,6 +200,7 @@ const fetchPlanStatus = async (userId: string) => {
     const res = await fetch(`${API_URL}/api/company/my/${userId}`);
     const data = await res.json();
     if (data.company_id) {
+      setCompanyId(data.company_id);
       const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
       const subData = await subRes.json();
       if (subData.status === "expired") {
@@ -237,6 +241,35 @@ const fetchPlanStatus = async (userId: string) => {
     return `${h}h ${m}m`;
   };
 
+  const validateAndRecord = async (type: "checkin" | "checkout") => {
+    const position = await getCurrentPosition();
+    const { latitude, longitude } = position.coords;
+    const nowISO = new Date().toISOString();
+    const address = await getAddressFromCoords(latitude, longitude);
+
+    let isRemoteWork = false;
+    if (companyId) {
+      const valRes = await fetch(`${API_URL}/api/company/locations/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, latitude, longitude, user_id: user?.uid }),
+      });
+      const valData = await valRes.json();
+      if (!valData.allowed) {
+        throw new Error(valData.message || "출근 가능 위치가 아니에요");
+      }
+      isRemoteWork = valData.is_remote || false;
+    }
+
+    await fetch(`${API_URL}/api/location/record`, {
+      method: "POST",
+      headers: await getAuthHeader(),
+      body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type, address, is_remote: isRemoteWork }),
+    });
+
+    return { latitude, longitude, nowISO, address, isRemoteWork };
+  };
+
   const handleCheckIn = async () => {
     if (planExpired) {
       showToast("구독이 만료됐어요. 결제 후 이용해주세요.", "error");
@@ -244,22 +277,15 @@ const fetchPlanStatus = async (userId: string) => {
     }
     setGpsLoading(true);
     try {
-      const position = await getCurrentPosition();
-      const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
-      const address = await getAddressFromCoords(latitude, longitude);
-      await fetch(`${API_URL}/api/location/record`, {
-        method: "POST",
-        headers: await getAuthHeader(),
-        body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type: "checkin", address }),
-      });
+      const { latitude, longitude, nowISO, address, isRemoteWork } = await validateAndRecord("checkin");
       setIsCheckedIn(true);
       setCheckInTime(nowISO);
       setCurrentLocation(address);
+      setIsRemote(isRemoteWork);
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin" }]);
-      showToast("출근 완료!", "success");
-    } catch (error) {
-      showToast("GPS 위치를 가져올 수 없어요.", "error");
+      showToast(isRemoteWork ? "재택 출근 완료! 🏠" : "출근 완료!", "success");
+    } catch (error: any) {
+      showToast(error.message || "GPS 위치를 가져올 수 없어요.", "error");
     } finally {
       setGpsLoading(false);
     }
@@ -272,23 +298,15 @@ const fetchPlanStatus = async (userId: string) => {
     }
     setGpsLoading(true);
     try {
-      const position = await getCurrentPosition();
-      const { latitude, longitude } = position.coords;
-      const nowISO = new Date().toISOString();
-      const address = await getAddressFromCoords(latitude, longitude);
-      await fetch(`${API_URL}/api/location/record`, {
-        method: "POST",
-        headers: await getAuthHeader(),
-        body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type: "checkout", address }),
-      });
+      const { latitude, longitude, nowISO, address } = await validateAndRecord("checkout");
       setIsCheckedIn(false);
       setCheckOutTime(nowISO);
       setCheckOutLocation(address);
       if (checkInTime) setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
       showToast("퇴근 완료!", "success");
-    } catch (error) {
-      showToast("GPS 위치를 가져올 수 없어요.", "error");
+    } catch (error: any) {
+      showToast(error.message || "GPS 위치를 가져올 수 없어요.", "error");
     } finally {
       setGpsLoading(false);
     }
@@ -478,12 +496,19 @@ const fetchPlanStatus = async (userId: string) => {
               {currentLocation !== "-" ? `📍 ${currentLocation}` : "위치 미확인"}
             </div>
           </div>
-          <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-            isCheckedIn
-              ? "bg-[#f0fdf4] text-[#16a34a] border border-[#bbf7d0]"
-              : "bg-[#f8f8f8] text-[#a0a0a0] border border-[#e5e5e5]"
-          }`}>
-            {isCheckedIn ? "근무중" : checkOutTime ? "퇴근완료" : "미출근"}
+          <div className="flex flex-col items-end gap-1">
+            <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+              isCheckedIn
+                ? "bg-[#f0fdf4] text-[#16a34a] border border-[#bbf7d0]"
+                : "bg-[#f8f8f8] text-[#a0a0a0] border border-[#e5e5e5]"
+            }`}>
+              {isCheckedIn ? "근무중" : checkOutTime ? "퇴근완료" : "미출근"}
+            </div>
+            {isRemote && checkInTime && (
+              <div className="px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] text-xs font-medium">
+                🏠 재택근무
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-4 pt-4 border-t border-[#e5e5e5]">

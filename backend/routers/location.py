@@ -24,6 +24,7 @@ class LocationData(BaseModel):
     timestamp: datetime = None
     type: str = "checkin"
     address: str = ""
+    is_remote: bool = False
 
 @router.post("/record")
 def record_location(
@@ -57,6 +58,7 @@ def record_location(
         latitude=data.latitude,
         longitude=data.longitude,
         address=data.address,
+        is_remote=data.is_remote,
         recorded_at=ts,
     )
     db.add(attendance)

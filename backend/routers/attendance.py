@@ -59,6 +59,7 @@ def get_attendance_summary(
         "checkout": checkout.recorded_at.isoformat() if checkout else None,
         "checkin_address": checkin.address if checkin else None,
         "checkout_address": checkout.address if checkout else None,
+        "is_remote": bool(checkin.is_remote) if checkin else False,
         "work_minutes": work_minutes,
         "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분",
     }

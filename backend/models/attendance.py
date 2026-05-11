@@ -13,4 +13,5 @@ class Attendance(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     address = Column(String, nullable=True)
+    is_remote = Column(Boolean, default=False)
     recorded_at = Column(DateTime, default=datetime.now)

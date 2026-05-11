@@ -16,15 +16,18 @@ class Company(Base):
 class CompanyMember(Base):
     __tablename__ = "company_members"
 
-    id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id = Column(String, nullable=False)
-    user_id    = Column(String, nullable=False)
-    user_email = Column(String, nullable=False)
-    user_name  = Column(String, nullable=True)
-    birth_date = Column(String, nullable=True)   # ← 추가
-    is_admin   = Column(Boolean, default=False)
-    is_manager = Column(Boolean, default=False)  # 팀장 권한
-    created_at = Column(DateTime, default=datetime.now)
+    id             = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id     = Column(String, nullable=False)
+    user_id        = Column(String, nullable=False)
+    user_email     = Column(String, nullable=False)
+    user_name      = Column(String, nullable=True)
+    birth_date     = Column(String, nullable=True)
+    is_admin       = Column(Boolean, default=False)
+    is_manager     = Column(Boolean, default=False)
+    home_address   = Column(String, nullable=True)
+    home_latitude  = Column(Float, nullable=True)
+    home_longitude = Column(Float, nullable=True)
+    created_at     = Column(DateTime, default=datetime.now)
 
 class CompanyLocation(Base):
     __tablename__ = "company_locations"
@@ -36,4 +39,5 @@ class CompanyLocation(Base):
     longitude  = Column(Float, nullable=False)
     radius     = Column(Integer, default=100)
     is_active  = Column(Boolean, default=True)
+    address    = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)

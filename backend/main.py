@@ -19,6 +19,26 @@ load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
+# 기존 테이블에 새 컬럼 추가 (없을 경우에만)
+def run_migrations():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        migrations = [
+            "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS address VARCHAR",
+            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_address VARCHAR",
+            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_latitude FLOAT",
+            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_longitude FLOAT",
+            "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE",
+        ]
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+            except Exception as e:
+                print(f"Migration skipped: {e}")
+        conn.commit()
+
+run_migrations()
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 app = FastAPI(

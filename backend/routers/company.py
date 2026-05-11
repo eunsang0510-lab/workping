@@ -83,12 +83,20 @@ class LocationCreateRequest(BaseModel):
     latitude: float
     longitude: float
     radius: int = 100
+    address: str = ""
 
 
 class CheckInValidateRequest(BaseModel):
     company_id: str
     latitude: float
     longitude: float
+    user_id: str = ""
+
+
+class HomeLocationRequest(BaseModel):
+    home_address: str
+    home_latitude: float
+    home_longitude: float
 
 
 class ResetPasswordRequest(BaseModel):
@@ -345,11 +353,13 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
             "user_email": member.user_email,
             "checkin": checkin.recorded_at.isoformat() if checkin else None,
             "checkin_address": checkin.address if checkin else None,
+            "is_remote": bool(checkin.is_remote) if checkin else False,
             "checkout": checkout.recorded_at.isoformat() if checkout else None,
             "work_minutes": work_minutes,
             "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분" if work_minutes > 0 else "-",
             "status": status,
             "is_missing_checkout": is_missing_checkout,
+            "home_address": member.home_address or "",
         })
 
     return {"date": str(start.date()), "attendance": result}
@@ -370,10 +380,34 @@ def get_locations(company_id: str, db: Session = Depends(get_db)):
                 "longitude": l.longitude,
                 "radius": l.radius,
                 "is_active": l.is_active,
+                "address": l.address or "",
             }
             for l in locations
         ]
     }
+
+
+@router.get("/geocode")
+def geocode_address(address: str):
+    try:
+        kakao_key = os.getenv("KAKAO_REST_API_KEY")
+        response = requests.get(
+            "https://dapi.kakao.com/v2/local/search/address.json",
+            params={"query": address},
+            headers={"Authorization": f"KakaoAK {kakao_key}"},
+        )
+        data = response.json()
+        if data.get("documents"):
+            doc = data["documents"][0]
+            return {
+                "success": True,
+                "latitude": float(doc["y"]),
+                "longitude": float(doc["x"]),
+                "address": doc.get("address_name", address),
+            }
+        return {"success": False, "message": "주소를 찾을 수 없어요"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 
 @router.post("/locations/add")
@@ -384,6 +418,7 @@ def add_location(req: LocationCreateRequest, db: Session = Depends(get_db), curr
         latitude=req.latitude,
         longitude=req.longitude,
         radius=req.radius,
+        address=req.address,
     )
     db.add(location)
     db.commit()
@@ -408,14 +443,33 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
         CompanyLocation.is_active == True,
     ).all()
 
+    # 개인 재택 주소 확인
+    home_radius = 100
+    if req.user_id:
+        member = db.query(CompanyMember).filter(
+            CompanyMember.user_id == req.user_id,
+            CompanyMember.company_id == req.company_id,
+        ).first()
+        if member and member.home_latitude and member.home_longitude:
+            home_dist = calc_distance(req.latitude, req.longitude, member.home_latitude, member.home_longitude)
+            if home_dist <= home_radius:
+                return {
+                    "allowed": True,
+                    "is_remote": True,
+                    "message": f"재택근무 위치 범위 내 ({int(home_dist)}m)",
+                    "location_name": "재택근무",
+                    "distance": int(home_dist),
+                }
+
     if not locations:
-        return {"allowed": True, "message": "위치 제한 없음"}
+        return {"allowed": True, "is_remote": False, "message": "위치 제한 없음"}
 
     for loc in locations:
         distance = calc_distance(req.latitude, req.longitude, loc.latitude, loc.longitude)
         if distance <= loc.radius:
             return {
                 "allowed": True,
+                "is_remote": False,
                 "message": f"{loc.name} 범위 내 ({int(distance)}m)",
                 "location_name": loc.name,
                 "distance": int(distance),
@@ -431,10 +485,54 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
 
     return {
         "allowed": False,
+        "is_remote": False,
         "message": f"출근 가능 위치가 아니에요 (가장 가까운 위치: {nearest.name}, {nearest_distance}m)",
         "nearest_location": nearest.name,
         "distance": nearest_distance,
     }
+
+
+@router.get("/members/{user_id}/home-location")
+def get_home_location(user_id: str, company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id,
+        CompanyMember.company_id == company_id,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+    return {
+        "home_address": member.home_address or "",
+        "home_latitude": member.home_latitude,
+        "home_longitude": member.home_longitude,
+    }
+
+
+@router.put("/members/{user_id}/home-location")
+def set_home_location(user_id: str, req: HomeLocationRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+    member.home_address = req.home_address
+    member.home_latitude = req.home_latitude
+    member.home_longitude = req.home_longitude
+    db.commit()
+    return {"success": True, "message": "재택 주소 저장 완료"}
+
+
+@router.delete("/members/{user_id}/home-location")
+def delete_home_location(user_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == user_id,
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+    member.home_address = None
+    member.home_latitude = None
+    member.home_longitude = None
+    db.commit()
+    return {"success": True, "message": "재택 주소 삭제 완료"}
 
 
 @router.get("/admin-check/{user_id}")

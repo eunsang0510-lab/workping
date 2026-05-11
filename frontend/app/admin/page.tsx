@@ -17,10 +17,13 @@ interface Member {
   user_name: string;
   user_email: string;
   checkin: string | null;
+  checkin_address: string | null;
+  is_remote: boolean;
   checkout: string | null;
   work_hours: string;
   status: "출근중" | "퇴근" | "미출근" | "미퇴근";
   is_missing_checkout: boolean;
+  home_address: string;
 }
 
 interface Company {
@@ -37,6 +40,7 @@ interface CompanyLocation {
   longitude: number;
   radius: number;
   is_active: boolean;
+  address: string;
 }
 
 interface EditMember {
@@ -136,8 +140,13 @@ export default function Admin() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
   const [isManager, setIsManager] = useState(false);
-  const [allCompanies, setAllCompanies] = useState<Company[]>([]);         // ✅ 추가
-  const [showCompanySelector, setShowCompanySelector] = useState(false);   // ✅ 추가
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [showCompanySelector, setShowCompanySelector] = useState(false);
+  const [homeLocationMember, setHomeLocationMember] = useState<{ user_id: string; user_name: string } | null>(null);
+  const [homeAddress, setHomeAddress] = useState("");
+  const [homeLocationLoading, setHomeLocationLoading] = useState(false);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
+  const [locationAddress, setLocationAddress] = useState("");
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -695,13 +704,24 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     }
   };
 
+  const fetchAddressFromCoords = async (lat: string, lng: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/location/address?lat=${lat}&lng=${lng}`);
+      const data = await res.json();
+      setLocationAddress(data.address || "");
+    } catch {}
+  };
+
   const handleGetCurrentLocation = () => {
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocationLat(position.coords.latitude.toFixed(6));
-        setLocationLng(position.coords.longitude.toFixed(6));
+      async (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        setLocationLat(lat);
+        setLocationLng(lng);
         setGettingLocation(false);
+        await fetchAddressFromCoords(lat, lng);
       },
       () => { showToast("GPS 위치를 가져올 수 없어요", "error"); setGettingLocation(false); }
     );
@@ -713,15 +733,20 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     }
     setLocationLoading(true);
     try {
+      const addr = locationAddress || await (async () => {
+        const r = await fetch(`${API_URL}/api/location/address?lat=${locationLat}&lng=${locationLng}`);
+        const d = await r.json();
+        return d.address || "";
+      })();
       const res = await fetch(`${API_URL}/api/company/locations/add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: company?.id, name: locationName, latitude: parseFloat(locationLat), longitude: parseFloat(locationLng), radius: parseInt(locationRadius) }),
+        body: JSON.stringify({ company_id: company?.id, name: locationName, latitude: parseFloat(locationLat), longitude: parseFloat(locationLng), radius: parseInt(locationRadius), address: addr }),
       });
       const data = await res.json();
       if (data.success) {
         showToast("위치 등록 완료!", "success");
-        setLocationName(""); setLocationLat(""); setLocationLng(""); setLocationRadius("100");
+        setLocationName(""); setLocationLat(""); setLocationLng(""); setLocationRadius("100"); setLocationAddress("");
         setShowLocationForm(false);
         fetchLocations(company!.id);
       }
@@ -730,6 +755,56 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     } finally {
       setLocationLoading(false);
     }
+  };
+
+  const handleSetHomeLocation = async () => {
+    if (!homeLocationMember || !homeAddress.trim()) {
+      showToast("주소를 입력해주세요", "error"); return;
+    }
+    setGeocodeLoading(true);
+    try {
+      const geoRes = await fetch(`${API_URL}/api/company/geocode?address=${encodeURIComponent(homeAddress)}`);
+      const geoData = await geoRes.json();
+      if (!geoData.success) {
+        showToast(geoData.message || "주소를 찾을 수 없어요", "error"); return;
+      }
+      setHomeLocationLoading(true);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company/members/${homeLocationMember.user_id}/home-location`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ home_address: geoData.address, home_latitude: geoData.latitude, home_longitude: geoData.longitude }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("재택 주소 저장 완료!", "success");
+        setHomeLocationMember(null);
+        setHomeAddress("");
+        fetchAttendance(company!.id);
+      }
+    } catch {
+      showToast("저장 실패", "error");
+    } finally {
+      setGeocodeLoading(false);
+      setHomeLocationLoading(false);
+    }
+  };
+
+  const handleDeleteHomeLocation = async (userId: string, userName: string) => {
+    showConfirm(`${userName}의 재택 주소를 삭제할까요?`, async () => {
+      setConfirm(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/company/members/${userId}/home-location`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        showToast("재택 주소 삭제 완료", "success");
+        fetchAttendance(company!.id);
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
   };
 
   const handleDeleteLocation = async (id: string, name: string) => {
@@ -1056,21 +1131,26 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
                   return (
                     <div key={i} className={`bg-[#f8f8f8] border rounded-xl p-4 ${member.is_missing_checkout ? "border-[#fecaca]" : "border-[#e5e5e5]"}`}>
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <div className={`w-2 h-2 rounded-full ${config.dot}`}></div>
                           <span className="text-[#0a0a0a] text-sm font-bold">{member.user_name || member.user_email}</span>
                           {member.is_missing_checkout && <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>}
+                          {member.is_remote && <span className="text-xs px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] font-medium">🏠 재택</span>}
+                          {member.home_address && <span className="text-[#a0a0a0] text-xs">재택:{member.home_address}</span>}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
                           <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.status}</span>
                           <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
+                          <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택설정</button>
+                          {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
                           <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
                           <button onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">초기화</button>
                           <button onClick={() => handleDeleteMember(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                         </div>
                       </div>
-                      <div className="flex gap-4">
+                      <div className="flex gap-4 flex-wrap">
                         <span className="text-[#a0a0a0] text-xs">출근 <span className="text-[#16a34a] font-medium">{formatTime(member.checkin)}</span></span>
+                        {member.checkin_address && <span className="text-[#a0a0a0] text-xs">📍 {member.checkin_address}</span>}
                         <span className="text-[#a0a0a0] text-xs">퇴근 <span className="text-[#ef4444] font-medium">{formatTime(member.checkout)}</span></span>
                         <span className="text-[#a0a0a0] text-xs"><span className="text-[#4a4de0] font-medium">{member.work_hours}</span></span>
                       </div>
@@ -1106,6 +1186,9 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
                     className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                   />
                 </div>
+                {locationAddress && (
+                  <div className="text-[#5b5ef4] text-xs px-1">📍 {locationAddress}</div>
+                )}
                 <div className="flex items-center gap-3">
                   <input type="number" placeholder="허용 반경 (미터)" value={locationRadius} onChange={(e) => setLocationRadius(e.target.value)}
                     className="flex-1 bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm"
@@ -1133,7 +1216,8 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
                       </div>
                       <button onClick={() => handleDeleteLocation(loc.id, loc.name)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                     </div>
-                    <div className="flex gap-3 mt-1">
+                    <div className="flex flex-wrap gap-3 mt-1">
+                      {loc.address && <span className="text-[#6b6b6b] text-xs">📍 {loc.address}</span>}
                       <span className="text-[#a0a0a0] text-xs font-mono">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</span>
                       <span className="text-[#4a4de0] text-xs">반경 {loc.radius}m</span>
                     </div>
@@ -1397,6 +1481,33 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
         </>
       )}
 
+
+      {/* 재택 주소 설정 모달 */}
+      {homeLocationMember && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#0a0a0a] font-black">🏠 재택 주소 설정</div>
+              <button onClick={() => { setHomeLocationMember(null); setHomeAddress(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+            </div>
+            <p className="text-[#6b6b6b] text-sm mb-4">{homeLocationMember.user_name}의 재택근무 허용 주소를 입력하세요.<br/><span className="text-xs text-[#a0a0a0]">입력한 주소 반경 100m 내에서 재택 출퇴근이 가능해요.</span></p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="예: 서울시 강남구 역삼동 123-45"
+                value={homeAddress}
+                onChange={(e) => setHomeAddress(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSetHomeLocation(); }}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+              <button onClick={handleSetHomeLocation} disabled={geocodeLoading || homeLocationLoading}
+                className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm">
+                {geocodeLoading ? "주소 확인 중..." : homeLocationLoading ? "저장 중..." : "저장하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 수정 모달 */}
       {editMember && (
