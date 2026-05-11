@@ -79,11 +79,15 @@ def get_address(lat: float, lng: float):
         )
         data = response.json()
         if data.get("documents"):
-            address = data["documents"][0].get("address")
+            doc = data["documents"][0]
+            road = doc.get("road_address")
+            if road:
+                building = road.get("building_name", "")
+                addr = road.get("address_name", "")
+                return {"address": f"{addr} {building}".strip() if building else addr}
+            address = doc.get("address")
             if address:
-                return {
-                    "address": f"{address['region_2depth_name']} {address['region_3depth_name']}"
-                }
+                return {"address": address.get("address_name", f"{lat:.4f}, {lng:.4f}")}
         return {"address": f"{lat:.4f}, {lng:.4f}"}
     except Exception as e:
         print(f"오류: {e}")
