@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WorkPing",
-  description: "GPS 기반 스마트 근태관리",
+  title: "WorkPing - GPS 근태관리",
+  description: "중소기업을 위한 무료 GPS 기반 근태관리 앱",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
