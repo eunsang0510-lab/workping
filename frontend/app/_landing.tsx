@@ -135,17 +135,18 @@ export default function Landing() {
             {
               name: "무료", price: "0원", period: "",
               highlight: false,
-              features: ["직원 20명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
+              badge: "모든 기능 무료",
+              features: ["직원 20명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)", "재택근무 관리 · 팀 관리"],
             },
             {
               name: "유료", price: "50,000원", period: "/ 월(회사별)",
               highlight: true, badge: "인기",
-              features: ["직원 21명 이상", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)", "사내 시스템 API 연동 지원"],
+              features: ["직원 21명 이상", "무료 기능 전체 포함", "사내 시스템 API 연동 지원", "급여·ERP 등 사내 시스템 연동", "우선 고객 지원"],
             },
             {
               name: "비즈니스", price: "협의", period: "/ 월",
               highlight: false,
-              features: ["직원 무제한", "유료 기능 전체", "우선 고객 지원"],
+              features: ["직원 무제한", "유료 기능 전체", "전담 고객 지원"],
             },
           ].map((plan, i) => (
             <div key={i} className={`rounded-2xl p-5 border-2 ${
@@ -156,7 +157,7 @@ export default function Landing() {
               <div className="flex items-center justify-between mb-3">
                 <div className={`font-black text-base ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>{plan.name}</div>
                 {plan.badge && (
-                  <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{plan.badge}</span>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${plan.highlight ? "bg-white/20 text-white" : "bg-[#f0f0ff] text-[#5b5ef4]"}`}>{plan.badge}</span>
                 )}
               </div>
               <div className="flex items-end gap-1 mb-4">
