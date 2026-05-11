@@ -443,23 +443,27 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
         CompanyLocation.is_active == True,
     ).all()
 
-    # 개인 재택 주소 확인
-    home_radius = 100
+    # 개인 재택 주소 확인 (지오코딩 오차를 감안해 300m 허용)
+    home_radius = 300
     if req.user_id:
-        member = db.query(CompanyMember).filter(
-            CompanyMember.user_id == req.user_id,
-            CompanyMember.company_id == req.company_id,
-        ).first()
-        if member and member.home_latitude and member.home_longitude:
-            home_dist = calc_distance(req.latitude, req.longitude, member.home_latitude, member.home_longitude)
-            if home_dist <= home_radius:
-                return {
-                    "allowed": True,
-                    "is_remote": True,
-                    "message": f"재택근무 위치 범위 내 ({int(home_dist)}m)",
-                    "location_name": "재택근무",
-                    "distance": int(home_dist),
-                }
+        try:
+            member = db.query(CompanyMember).filter(
+                CompanyMember.user_id == req.user_id,
+                CompanyMember.company_id == req.company_id,
+            ).first()
+            if member and member.home_latitude and member.home_longitude:
+                home_dist = calc_distance(req.latitude, req.longitude, member.home_latitude, member.home_longitude)
+                print(f"🏠 재택 거리 체크: {int(home_dist)}m (허용: {home_radius}m)")
+                if home_dist <= home_radius:
+                    return {
+                        "allowed": True,
+                        "is_remote": True,
+                        "message": f"재택근무 위치 범위 내 ({int(home_dist)}m)",
+                        "location_name": "재택근무",
+                        "distance": int(home_dist),
+                    }
+        except Exception as e:
+            print(f"⚠️ 재택 위치 확인 오류: {e}")
 
     if not locations:
         return {"allowed": True, "is_remote": False, "message": "위치 제한 없음"}

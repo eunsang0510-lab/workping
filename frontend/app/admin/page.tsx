@@ -1546,7 +1546,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
               <div className="text-[#0a0a0a] font-black">🏠 재택 주소 설정</div>
               <button onClick={() => { setHomeLocationMember(null); setHomeAddress(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
             </div>
-            <p className="text-[#6b6b6b] text-sm mb-4">{homeLocationMember.user_name}의 재택근무 허용 주소를 입력하세요.<br/><span className="text-xs text-[#a0a0a0]">입력한 주소 반경 100m 내에서 재택 출퇴근이 가능해요.</span></p>
+            <p className="text-[#6b6b6b] text-sm mb-4">{homeLocationMember.user_name}의 재택근무 허용 주소를 입력하세요.<br/><span className="text-xs text-[#a0a0a0]">입력한 주소 반경 300m 내에서 재택 출퇴근이 가능해요.</span></p>
             <div className="space-y-3">
               <input
                 type="text"
