@@ -348,6 +348,28 @@ export default function SuperAdmin() {
     });
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    showConfirm(`"${userName}" 계정을 삭제할까요?\n출퇴근 기록도 모두 삭제됩니다.`, async () => {
+      setConfirm(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetch(`${API_URL}/api/superadmin/user/${userId}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (res.ok) {
+          showToast("삭제 완료", "success");
+          fetchAll();
+        } else {
+          const data = await res.json();
+          showToast(`삭제 실패: ${data.detail || "알 수 없는 오류"}`, "error");
+        }
+      } catch {
+        showToast("삭제 실패", "error");
+      }
+    });
+  };
+
   const handleResetUserAttendance = async (userId: string, userName: string) => {
     showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
       setConfirm(null);
@@ -620,7 +642,10 @@ export default function SuperAdmin() {
               <div key={u.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[#0a0a0a] font-black">{u.name || "-"}</span>
-                  <button onClick={() => handleResetUserAttendance(u.id, u.name || u.email)} className="text-[#a0a0a0] hover:text-[#f59e0b] text-xs transition-colors">출근초기화</button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => handleResetUserAttendance(u.id, u.name || u.email)} className="text-[#a0a0a0] hover:text-[#f59e0b] text-xs transition-colors">출근초기화</button>
+                    <button onClick={() => handleDeleteUser(u.id, u.name || u.email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">계정삭제</button>
+                  </div>
                 </div>
                 <div className="text-[#6b6b6b] text-xs mb-1">{u.email}</div>
                 <div className="text-[#a0a0a0] text-xs">가입일 {formatDate(u.created_at)}</div>

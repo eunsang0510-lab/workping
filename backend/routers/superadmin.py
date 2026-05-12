@@ -179,6 +179,30 @@ def get_individual_users(db: Session = Depends(get_db)):
         ]
     }
 
+# 개인 유저 계정 삭제
+@router.delete("/user/{user_id}")
+def delete_user(user_id: str, db: Session = Depends(get_db)):
+    from models.attendance import Attendance
+    from models.location import Location
+    from firebase_admin import auth as firebase_auth
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다")
+
+    db.query(Attendance).filter(Attendance.user_id == user_id).delete()
+    db.query(Location).filter(Location.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
+
+    try:
+        firebase_auth.delete_user(user_id)
+    except Exception as e:
+        print(f"Firebase 계정 삭제 실패 (무시): {e}")
+
+    return {"message": "삭제 완료"}
+
+
 # 개인 유저 근태 초기화
 @router.delete("/user/attendance/{user_id}")
 def reset_user_attendance(user_id: str, db: Session = Depends(get_db)):
