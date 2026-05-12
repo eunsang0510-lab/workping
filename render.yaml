@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: workping-backend
+    env: docker
+    rootDir: backend
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: KAKAO_REST_API_KEY
+        sync: false
+      - key: FIREBASE_API_KEY
+        sync: false
+      - key: FIREBASE_ADMIN_CREDENTIALS
+        sync: false
+      - key: TOSS_SECRET_KEY
+        sync: false
