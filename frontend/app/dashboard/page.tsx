@@ -11,11 +11,23 @@ import Toast from "@/components/Toast";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 const getAuthHeader = async () => {
-  const token = await auth.currentUser?.getIdToken();
-  return {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`,
-  };
+  if (!auth.currentUser) {
+    throw new Error("로그인이 필요해요. 다시 로그인해주세요.");
+  }
+  try {
+    const token = await auth.currentUser.getIdToken();
+    return {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    };
+  } catch (e: any) {
+    const code = e?.code || "";
+    if (code.includes("user-not-found") || code.includes("user-disabled") || code.includes("token-expired")) {
+      await signOut(auth);
+      throw new Error("계정 인증이 만료됐어요. 다시 로그인해주세요.");
+    }
+    throw new Error("인증에 실패했어요. 다시 로그인해주세요.");
+  }
 };
 
 interface LocationRecord {
@@ -261,11 +273,20 @@ const fetchPlanStatus = async (userId: string) => {
       isRemoteWork = valData.is_remote || false;
     }
 
-    await fetch(`${API_URL}/api/location/record`, {
+    const authHeaders = await getAuthHeader();
+    const recRes = await fetch(`${API_URL}/api/location/record`, {
       method: "POST",
-      headers: await getAuthHeader(),
+      headers: authHeaders,
       body: JSON.stringify({ user_id: user?.uid, latitude, longitude, timestamp: nowISO, type, address, is_remote: isRemoteWork }),
     });
+    if (!recRes.ok) {
+      const recData = await recRes.json().catch(() => ({}));
+      if (recRes.status === 401 || recRes.status === 403) {
+        await signOut(auth);
+        throw new Error("계정 인증이 만료됐어요. 다시 로그인해주세요.");
+      }
+      throw new Error(recData.detail || "출근 기록 저장에 실패했어요. 잠시 후 다시 시도해주세요.");
+    }
 
     return { latitude, longitude, nowISO, address, isRemoteWork };
   };
@@ -534,29 +555,45 @@ const fetchPlanStatus = async (userId: string) => {
       </div>
 
       {/* 출퇴근 버튼 */}
-      {/* ✅ GPS 권한 거부 안내 */}
+      {/* GPS 권한 거부 안내 */}
       {gpsPermission === "denied" && (
         <div className="bg-[#fef2f2] border border-[#fecaca] rounded-2xl p-4 mb-4">
           <div className="text-[#ef4444] text-sm font-bold mb-1">📍 GPS 권한이 필요해요</div>
           <div className="text-[#6b6b6b] text-xs leading-relaxed mb-3">
-            출퇴근 기록을 위해 위치 권한이 필요해요.<br />
-            아래 방법으로 권한을 허용해주세요.
+            위치 권한이 거부되어 있어요.<br />
+            아래 방법으로 직접 허용 후 앱을 새로고침해주세요.
           </div>
-          <div className="bg-white border border-[#fecaca] rounded-xl p-3 space-y-1 mb-3">
-            <div className="text-[#0a0a0a] text-xs font-bold">📱 안드로이드 설정 방법</div>
-            <div className="text-[#6b6b6b] text-xs">설정 → 앱 → WorkPing → 권한 → 위치 → 허용</div>
+          <div className="bg-white border border-[#fecaca] rounded-xl p-3 space-y-2 mb-3">
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">📱 안드로이드</div>
+              <div className="text-[#6b6b6b] text-xs">설정 → 앱 → WorkPing → 권한 → 위치 → 허용</div>
+            </div>
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">🍎 아이폰 (iOS)</div>
+              <div className="text-[#6b6b6b] text-xs">설정 → Safari(또는 Chrome) → 위치 → 허용</div>
+            </div>
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">🖥 PC 브라우저</div>
+              <div className="text-[#6b6b6b] text-xs">주소창 왼쪽 자물쇠 아이콘 → 위치 → 허용</div>
+            </div>
           </div>
           <button
             onClick={() => {
-              // 권한 재요청 시도
               navigator.geolocation.getCurrentPosition(
-                () => setGpsPermission("granted"),
-                () => {},
+                () => {
+                  setGpsPermission("granted");
+                  showToast("위치 권한이 허용되었어요!", "success");
+                },
+                (error) => {
+                  if (error.code === error.PERMISSION_DENIED) {
+                    showToast("위치 권한이 거부된 상태예요. 위 안내에 따라 기기 설정에서 직접 허용 후 새로고침해주세요.", "error");
+                  }
+                },
               );
             }}
             className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-bold py-2.5 rounded-xl transition-all"
           >
-            권한 다시 요청하기
+            권한 확인하기
           </button>
         </div>
       )}
