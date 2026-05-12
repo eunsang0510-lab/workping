@@ -82,9 +82,8 @@ def get_address(lat: float, lng: float):
             doc = data["documents"][0]
             road = doc.get("road_address")
             if road:
-                building = road.get("building_name", "")
                 addr = road.get("address_name", "")
-                return {"address": f"{addr} {building}".strip() if building else addr}
+                return {"address": addr}
             address = doc.get("address")
             if address:
                 return {"address": address.get("address_name", f"{lat:.4f}, {lng:.4f}")}
