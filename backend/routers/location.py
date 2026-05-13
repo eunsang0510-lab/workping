@@ -62,9 +62,14 @@ def record_location(
         recorded_at=ts,
     )
     db.add(attendance)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[ERROR] DB 저장 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"DB 저장 실패: {str(e)}")
 
-    print(f"✅ DB 저장 완료: {data.user_id} - {data.type} - {data.address} - {ts}")
+    print(f"[OK] DB 저장 완료: {data.user_id} - {data.type} - {data.address} - {ts}")
 
     return {"message": "위치 기록 완료", "data": data}
 
