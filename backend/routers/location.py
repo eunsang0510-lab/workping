@@ -8,6 +8,7 @@ from models.attendance import Attendance
 from models.location import Location
 from routers.deps import get_current_user
 import requests
+import re
 import os
 
 load_dotenv()
@@ -15,6 +16,34 @@ load_dotenv()
 router = APIRouter()
 
 KST = timezone(timedelta(hours=9))
+
+_COORD_RE = re.compile(r"^-?\d+\.\d+,\s*-?\d+\.\d+$")
+
+
+def _kakao_address(lat: float, lng: float) -> str:
+    try:
+        kakao_key = os.getenv("KAKAO_REST_API_KEY")
+        resp = requests.get(
+            f"https://dapi.kakao.com/v2/local/geo/coord2address.json?x={lng}&y={lat}",
+            headers={"Authorization": f"KakaoAK {kakao_key}"},
+            timeout=8,
+        )
+        data = resp.json()
+        if data.get("documents"):
+            doc = data["documents"][0]
+            road = doc.get("road_address")
+            if road:
+                addr = road.get("address_name", "")
+                building = road.get("building_name", "")
+                if building and building in addr:
+                    addr = addr.replace(" " + building, "").strip()
+                return addr
+            address = doc.get("address")
+            if address:
+                return address.get("address_name", "")
+    except Exception as e:
+        print(f"[WARN] Kakao 주소 조회 실패: {e}")
+    return ""
 
 
 class LocationData(BaseModel):
@@ -43,11 +72,19 @@ def record_location(
     else:
      ts = datetime.utcnow()
 
+    # 프론트에서 주소 조회 실패(좌표 문자열) or 빈값이면 백엔드에서 직접 조회
+    address = data.address.strip()
+    if not address or _COORD_RE.match(address):
+        resolved = _kakao_address(data.latitude, data.longitude)
+        if resolved:
+            address = resolved
+            print(f"[INFO] 백엔드 주소 보정: {data.address!r} → {address!r}")
+
     location = Location(
         user_id=data.user_id,
         latitude=data.latitude,
         longitude=data.longitude,
-        place_name=data.address,
+        place_name=address,
         recorded_at=ts,
     )
     db.add(location)
@@ -57,7 +94,7 @@ def record_location(
         type=data.type,
         latitude=data.latitude,
         longitude=data.longitude,
-        address=data.address,
+        address=address,
         is_remote=data.is_remote,
         recorded_at=ts,
     )
@@ -69,7 +106,7 @@ def record_location(
         print(f"[ERROR] DB 저장 실패: {e}")
         raise HTTPException(status_code=500, detail=f"DB 저장 실패: {str(e)}")
 
-    print(f"[OK] DB 저장 완료: {data.user_id} - {data.type} - {data.address} - {ts}")
+    print(f"[OK] DB 저장 완료: {data.user_id} - {data.type} - {address} - {ts}")
 
     return {"message": "위치 기록 완료", "data": data}
 
