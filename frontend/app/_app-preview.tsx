@@ -210,20 +210,34 @@ export default function AppPreview() {
 
     // 관리자
     <div key="admin" className="bg-[#f4f4f8] rounded-3xl p-4 text-left">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="w-7 h-7 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-xs">←</div>
         <span className="text-[#0a0a0a] text-base font-black">Work<span className="text-[#5b5ef4]">Ping</span></span>
         <div className="w-7" />
       </div>
+
+      {/* 회사 정보 */}
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[#a0a0a0] text-xs">회사</div>
+            <div className="text-[#0a0a0a] text-sm font-black">워크핑 주식회사</div>
+            <div className="text-[#a0a0a0] text-xs">팀원 8명 · 코드: a1b2c3d4</div>
+          </div>
+          <div className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-2 py-1 rounded-lg">📥 엑셀</div>
+        </div>
+      </div>
+
       {/* 4개 상태 카드 */}
       <div className="grid grid-cols-4 gap-1.5 mb-3">
-        {[["출근중", "8", "#16a34a"], ["퇴근", "3", "#4a4de0"], ["미출근", "1", "#a0a0a0"], ["미퇴근", "2", "#ef4444"]].map(([label, val, color]) => (
+        {[["출근중","8","#16a34a"],["퇴근","3","#4a4de0"],["미출근","1","#a0a0a0"],["미퇴근","2","#ef4444"]].map(([label,val,color]) => (
           <div key={label} className="bg-white border border-[#e5e5e5] rounded-xl p-2 text-center shadow-sm">
             <div className="font-black text-sm" style={{ color }}>{val}</div>
             <div className="text-[#a0a0a0] text-xs">{label}</div>
           </div>
         ))}
       </div>
+
       {/* 연차 관리 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
         <div className="flex items-center justify-between mb-2">
@@ -234,6 +248,10 @@ export default function AppPreview() {
               <div className="absolute top-0.5 left-5 w-4 h-4 bg-white rounded-full shadow" />
             </div>
           </div>
+        </div>
+        <div className="flex gap-1.5 mb-2">
+          <div className="flex-1 bg-[#5b5ef4] text-white text-xs font-bold py-1.5 rounded-lg text-center">신청 현황 (1)</div>
+          <div className="flex-1 bg-[#f8f8f8] border border-[#e5e5e5] text-[#a0a0a0] text-xs font-bold py-1.5 rounded-lg text-center">연차 현황</div>
         </div>
         <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
@@ -249,32 +267,84 @@ export default function AppPreview() {
           </div>
         </div>
       </div>
+
       {/* 오늘 근태 현황 */}
-      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 shadow-sm">
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
         <div className="text-[#a0a0a0] text-xs font-semibold mb-2 uppercase tracking-wider">오늘 근태 현황</div>
         <div className="space-y-2">
           {[
-            { name: "김민준", time: "09:05", addr: "강남구 테헤란로", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: false, warn: false },
-            { name: "이서연", time: "08:50", addr: "", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: true, warn: false },
-            { name: "박지호", time: "09:20", addr: "강남구 테헤란로", status: "미퇴근", color: "#ef4444", bg: "#fef2f2", border: "#fecaca", remote: false, warn: true },
-            { name: "최수아", time: "--:--", addr: "", status: "미출근", color: "#a0a0a0", bg: "#f8f8f8", border: "#e5e5e5", remote: false, warn: false },
-          ].map(({ name, time, addr, status, color, bg, border, remote, warn }) => (
-            <div key={name} className="flex items-center justify-between py-2 border-b border-[#f0f0f0] last:border-0">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 bg-[#f0f0ff] rounded-full flex items-center justify-center text-xs font-bold text-[#5b5ef4]">{name[0]}</div>
-                <div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[#0a0a0a] text-xs font-bold">{name}</span>
-                    {remote && <span className="bg-[#e0f2fe] text-[#0369a1] text-xs px-1 py-0.5 rounded font-medium">재택</span>}
-                    {warn && <span className="text-[#ef4444] text-xs">⚠️</span>}
-                  </div>
-                  <div className="text-[#a0a0a0] text-xs">{time}{addr ? ` · ${addr}` : ""}</div>
+            { name: "김민준", time: "09:05", addr: "강남구 테헤란로", checkout: "--:--", wh: "6h 42m", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: false, warn: false },
+            { name: "이서연", time: "08:50", addr: "재택", checkout: "--:--", wh: "7h 2m", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: true, warn: false },
+            { name: "박지호", time: "09:20", addr: "강남구 테헤란로", checkout: "18:10", wh: "8h 50m", status: "미퇴근", color: "#ef4444", bg: "#fef2f2", border: "#fecaca", remote: false, warn: true },
+            { name: "최수아", time: "--:--", addr: "", checkout: "--:--", wh: "-", status: "미출근", color: "#a0a0a0", bg: "#f8f8f8", border: "#e5e5e5", remote: false, warn: false },
+          ].map(({ name, time, addr, checkout, wh, status, color, bg, border, remote, warn }) => (
+            <div key={name} className={`rounded-xl p-2.5 border ${warn ? "border-[#fecaca] bg-[#fff8f8]" : "border-[#f0f0f0] bg-[#f8f8f8]"}`}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 bg-[#f0f0ff] rounded-full flex items-center justify-center text-xs font-bold text-[#5b5ef4]">{name[0]}</div>
+                  <span className="text-[#0a0a0a] text-xs font-bold">{name}</span>
+                  {remote && <span className="bg-[#e0f2fe] text-[#0369a1] text-xs px-1 rounded font-medium">🏠 재택</span>}
+                  {warn && <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>}
                 </div>
+                <div className="px-1.5 py-0.5 rounded-lg text-xs font-bold border" style={{ color, backgroundColor: bg, borderColor: border }}>{status}</div>
               </div>
-              <div className="px-2 py-0.5 rounded-lg text-xs font-bold border" style={{ color, backgroundColor: bg, borderColor: border }}>{status}</div>
+              <div className="flex gap-2 text-xs text-[#a0a0a0] flex-wrap">
+                <span>출근 <span className="text-[#16a34a] font-medium">{time}</span></span>
+                {addr && <span>📍 {addr}</span>}
+                <span>퇴근 <span className="text-[#ef4444] font-medium">{checkout}</span></span>
+                <span className="text-[#4a4de0] font-medium">{wh}</span>
+              </div>
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 출근 위치 관리 */}
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">출근 위치 관리</div>
+          <span className="text-[#5b5ef4] text-xs">+ 위치 추가</span>
+        </div>
+        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold">📍 본사</div>
+              <div className="text-[#6b6b6b] text-xs">강남구 테헤란로 427 · 반경 100m</div>
+            </div>
+            <span className="text-[#a0a0a0] text-xs">삭제</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 팀 관리 */}
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">팀 관리</div>
+          <span className="text-[#5b5ef4] text-xs">+ 팀 추가</span>
+        </div>
+        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold">🏷️ 개발팀 · 3명</div>
+              <div className="text-[#5b5ef4] text-xs">팀장: 김민준</div>
+            </div>
+            <span className="text-[#a0a0a0] text-xs">삭제</span>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {[["김민준","👑"],["이서연",""],["박지호",""]].map(([n, crown]) => (
+              <div key={n} className="bg-white border border-[#e5e5e5] rounded-lg px-2 py-0.5 text-xs flex items-center gap-0.5">
+                <span>{crown}</span><span>{n}</span><span className="text-[#a0a0a0] ml-0.5">×</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 회사 공지 관리 */}
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 shadow-sm">
+        <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-2">회사 공지 관리</div>
+        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl px-3 py-2 text-[#a0a0a0] text-xs mb-2">공지 제목 입력...</div>
+        <div className="bg-[#0a0a0a] text-white text-xs font-bold py-2 rounded-xl text-center">🏢 회사 공지 등록</div>
       </div>
     </div>,
   ];
