@@ -8,7 +8,7 @@ import Link from "next/link";
 import Toast from "@/components/Toast";
 import Confirm from "@/components/Confirm";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+import { API_URL } from "@/lib/api";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
 interface Company {
