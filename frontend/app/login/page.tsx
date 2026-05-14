@@ -10,7 +10,7 @@ import Link from "next/link";
 import { API_URL } from "@/lib/api";
 
 export default function Login() {
-  const [mode, setMode] = useState<"select" | "personal" | "company">("select");
+  const [mode, setMode] = useState<"select" | "personal" | "company" | "register">("select");
   const [loading, setLoading] = useState(false);
   const [companySearch, setCompanySearch] = useState("");
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
@@ -18,6 +18,17 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  // 회사 등록 신청 폼
+  const [regCompanyName, setRegCompanyName] = useState("");
+  const [regRepName, setRegRepName] = useState("");
+  const [regBizNumber, setRegBizNumber] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState("");
+  const [showRegDone, setShowRegDone] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -75,6 +86,44 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRegisterRequest = async () => {
+    setRegError("");
+    if (!regCompanyName.trim()) { setRegError("회사명을 입력해주세요"); return; }
+    if (!regRepName.trim()) { setRegError("대표자명을 입력해주세요"); return; }
+    if (!regBizNumber.trim()) { setRegError("사업자등록번호를 입력해주세요"); return; }
+    if (!regEmail.trim()) { setRegError("이메일을 입력해주세요"); return; }
+
+    setRegLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/company-request/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_name: regCompanyName,
+          representative_name: regRepName,
+          business_number: regBizNumber,
+          phone: regPhone,
+          email: regEmail,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowRegDone(true);
+      } else {
+        setRegError(data.detail || "신청에 실패했어요");
+      }
+    } catch {
+      setRegError("서버 오류가 발생했어요. 잠시 후 다시 시도해주세요");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const resetRegForm = () => {
+    setRegCompanyName(""); setRegRepName(""); setRegBizNumber("");
+    setRegPhone(""); setRegEmail(""); setRegError(""); setShowRegDone(false);
   };
 
   return (
@@ -196,6 +245,19 @@ export default function Login() {
                 {companies.length === 0 && companySearch && (
                   <div className="text-[#a0a0a0] text-sm text-center py-4">검색 결과가 없어요</div>
                 )}
+
+                {/* 회사 등록 요청 버튼 */}
+                <div className="pt-2 border-t border-[#e5e5e5]">
+                  <button
+                    onClick={() => { setMode("register"); resetRegForm(); }}
+                    className="w-full bg-[#f8f8f8] border border-dashed border-[#c7c8fa] hover:border-[#5b5ef4] hover:bg-[#f0f0ff] text-[#5b5ef4] font-bold py-3 rounded-xl transition-all text-sm"
+                  >
+                    🏢 회사 등록 신청
+                  </button>
+                  <p className="text-[#a0a0a0] text-xs text-center mt-2">
+                    처음 사용하시나요? 회사를 등록하고 관리자 계정을 받으세요
+                  </p>
+                </div>
               </>
             )}
 
@@ -239,18 +301,118 @@ export default function Login() {
           </div>
         )}
 
+        {/* 회사 등록 신청 폼 */}
+        {mode === "register" && (
+          <div className="space-y-3">
+            <button
+              onClick={() => setMode("company")}
+              className="text-[#6b6b6b] text-sm flex items-center gap-1 mb-2 hover:text-[#0a0a0a] transition-colors"
+            >
+              ← 뒤로
+            </button>
+            <div className="text-center mb-2">
+              <div className="text-[#0a0a0a] font-black text-base">회사 등록 신청</div>
+              <div className="text-[#6b6b6b] text-xs mt-1">관리자 승인 후 계정이 생성돼요</div>
+            </div>
+
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">회사명 *</div>
+              <input
+                type="text"
+                placeholder="예) (주)워크핑"
+                value={regCompanyName}
+                onChange={(e) => setRegCompanyName(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+            </div>
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">대표자명 *</div>
+              <input
+                type="text"
+                placeholder="예) 홍길동"
+                value={regRepName}
+                onChange={(e) => setRegRepName(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+            </div>
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">사업자등록번호 * <span className="text-[#5b5ef4]">(초기 비밀번호로 사용됩니다)</span></div>
+              <input
+                type="text"
+                placeholder="예) 123-45-67890"
+                value={regBizNumber}
+                onChange={(e) => setRegBizNumber(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+            </div>
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">전화번호</div>
+              <input
+                type="tel"
+                placeholder="예) 02-1234-5678"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+            </div>
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">관리자 이메일 * <span className="text-[#6b6b6b]">(계정 생성에 사용됩니다)</span></div>
+              <input
+                type="email"
+                placeholder="예) admin@company.com"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+              />
+            </div>
+
+            {regError && <div className="text-[#ef4444] text-xs text-center">{regError}</div>}
+
+            <button
+              onClick={handleRegisterRequest}
+              disabled={regLoading}
+              className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all text-sm"
+            >
+              {regLoading ? "신청 중..." : "등록 신청하기"}
+            </button>
+          </div>
+        )}
+
         <p className="text-[#a0a0a0] text-xs text-center mt-6">
           로그인 시 <Link href="/terms" className="text-[#5b5ef4] hover:underline">서비스 이용약관</Link> 및 <Link href="/privacy" className="text-[#5b5ef4] hover:underline">개인정보처리방침</Link>에 동의합니다
         </p>
-        {mode === "company" && !selectedCompany && (
-          <p className="text-[#a0a0a0] text-xs text-center mt-2">
-            회사 등록 및 기타 문의 :{" "}
-            <a href="mailto:workpingofficial@gmail.com" className="text-[#5b5ef4] hover:underline">
-              workpingofficial@gmail.com
-            </a>
-          </p>
-        )}
       </div>
+
+      {/* 신청 완료 팝업 */}
+      {showRegDone && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden">
+            <div className="bg-[#5b5ef4] px-5 py-4">
+              <div className="text-white font-black text-base">🎉 신청이 접수됐어요!</div>
+            </div>
+            <div className="p-5">
+              <p className="text-[#0a0a0a] text-sm font-bold mb-2">관리자 승인 후 계정이 생성됩니다</p>
+              <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4 space-y-2 mb-4">
+                <div className="text-[#6b6b6b] text-xs leading-relaxed">
+                  1. WorkPing 관리자가 신청 내용을 검토합니다<br />
+                  2. 승인되면 입력하신 이메일로 관리자 계정이 생성됩니다<br />
+                  3. 초기 비밀번호는 <span className="font-bold text-[#5b5ef4]">사업자등록번호</span>입니다<br />
+                  4. 로그인 후 직원을 등록하고 서비스를 시작하세요
+                </div>
+              </div>
+              <div className="text-[#a0a0a0] text-xs text-center mb-4">
+                문의: <a href="mailto:workpingofficial@gmail.com" className="text-[#5b5ef4]">workpingofficial@gmail.com</a>
+              </div>
+              <button
+                onClick={() => { setShowRegDone(false); setMode("company"); resetRegForm(); }}
+                className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -65,7 +65,7 @@ interface Notice {
 export default function SuperAdmin() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"companies" | "members" | "users" | "notice">("companies");
+  const [tab, setTab] = useState<"companies" | "members" | "users" | "notice" | "requests">("companies");
   const [stats, setStats] = useState<Stats | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -85,6 +85,8 @@ export default function SuperAdmin() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [regRequests, setRegRequests] = useState<any[]>([]);
+  const [regApproving, setRegApproving] = useState<string | null>(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
@@ -140,6 +142,59 @@ export default function SuperAdmin() {
     } catch (error) {
       console.error("공지 로딩 실패:", error);
     }
+  };
+
+  const fetchRegRequests = async () => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company-request/list`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setRegRequests(data.requests || []);
+    } catch (error) {
+      console.error("등록 신청 로딩 실패:", error);
+    }
+  };
+
+  const handleApproveRequest = async (requestId: string) => {
+    setRegApproving(requestId);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company-request/approve/${requestId}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`승인 완료! 초기 비밀번호: ${data.initial_password}`, "success");
+        fetchRegRequests();
+        fetchAll();
+      } else {
+        showToast(data.detail || "승인 실패", "error");
+      }
+    } catch {
+      showToast("승인 실패", "error");
+    } finally {
+      setRegApproving(null);
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string, companyName: string) => {
+    showConfirm(`"${companyName}" 신청을 반려할까요?`, async () => {
+      setConfirm(null);
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/company-request/${requestId}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        showToast("반려 완료", "success");
+        fetchRegRequests();
+      } catch {
+        showToast("반려 실패", "error");
+      }
+    });
   };
 
   const handleCreateNotice = async () => {
@@ -463,18 +518,26 @@ export default function SuperAdmin() {
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-2 mb-4">
-        {(["companies", "members", "users", "notice"] as const).map((t) => (
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {(["companies", "members", "users", "notice", "requests"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); if (t === "notice") fetchNotices(); }}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            onClick={() => {
+              setTab(t);
+              if (t === "notice") fetchNotices();
+              if (t === "requests") fetchRegRequests();
+            }}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all min-w-[60px] ${
               tab === t
                 ? "bg-[#5b5ef4] text-white shadow-[0_4px_12px_rgba(91,94,244,0.3)]"
                 : "bg-white border border-[#e5e5e5] text-[#6b6b6b] shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
             }`}
           >
-            {t === "companies" ? `회사 (${companies.length})` : t === "members" ? `직원 (${members.length})` : t === "users" ? `개인 (${individualUsers.length})` : "공지"}
+            {t === "companies" ? `회사 (${companies.length})`
+              : t === "members" ? `직원 (${members.length})`
+              : t === "users" ? `개인 (${individualUsers.length})`
+              : t === "requests" ? `신청 (${regRequests.filter(r => r.status === "pending").length})`
+              : "공지"}
           </button>
         ))}
       </div>
@@ -651,6 +714,60 @@ export default function SuperAdmin() {
                 <div className="text-[#a0a0a0] text-xs">가입일 {formatDate(u.created_at)}</div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* 회사 등록 신청 탭 */}
+      {tab === "requests" && (
+        <div className="space-y-3">
+          {regRequests.length === 0 ? (
+            <div className="text-[#a0a0a0] text-sm text-center py-12">등록 신청이 없어요</div>
+          ) : (
+            regRequests.map((r) => {
+              const isPending = r.status === "pending";
+              const badgeMap: Record<string, { bg: string; color: string; border: string; text: string }> = {
+                pending:  { bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]", text: "대기중" },
+                approved: { bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]", text: "승인완료" },
+                rejected: { bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]", text: "반려" },
+              };
+              const badge = badgeMap[r.status] || badgeMap.pending;
+              return (
+                <div key={r.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-[#0a0a0a] font-black text-sm">{r.company_name}</div>
+                      <div className="text-[#6b6b6b] text-xs mt-0.5">{r.representative_name} · {r.email}</div>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg border shrink-0 ${badge.bg} ${badge.color} ${badge.border}`}>
+                      {badge.text}
+                    </span>
+                  </div>
+                  <div className="space-y-1 mb-3">
+                    <div className="text-[#a0a0a0] text-xs">사업자번호 <span className="text-[#0a0a0a] font-medium">{r.business_number}</span></div>
+                    {r.phone && <div className="text-[#a0a0a0] text-xs">전화 <span className="text-[#0a0a0a] font-medium">{r.phone}</span></div>}
+                    <div className="text-[#a0a0a0] text-xs">신청일 <span className="text-[#6b6b6b]">{new Date(r.created_at).toLocaleDateString("ko-KR")}</span></div>
+                  </div>
+                  {isPending && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApproveRequest(r.id)}
+                        disabled={regApproving === r.id}
+                        className="flex-1 bg-[#16a34a] hover:bg-[#15803d] disabled:opacity-50 text-white text-xs font-bold py-2.5 rounded-xl transition-all"
+                      >
+                        {regApproving === r.id ? "처리 중..." : "승인 (회사+계정 생성)"}
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(r.id, r.company_name)}
+                        className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2.5 rounded-xl transition-all hover:bg-[#fef2f2]"
+                      >
+                        반려
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       )}
