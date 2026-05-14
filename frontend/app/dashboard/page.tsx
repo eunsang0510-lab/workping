@@ -15,7 +15,7 @@ const getAuthHeader = async () => {
     throw new Error("로그인이 필요해요. 다시 로그인해주세요.");
   }
   try {
-    const token = await auth.currentUser.getIdToken(true);
+    const token = await auth.currentUser.getIdToken();
     return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
@@ -237,11 +237,31 @@ const fetchPlanStatus = async (userId: string) => {
         reject(new Error("GPS를 지원하지 않는 브라우저예요"));
         return;
       }
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 30000,
-        maximumAge: 60000,
-      });
+      navigator.geolocation.getCurrentPosition(
+        resolve,
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
+            reject(new Error(
+              "위치 권한이 없어요.\n" +
+              "📱 Android 설정 → 앱 → Chrome → 권한 → 위치 → '앱 사용 중에만 허용'"
+            ));
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            reject(new Error("현재 위치를 가져올 수 없어요. GPS를 켜고 다시 시도해주세요."));
+          } else if (error.code === error.TIMEOUT) {
+            reject(new Error("위치 조회 시간이 초과됐어요. 다시 시도해주세요."));
+          } else {
+            reject(new Error(
+              "위치 권한을 확인해주세요.\n" +
+              "📱 Android 설정 → 앱 → Chrome → 권한 → 위치 → '앱 사용 중에만 허용'"
+            ));
+          }
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 30000,
+          maximumAge: 60000,
+        }
+      );
     });
   };
 
