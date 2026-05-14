@@ -17,6 +17,7 @@ is_supabase_pooler = "pooler.supabase.com" in DATABASE_URL
 engine = create_engine(
     DATABASE_URL,
     poolclass=NullPool if is_supabase_pooler else None,
+    pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()

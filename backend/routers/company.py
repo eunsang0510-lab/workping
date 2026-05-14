@@ -138,18 +138,23 @@ def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depen
     is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
     if not is_superadmin:
         raise HTTPException(status_code=403, detail="시스템 관리자만 조회할 수 있어요")
-    
+
     companies = db.query(Company).all()
-    result = []
-    for c in companies:
-        member_count = db.query(CompanyMember).filter(CompanyMember.company_id == c.id).count()
-        result.append({
+    member_counts = dict(
+        db.query(CompanyMember.company_id, func.count(CompanyMember.id))
+        .group_by(CompanyMember.company_id)
+        .all()
+    )
+    result = [
+        {
             "id": c.id,
             "name": c.name,
-            "member_count": member_count,
+            "member_count": member_counts.get(c.id, 0),
             "company_code": c.id[:8],
-             "leave_enabled": c.leave_enabled,  # ✅ 추가
-        })
+            "leave_enabled": c.leave_enabled,
+        }
+        for c in companies
+    ]
     return {"companies": result}
 
 
@@ -346,15 +351,28 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
     now = datetime.now()
 
     members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    if not members:
+        return {"date": str(start.date()), "attendance": []}
+
+    user_ids = [m.user_id for m in members]
+    all_records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id.in_(user_ids),
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
+
+    records_by_user: dict = {}
+    for r in all_records:
+        records_by_user.setdefault(r.user_id, []).append(r)
 
     result = []
     for member in members:
-        records = db.query(Attendance).filter(
-            Attendance.user_id == member.user_id,
-            Attendance.recorded_at >= start,
-            Attendance.recorded_at < end,
-        ).order_by(Attendance.recorded_at).all()
-
+        records = records_by_user.get(member.user_id, [])
         checkin = next((r for r in records if r.type == "checkin"), None)
         checkout = next((r for r in records if r.type == "checkout"), None)
 

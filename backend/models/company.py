@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Boolean, Float, Integer
+from sqlalchemy import Column, String, DateTime, Boolean, Float, Integer, Index
 from datetime import datetime
 from database.connection import Base
 import uuid
@@ -8,7 +8,7 @@ class Company(Base):
 
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name       = Column(String, nullable=False)
-    admin_id   = Column(String, nullable=False)
+    admin_id   = Column(String, nullable=False, index=True)
     plan       = Column(String, default="team")
     leave_enabled  = Column(Boolean, default=False)  # 연차 기능 ON/OFF
     created_at = Column(DateTime, default=datetime.now)
@@ -17,8 +17,8 @@ class CompanyMember(Base):
     __tablename__ = "company_members"
 
     id             = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id     = Column(String, nullable=False)
-    user_id        = Column(String, nullable=False)
+    company_id     = Column(String, nullable=False, index=True)
+    user_id        = Column(String, nullable=False, index=True)
     user_email     = Column(String, nullable=False)
     user_name      = Column(String, nullable=True)
     birth_date     = Column(String, nullable=True)

@@ -74,23 +74,29 @@ def get_company_attendance(
     start, end = get_work_day_range()
     now = datetime.now(KST)
 
-    members = (
-        db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    if not members:
+        return {"attendance": []}
+
+    user_ids = [m.user_id for m in members]
+    all_records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id.in_(user_ids),
+            Attendance.recorded_at >= start,
+            Attendance.recorded_at < end,
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
     )
+
+    records_by_user: dict = {}
+    for r in all_records:
+        records_by_user.setdefault(r.user_id, []).append(r)
 
     result = []
     for member in members:
-        records = (
-            db.query(Attendance)
-            .filter(
-                Attendance.user_id == member.user_id,
-                Attendance.recorded_at >= start,
-                Attendance.recorded_at < end,
-            )
-            .order_by(Attendance.recorded_at)
-            .all()
-        )
-
+        records = records_by_user.get(member.user_id, [])
         checkin = next((r for r in records if r.type == "checkin"), None)
         checkout = next((r for r in records if r.type == "checkout"), None)
 
@@ -286,6 +292,21 @@ def export_attendance_excel(
     end_date = datetime.now(KST).date()
     start_date = end_date - timedelta(days=30)
 
+    user_ids = [m.user_id for m in members]
+    all_records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id.in_(user_ids),
+            Attendance.recorded_at >= datetime.combine(start_date, datetime.min.time()),
+            Attendance.recorded_at <= datetime.combine(end_date, datetime.max.time()),
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
+    records_by_user: dict = {}
+    for r in all_records:
+        records_by_user.setdefault(r.user_id, []).append(r)
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "근무기록"
@@ -303,16 +324,7 @@ def export_attendance_excel(
 
     row = 2
     for member in members:
-        records = (
-            db.query(Attendance)
-            .filter(
-                Attendance.user_id == member.user_id,
-                Attendance.recorded_at >= datetime.combine(start_date, datetime.min.time()),
-                Attendance.recorded_at <= datetime.combine(end_date, datetime.max.time()),
-            )
-            .order_by(Attendance.recorded_at)
-            .all()
-        )
+        records = records_by_user.get(member.user_id, [])
 
         daily = {}
         for r in records:

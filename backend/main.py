@@ -29,6 +29,13 @@ def run_migrations():
             "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_latitude FLOAT",
             "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_longitude FLOAT",
             "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE",
+            # 성능 인덱스
+            "CREATE INDEX IF NOT EXISTS ix_attendances_user_id ON attendances (user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_attendances_recorded_at ON attendances (recorded_at)",
+            "CREATE INDEX IF NOT EXISTS ix_attendances_user_recorded ON attendances (user_id, recorded_at)",
+            "CREATE INDEX IF NOT EXISTS ix_company_members_company_id ON company_members (company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_company_members_user_id ON company_members (user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_companies_admin_id ON companies (admin_id)",
         ]
         for sql in migrations:
             try:
