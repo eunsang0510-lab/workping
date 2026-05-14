@@ -85,6 +85,7 @@ export default function Dashboard() {
   const [gpsPermission, setGpsPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown");
   const [isRemote, setIsRemote] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [isOnLeave, setIsOnLeave] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -227,8 +228,22 @@ const fetchPlanStatus = async (userId: string) => {
       }
       if (data.leave_enabled) {
         setLeaveEnabled(true);
+        checkTodayLeave(userId);
       }
     }
+  } catch {}
+};
+
+const checkTodayLeave = async (userId: string) => {
+  try {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_URL}/api/leave/my/${userId}`, { headers });
+    const data = await res.json();
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    const onLeave = (data.leaves || []).some(
+      (l: any) => l.status === "approved" && l.start_date <= today && today <= l.end_date
+    );
+    setIsOnLeave(onLeave);
   } catch {}
 };
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
@@ -584,6 +599,14 @@ const fetchPlanStatus = async (userId: string) => {
         </div>
       </div>
 
+      {/* 연차 안내 */}
+      {isOnLeave && (
+        <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-2xl p-4 mb-4">
+          <div className="text-[#16a34a] text-sm font-bold mb-0.5">🏖️ 오늘은 연차예요</div>
+          <div className="text-[#6b6b6b] text-xs">승인된 연차 중이라 출퇴근이 비활성화되어 있어요</div>
+        </div>
+      )}
+
       {/* 출퇴근 버튼 */}
       {/* GPS 권한 거부 안내 */}
       {gpsPermission === "denied" && (
@@ -632,17 +655,17 @@ const fetchPlanStatus = async (userId: string) => {
       <div className="grid grid-cols-2 gap-3 mb-4">
         <button
           onClick={handleCheckIn}
-          disabled={isCheckedIn || !!checkOutTime || gpsLoading || planExpired}
+          disabled={isCheckedIn || !!checkOutTime || gpsLoading || planExpired || isOnLeave}
           className="bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(91,94,244,0.3)]"
         >
-          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : "📍 출근하기"}
+          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : isOnLeave ? "🏖️ 연차" : "📍 출근하기"}
         </button>
         <button
           onClick={handleCheckOut}
-          disabled={!isCheckedIn || gpsLoading || planExpired}
+          disabled={!isCheckedIn || gpsLoading || planExpired || isOnLeave}
           className="bg-white border border-[#e5e5e5] hover:bg-[#f8f8f8] disabled:opacity-40 disabled:cursor-not-allowed text-[#6b6b6b] font-bold py-4 rounded-xl transition-all text-sm shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
         >
-          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : "🏠 퇴근하기"}
+          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : isOnLeave ? "🏖️ 연차" : "🏠 퇴근하기"}
         </button>
       </div>
 
