@@ -240,20 +240,15 @@ const fetchPlanStatus = async (userId: string) => {
       navigator.geolocation.getCurrentPosition(
         resolve,
         (error) => {
+          const GUIDE = "📱 Chrome 주소창 왼쪽 자물쇠 → 권한 → 위치 허용\n또는 Android 설정 → 앱 → Chrome → 권한 → 위치 → 허용";
           if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
-            reject(new Error(
-              "위치 권한이 없어요.\n" +
-              "📱 Android 설정 → 앱 → Chrome → 권한 → 위치 → '앱 사용 중에만 허용'"
-            ));
+            reject(new Error("위치 권한이 거부됐어요.\n" + GUIDE));
           } else if (error.code === error.POSITION_UNAVAILABLE) {
-            reject(new Error("현재 위치를 가져올 수 없어요. GPS를 켜고 다시 시도해주세요."));
+            reject(new Error("위치를 가져올 수 없어요.\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② " + GUIDE));
           } else if (error.code === error.TIMEOUT) {
-            reject(new Error("위치 조회 시간이 초과됐어요. 다시 시도해주세요."));
+            reject(new Error("위치 조회 시간이 초과됐어요. GPS를 켜고 야외에서 다시 시도해주세요."));
           } else {
-            reject(new Error(
-              "위치 권한을 확인해주세요.\n" +
-              "📱 Android 설정 → 앱 → Chrome → 권한 → 위치 → '앱 사용 중에만 허용'"
-            ));
+            reject(new Error("위치 오류: " + (error.message || "알 수 없는 오류") + "\n" + GUIDE));
           }
         },
         {
