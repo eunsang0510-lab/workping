@@ -241,7 +241,7 @@ const checkTodayLeave = async (userId: string) => {
     const data = await res.json();
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
     const onLeave = (data.leaves || []).some(
-      (l: any) => l.status === "approved" && l.start_date <= today && today <= l.end_date
+      (l: any) => l.status === "approved" && !l.is_half && l.start_date <= today && today <= l.end_date
     );
     setIsOnLeave(onLeave);
   } catch {}
