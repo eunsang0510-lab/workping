@@ -87,6 +87,8 @@ export default function Dashboard() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(true);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -96,6 +98,20 @@ export default function Dashboard() {
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true;
+    setIsStandalone(standalone);
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
   useEffect(() => {
@@ -595,6 +611,27 @@ const checkTodayLeave = async (userId: string) => {
           )}
         </div>
       </div>
+
+      {/* 앱 설치 유도 배너 */}
+      {!isStandalone && installPrompt && (
+        <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-2xl p-4 mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-[#5b5ef4] text-sm font-bold mb-0.5">앱으로 설치하면 더 편해요</div>
+            <div className="text-[#6b6b6b] text-xs">주소창 없이 앱처럼 사용할 수 있어요</div>
+          </div>
+          <button
+            onClick={async () => {
+              installPrompt.prompt();
+              const { outcome } = await installPrompt.userChoice;
+              if (outcome === "accepted") setIsStandalone(true);
+              setInstallPrompt(null);
+            }}
+            className="bg-[#5b5ef4] text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap ml-3"
+          >
+            설치하기
+          </button>
+        </div>
+      )}
 
       {/* 플랜 만료 알림 */}
       {planExpired && (
