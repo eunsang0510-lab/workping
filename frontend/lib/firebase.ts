@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, indexedDBLocalPersistence, browserLocalPersistence, setPersistence } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDCUOcUZl08c8lAf10j_HlSK-PQy5N7aGU",
@@ -14,5 +14,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// 로그아웃 전까지 자동 로그인 유지
-setPersistence(auth, browserLocalPersistence);
+// TWA 환경 호환: IndexedDB 우선, 실패 시 localStorage 폴백
+setPersistence(auth, indexedDBLocalPersistence).catch(() => {
+  setPersistence(auth, browserLocalPersistence);
+});

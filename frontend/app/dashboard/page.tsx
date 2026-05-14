@@ -15,16 +15,23 @@ const getAuthHeader = async () => {
     throw new Error("로그인이 필요해요. 다시 로그인해주세요.");
   }
   try {
-    const token = await auth.currentUser.getIdToken();
+    const token = await auth.currentUser.getIdToken(true);
     return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
     };
   } catch (e: any) {
     const code = e?.code || "";
-    if (code.includes("user-not-found") || code.includes("user-disabled") || code.includes("token-expired")) {
+    const message = e?.message || "";
+    if (
+      code.includes("user-not-found") ||
+      code.includes("user-disabled") ||
+      code.includes("token-expired") ||
+      message.includes("NoTWAFound") ||
+      code.includes("NoTWAFound")
+    ) {
       await signOut(auth);
-      throw new Error("계정 인증이 만료됐어요. 다시 로그인해주세요.");
+      throw new Error("앱 재설치 후 재로그인이 필요해요. 로그인 화면으로 이동합니다.");
     }
     throw new Error("인증에 실패했어요. 다시 로그인해주세요.");
   }
@@ -306,7 +313,11 @@ const fetchPlanStatus = async (userId: string) => {
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkin" }]);
       showToast(isRemoteWork ? "재택 출근 완료! 🏠" : "출근 완료!", "success");
     } catch (error: any) {
-      showToast(error.message || "GPS 위치를 가져올 수 없어요.", "error");
+      const msg = error.message || "GPS 위치를 가져올 수 없어요.";
+      showToast(msg, "error");
+      if (msg.includes("재로그인")) {
+        setTimeout(() => router.push("/login"), 2000);
+      }
     } finally {
       setGpsLoading(false);
     }
@@ -327,7 +338,11 @@ const fetchPlanStatus = async (userId: string) => {
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
       showToast("퇴근 완료!", "success");
     } catch (error: any) {
-      showToast(error.message || "GPS 위치를 가져올 수 없어요.", "error");
+      const msg = error.message || "GPS 위치를 가져올 수 없어요.";
+      showToast(msg, "error");
+      if (msg.includes("재로그인")) {
+        setTimeout(() => router.push("/login"), 2000);
+      }
     } finally {
       setGpsLoading(false);
     }
