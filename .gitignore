@@ -14,3 +14,4 @@ frontend/.next/
 # 캐시
 __pycache__/
 *.pyc
+.vercel
