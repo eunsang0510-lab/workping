@@ -264,6 +264,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
         user_email=req.email,
         user_name=req.name,
         birth_date=req.birth_date,
+        force_password_change=True,
     )
     db.add(member)
     db.commit()
@@ -666,7 +667,12 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
 
     except Exception as e:
         print(f"이메일 발송 실패: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"이메일 발송 실패: {str(e)}")
+
+    # force_password_change 플래그 설정
+    member.force_password_change = True
+    db.commit()
+
+    return {"success": True, "message": f"임시 비밀번호가 {req.email}로 발송됐어요", "new_password": new_password}
 
 
 @router.put("/members/{member_id}")
@@ -699,12 +705,28 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
     company = db.query(Company).filter(Company.id == member.company_id).first()
 
     return {
-           "company_id": member.company_id,
-           "company_name": company.name if company else None,
-          "is_admin": member.is_admin,
-          "is_manager": member.is_manager,
-          "leave_enabled": company.leave_enabled if company else False,
+        "company_id": member.company_id,
+        "company_name": company.name if company else None,
+        "is_admin": member.is_admin,
+        "is_manager": member.is_manager,
+        "leave_enabled": company.leave_enabled if company else False,
+        "force_password_change": member.force_password_change or False,
     }
+
+@router.put("/members/{user_id}/password-changed")
+def mark_password_changed(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인만 변경할 수 있어요")
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
+    if member:
+        member.force_password_change = False
+        db.commit()
+    return {"success": True}
+
 
 @router.delete("/members/by-user/{user_id}")
 def delete_member_by_user_id(

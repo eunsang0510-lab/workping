@@ -27,7 +27,7 @@ export default function Login() {
   const [regEmail, setRegEmail] = useState("");
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState("");
-  const [showRegDone, setShowRegDone] = useState(false);
+  const [regResult, setRegResult] = useState<{ email: string; password: string; companyName: string } | null>(null);
 
   const router = useRouter();
 
@@ -110,9 +110,9 @@ export default function Login() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setShowRegDone(true);
+        setRegResult({ email: data.email, password: data.initial_password, companyName: data.company_name });
       } else {
-        setRegError(data.detail || "신청에 실패했어요");
+        setRegError(data.detail || "등록에 실패했어요");
       }
     } catch {
       setRegError("서버 오류가 발생했어요. 잠시 후 다시 시도해주세요");
@@ -123,7 +123,7 @@ export default function Login() {
 
   const resetRegForm = () => {
     setRegCompanyName(""); setRegRepName(""); setRegBizNumber("");
-    setRegPhone(""); setRegEmail(""); setRegError(""); setShowRegDone(false);
+    setRegPhone(""); setRegEmail(""); setRegError(""); setRegResult(null);
   };
 
   return (
@@ -311,8 +311,8 @@ export default function Login() {
               ← 뒤로
             </button>
             <div className="text-center mb-2">
-              <div className="text-[#0a0a0a] font-black text-base">회사 등록 신청</div>
-              <div className="text-[#6b6b6b] text-xs mt-1">관리자 승인 후 계정이 생성돼요</div>
+              <div className="text-[#0a0a0a] font-black text-base">회사 등록</div>
+              <div className="text-[#6b6b6b] text-xs mt-1">등록 즉시 관리자 계정이 생성돼요</div>
             </div>
 
             <div>
@@ -373,7 +373,7 @@ export default function Login() {
               disabled={regLoading}
               className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all text-sm"
             >
-              {regLoading ? "신청 중..." : "등록 신청하기"}
+              {regLoading ? "등록 중..." : "회사 등록하기"}
             </button>
           </div>
         )}
@@ -383,31 +383,37 @@ export default function Login() {
         </p>
       </div>
 
-      {/* 신청 완료 팝업 */}
-      {showRegDone && (
+      {/* 등록 완료 팝업 - 계정 정보 표시 */}
+      {regResult && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-5">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden">
-            <div className="bg-[#5b5ef4] px-5 py-4">
-              <div className="text-white font-black text-base">🎉 신청이 접수됐어요!</div>
+            <div className="bg-[#16a34a] px-5 py-4">
+              <div className="text-white font-black text-base">🎉 등록 완료!</div>
+              <div className="text-white/80 text-xs mt-0.5">{regResult.companyName} 관리자 계정이 생성됐어요</div>
             </div>
             <div className="p-5">
-              <p className="text-[#0a0a0a] text-sm font-bold mb-2">관리자 승인 후 계정이 생성됩니다</p>
-              <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4 space-y-2 mb-4">
-                <div className="text-[#6b6b6b] text-xs leading-relaxed">
-                  1. WorkPing 관리자가 신청 내용을 검토합니다<br />
-                  2. 승인되면 입력하신 이메일로 관리자 계정이 생성됩니다<br />
-                  3. 초기 비밀번호는 <span className="font-bold text-[#5b5ef4]">사업자등록번호</span>입니다<br />
-                  4. 로그인 후 직원을 등록하고 서비스를 시작하세요
+              <p className="text-[#6b6b6b] text-xs mb-3">아래 정보로 바로 로그인하세요. 동일한 내용이 이메일로도 발송됐어요.</p>
+
+              <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-xl p-4 mb-3 space-y-3">
+                <div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">아이디 (이메일)</div>
+                  <div className="text-[#0a0a0a] text-sm font-bold">{regResult.email}</div>
+                </div>
+                <div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">초기 비밀번호 (사업자등록번호)</div>
+                  <div className="text-[#5b5ef4] text-lg font-black tracking-wider">{regResult.password}</div>
                 </div>
               </div>
-              <div className="text-[#a0a0a0] text-xs text-center mb-4">
-                문의: <a href="mailto:workpingofficial@gmail.com" className="text-[#5b5ef4]">workpingofficial@gmail.com</a>
+
+              <div className="bg-[#fef9c3] border border-[#fde047] rounded-xl px-3 py-2 mb-4">
+                <div className="text-[#854d0e] text-xs">⚠️ 로그인 후 반드시 비밀번호를 변경해주세요</div>
               </div>
+
               <button
-                onClick={() => { setShowRegDone(false); setMode("company"); resetRegForm(); }}
+                onClick={() => { setMode("company"); resetRegForm(); }}
                 className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm"
               >
-                확인
+                로그인하러 가기
               </button>
             </div>
           </div>

@@ -86,6 +86,7 @@ export default function Dashboard() {
   const [isRemote, setIsRemote] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
+  const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -229,6 +230,9 @@ const fetchPlanStatus = async (userId: string) => {
       if (data.leave_enabled) {
         setLeaveEnabled(true);
         checkTodayLeave(userId);
+      }
+      if (data.force_password_change) {
+        setForcePasswordChange(true);
       }
     }
   } catch {}
@@ -397,6 +401,16 @@ const checkTodayLeave = async (userId: string) => {
       setShowPasswordModal(false);
       setCurrentPassword("");
       setNewPassword("");
+      if (forcePasswordChange && user?.uid) {
+        try {
+          const headers = await getAuthHeader();
+          await fetch(`${API_URL}/api/company/members/${user.uid}/password-changed`, {
+            method: "PUT",
+            headers,
+          });
+        } catch {}
+        setForcePasswordChange(false);
+      }
     } catch (e: any) {
       if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
         showToast("현재 비밀번호가 올바르지 않아요", "error");
@@ -446,6 +460,53 @@ const checkTodayLeave = async (userId: string) => {
           type={toast.type}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {/* 강제 비밀번호 변경 모달 (닫기 불가) */}
+      {forcePasswordChange && (
+        <div className="fixed inset-0 bg-black/70 z-[300] flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.3)] overflow-hidden">
+            <div className="bg-[#f59e0b] px-5 py-4">
+              <div className="text-white font-black text-base">⚠️ 비밀번호 변경 필요</div>
+              <div className="text-white/80 text-xs mt-1">초기 비밀번호를 반드시 변경해주세요</div>
+            </div>
+            <div className="p-5">
+              <p className="text-[#6b6b6b] text-sm mb-4 leading-relaxed">
+                보안을 위해 초기 비밀번호를 새 비밀번호로 변경해야 해요.<br/>
+                변경 전까지 이 화면이 계속 표시됩니다.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">현재 비밀번호 (초기 비밀번호)</div>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="초기 비밀번호 입력"
+                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  />
+                </div>
+                <div>
+                  <div className="text-[#a0a0a0] text-xs mb-1">새 비밀번호</div>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="새 비밀번호 입력 (6자 이상)"
+                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  />
+                </div>
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passwordLoading}
+                  className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+                >
+                  {passwordLoading ? "변경 중..." : "비밀번호 변경하기"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 공지사항 팝업 */}
