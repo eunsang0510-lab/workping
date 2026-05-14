@@ -93,6 +93,19 @@ interface LeaveItem {
   created_at: string;
 }
 
+interface TripItem {
+  id: string;
+  user_id: string;
+  user_name: string;
+  destination: string;
+  purpose: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  reject_reason: string | null;
+  created_at: string;
+}
+
 interface Team {
   id: string;
   name: string;
@@ -140,6 +153,9 @@ export default function Admin() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
   const [isManager, setIsManager] = useState(false);
+  const [businessTrips, setBusinessTrips] = useState<TripItem[]>([]);
+  const [tripRejectModal, setTripRejectModal] = useState<{ id: string; userName: string } | null>(null);
+  const [tripRejectReason, setTripRejectReason] = useState("");
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [showCompanySelector, setShowCompanySelector] = useState(false);
   const [homeLocationMember, setHomeLocationMember] = useState<{ user_id: string; user_name: string } | null>(null);
@@ -218,6 +234,7 @@ const loadCompanyData = (companyData: Company) => {
   fetchLeaveData(companyData.id, auth.currentUser!.uid);
   fetchTeams(companyData.id);
   fetchSubscription(companyData.id);
+  fetchBusinessTrips(companyData.id);
 };
 
   const fetchAttendance = async (companyId: string) => {
@@ -515,6 +532,39 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     }
   } catch {
     showToast("설정 변경 실패", "error");
+  }
+};
+
+  const fetchBusinessTrips = async (companyId: string) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/business-trip/company/${companyId}`, {
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    setBusinessTrips(data.trips || []);
+  } catch (error) {
+    console.error("출장 데이터 로딩 실패:", error);
+  }
+};
+
+const handleApproveTrip = async (tripId: string, status: "approved" | "rejected", rejectReason: string = "") => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/business-trip/approve/${tripId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ status, reject_reason: rejectReason }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(status === "approved" ? "승인 완료!" : "반려 완료!", "success");
+      fetchBusinessTrips(company!.id);
+      setTripRejectModal(null);
+      setTripRejectReason("");
+    }
+  } catch {
+    showToast("처리 실패", "error");
   }
 };
 
@@ -1179,6 +1229,77 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
             )}
           </div>
 
+          {/* 출장 승인 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">
+                출장 승인
+                {businessTrips.filter(t => t.status === "pending").length > 0 && (
+                  <span className="ml-2 bg-[#fef9c3] text-[#854d0e] border border-[#fde047] text-xs px-2 py-0.5 rounded-full">
+                    {businessTrips.filter(t => t.status === "pending").length}건 대기
+                  </span>
+                )}
+              </div>
+              <button onClick={() => fetchBusinessTrips(company!.id)} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">새로고침</button>
+            </div>
+            {businessTrips.length === 0 ? (
+              <div className="text-[#a0a0a0] text-sm text-center py-6">출장 신청이 없어요</div>
+            ) : (
+              <div className="space-y-3">
+                {businessTrips.map((trip) => {
+                  const isPending = trip.status === "pending";
+                  const badgeMap: Record<string, { bg: string; color: string; border: string; text: string }> = {
+                    pending:  { bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]", text: "대기중" },
+                    approved: { bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]", text: "승인" },
+                    rejected: { bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]", text: "반려" },
+                  };
+                  const badge = badgeMap[trip.status] || badgeMap.pending;
+                  return (
+                    <div key={trip.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="text-[#0a0a0a] text-sm font-bold">
+                            {trip.user_name} · {trip.destination}
+                          </div>
+                          <div className="text-[#6b6b6b] text-xs mt-0.5">
+                            {trip.start_date} ~ {trip.end_date}
+                          </div>
+                          {trip.purpose && (
+                            <div className="text-[#a0a0a0] text-xs mt-1">{trip.purpose}</div>
+                          )}
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${badge.bg} ${badge.color} ${badge.border}`}>
+                          {badge.text}
+                        </span>
+                      </div>
+                      {trip.status === "rejected" && trip.reject_reason && (
+                        <div className="text-[#ef4444] text-xs bg-[#fef2f2] border border-[#fecaca] rounded-lg px-3 py-2 mb-2">
+                          반려 사유: {trip.reject_reason}
+                        </div>
+                      )}
+                      {isPending && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleApproveTrip(trip.id, "approved")}
+                            className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
+                          >
+                            승인
+                          </button>
+                          <button
+                            onClick={() => setTripRejectModal({ id: trip.id, userName: trip.user_name })}
+                            className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
+                          >
+                            반려
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* 팀원 목록 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
@@ -1564,6 +1685,34 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
         </>
       )}
 
+
+      {/* 출장 반려 사유 모달 */}
+      {tripRejectModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#0a0a0a] font-black">출장 반려</div>
+              <button onClick={() => { setTripRejectModal(null); setTripRejectReason(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+            </div>
+            <p className="text-[#6b6b6b] text-sm mb-4">{tripRejectModal.userName}의 출장 신청을 반려합니다.</p>
+            <div className="space-y-3">
+              <textarea
+                value={tripRejectReason}
+                onChange={(e) => setTripRejectReason(e.target.value)}
+                placeholder="반려 사유를 입력해주세요 (선택)"
+                rows={3}
+                className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#ef4444] transition-all text-sm placeholder-[#a0a0a0] resize-none"
+              />
+              <button
+                onClick={() => handleApproveTrip(tripRejectModal.id, "rejected", tripRejectReason)}
+                className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-3 rounded-xl transition-all text-sm"
+              >
+                반려하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 재택 주소 설정 모달 */}
       {homeLocationMember && (

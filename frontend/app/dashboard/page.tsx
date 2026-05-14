@@ -706,6 +706,15 @@ const fetchPlanStatus = async (userId: string) => {
           </div>
         </Link>
       )}
+        <Link href="/business-trip">
+          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <span className="text-lg">✈️</span>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-bold">출장신청</div>
+              <div className="text-[#6b6b6b] text-xs">출장 신청 및 현황</div>
+            </div>
+          </div>
+        </Link>
        <Link href="/notice">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <span className="text-lg">📢</span>

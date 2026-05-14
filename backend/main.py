@@ -4,7 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip
 from database.connection import engine, Base
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -13,6 +13,7 @@ from models import subscription as subscription_model
 from models import notice as notice_model
 from models import leave as leave_model
 from models import team as team_model
+from models import business_trip as business_trip_model
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,6 +37,8 @@ def run_migrations():
             "CREATE INDEX IF NOT EXISTS ix_company_members_company_id ON company_members (company_id)",
             "CREATE INDEX IF NOT EXISTS ix_company_members_user_id ON company_members (user_id)",
             "CREATE INDEX IF NOT EXISTS ix_companies_admin_id ON companies (admin_id)",
+            "CREATE INDEX IF NOT EXISTS ix_business_trips_company_id ON business_trips (company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_business_trips_user_id ON business_trips (user_id)",
         ]
         for sql in migrations:
             try:
@@ -77,6 +80,7 @@ app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 app.include_router(notice.router, prefix="/api/notice", tags=["공지사항"])
 app.include_router(leave.router, prefix="/api/leave", tags=["연차관리"])
 app.include_router(team.router, prefix="/api/team", tags=["팀관리"])
+app.include_router(business_trip.router, prefix="/api/business-trip", tags=["출장관리"])
 
 
 @app.get("/")
