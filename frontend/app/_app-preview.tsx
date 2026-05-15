@@ -167,7 +167,7 @@ export default function AppPreview() {
             ["05/12 (월)", "08:55", "17:30", "8h 35m", false],
             ["05/09 (금)", "09:05", "17:45", "8h 40m", false],
           ].map(([date, ci, co, wh, isRemote]) => (
-            <div key={date} className="flex items-center justify-between py-2 border-b border-[#f0f0f0] last:border-0">
+            <div key={date as string} className="flex items-center justify-between py-2 border-b border-[#f0f0f0] last:border-0">
               <div className="text-[#6b6b6b] text-xs flex items-center gap-1">
                 {date}
                 {isRemote && <span className="bg-[#e0f2fe] text-[#0369a1] text-xs px-1 rounded">재택</span>}
