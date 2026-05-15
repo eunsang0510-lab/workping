@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
@@ -6,8 +6,28 @@ from models.company import Company, CompanyMember
 from pydantic import BaseModel
 from typing import Optional
 import uuid
+import os
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 
 router = APIRouter()
+
+
+class AdminPasswordResetRequest(BaseModel):
+    email: str
+    new_password: str
+
+@router.post("/reset-firebase-password")
+def reset_firebase_password(req: AdminPasswordResetRequest, x_admin_secret: str = Header(...)):
+    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET", "workping-admin-2026")
+    if x_admin_secret != expected:
+        raise HTTPException(status_code=403, detail="권한 없음")
+    try:
+        user = firebase_auth.get_user_by_email(req.email)
+        firebase_auth.update_user(user.uid, password=req.new_password)
+        return {"success": True, "message": f"{req.email} 비밀번호 업데이트 완료"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # 회사 생성 스키마

@@ -246,9 +246,12 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
 
     print(f"🔍 Firebase 계정 생성 응답: {response.status_code} {response.text}")
 
+    SYSTEM_ADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
     if response.status_code != 200:
         error = response.json().get("error", {}).get("message", "알 수 없는 오류")
         if "EMAIL_EXISTS" in error:
+            if req.email.strip().lower() == SYSTEM_ADMIN_EMAIL.lower():
+                raise HTTPException(status_code=400, detail="시스템 관리자 계정은 직원으로 등록할 수 없어요")
             fb_user = firebase_auth.get_user_by_email(req.email.strip())
             uid = fb_user.uid
             # 기존 계정의 비밀번호를 초기 비밀번호로 강제 리셋
