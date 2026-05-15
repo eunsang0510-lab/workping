@@ -87,6 +87,7 @@ export default function Dashboard() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(true);
   const router = useRouter();
@@ -417,6 +418,7 @@ const checkTodayLeave = async (userId: string) => {
       setShowPasswordModal(false);
       setCurrentPassword("");
       setNewPassword("");
+      setPasswordError("");
       if (forcePasswordChange && user?.uid) {
         try {
           const headers = await getAuthHeader();
@@ -429,9 +431,9 @@ const checkTodayLeave = async (userId: string) => {
       }
     } catch (e: any) {
       if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
-        showToast("현재 비밀번호가 올바르지 않아요", "error");
+        setPasswordError("현재 비밀번호가 올바르지 않아요");
       } else {
-        showToast("비밀번호 변경 실패: " + e.message, "error");
+        setPasswordError("비밀번호 변경 실패: " + e.message);
       }
     } finally {
       setPasswordLoading(false);
@@ -478,13 +480,21 @@ const checkTodayLeave = async (userId: string) => {
         />
       )}
 
-      {/* 강제 비밀번호 변경 모달 (닫기 불가) */}
+      {/* 강제 비밀번호 변경 모달 */}
       {forcePasswordChange && (
         <div className="fixed inset-0 bg-black/70 z-[300] flex items-center justify-center p-5">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.3)] overflow-hidden">
-            <div className="bg-[#f59e0b] px-5 py-4">
-              <div className="text-white font-black text-base">⚠️ 비밀번호 변경 필요</div>
-              <div className="text-white/80 text-xs mt-1">초기 비밀번호를 반드시 변경해주세요</div>
+            <div className="bg-[#f59e0b] px-5 py-4 flex items-start justify-between">
+              <div>
+                <div className="text-white font-black text-base">⚠️ 비밀번호 변경 필요</div>
+                <div className="text-white/80 text-xs mt-1">초기 비밀번호를 반드시 변경해주세요</div>
+              </div>
+              <button
+                onClick={() => { setForcePasswordChange(false); setPasswordError(""); setCurrentPassword(""); setNewPassword(""); }}
+                className="text-white/70 hover:text-white text-xl leading-none ml-3 mt-0.5"
+              >
+                ✕
+              </button>
             </div>
             <div className="p-5">
               <p className="text-[#6b6b6b] text-sm mb-4 leading-relaxed">
@@ -497,9 +507,9 @@ const checkTodayLeave = async (userId: string) => {
                   <input
                     type="password"
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(""); }}
                     placeholder="초기 비밀번호 입력"
-                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                    className={`w-full bg-white border text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] ${passwordError ? "border-[#ef4444]" : "border-[#e5e5e5]"}`}
                   />
                 </div>
                 <div>
@@ -507,11 +517,14 @@ const checkTodayLeave = async (userId: string) => {
                   <input
                     type="password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(""); }}
                     placeholder="새 비밀번호 입력 (6자 이상)"
-                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                    className={`w-full bg-white border text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] ${passwordError ? "border-[#ef4444]" : "border-[#e5e5e5]"}`}
                   />
                 </div>
+                {passwordError && (
+                  <div className="text-[#ef4444] text-xs">{passwordError}</div>
+                )}
                 <button
                   onClick={handleChangePassword}
                   disabled={passwordLoading}
