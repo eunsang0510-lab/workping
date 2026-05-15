@@ -229,17 +229,17 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
     if existing:
         return {"message": "이미 등록된 직원이에요", "success": False}
 
-    email_prefix = req.email.split("@")[0]
-    initial_password = f"{email_prefix}{req.birth_date}"
+    email_prefix = req.email.strip().split("@")[0]
+    initial_password = f"{email_prefix}{req.birth_date.strip()}"
 
     firebase_api_key = os.getenv("FIREBASE_API_KEY")
 
     response = requests.post(
         f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={firebase_api_key}",
         json={
-            "email": req.email,
+            "email": req.email.strip(),
             "password": initial_password,
-            "displayName": req.name,
+            "displayName": req.name.strip(),
         },
     )
 
@@ -248,10 +248,11 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
     if response.status_code != 200:
         error = response.json().get("error", {}).get("message", "알 수 없는 오류")
         if "EMAIL_EXISTS" in error:
-            # 이미 있으면 uid 가져오기
-            user = firebase_auth.get_user_by_email(req.email)
-            uid = user.uid
-            print(f"🔍 기존 Firebase 계정 uid: {uid}")
+            fb_user = firebase_auth.get_user_by_email(req.email.strip())
+            uid = fb_user.uid
+            # 기존 계정의 비밀번호를 초기 비밀번호로 강제 리셋
+            firebase_auth.update_user(uid, password=initial_password)
+            print(f"🔍 기존 Firebase 계정 비밀번호 리셋: {uid}")
         else:
             raise HTTPException(status_code=400, detail=f"계정 생성 실패: {error}")
     else:
