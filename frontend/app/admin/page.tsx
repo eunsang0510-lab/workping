@@ -125,6 +125,7 @@ export default function Admin() {
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberBirth, setMemberBirth] = useState("");
+  const [memberIsAdmin, setMemberIsAdmin] = useState(false);
   const [excelMembers, setExcelMembers] = useState<any[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -624,12 +625,12 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth })
+      body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth, is_admin: memberIsAdmin })
     });
       const data = await res.json();
       if (data.success) {
         showToast(`등록 완료! 초기 비밀번호: ${data.initial_password}`, "success");
-        setMemberName(""); setMemberEmail(""); setMemberBirth("");
+        setMemberName(""); setMemberEmail(""); setMemberBirth(""); setMemberIsAdmin(false);
         fetchAttendance(company!.id);
       } else {
         showToast(data.message, "error");
@@ -1324,7 +1325,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
                           <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.status}</span>
-                          <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
+                          <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
                           <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택주소 설정</button>
                           {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
                           <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
@@ -1639,6 +1640,10 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                 />
               ))}
+              <label className="flex items-center gap-2 cursor-pointer px-1">
+                <input type="checkbox" checked={memberIsAdmin} onChange={(e) => setMemberIsAdmin(e.target.checked)} className="w-4 h-4 accent-[#5b5ef4]" />
+                <span className="text-[#6b6b6b] text-sm">관리자 권한 부여</span>
+              </label>
               <button onClick={handleRegisterMember} className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm">
                 직원 등록하기
               </button>

@@ -66,6 +66,7 @@ class RegisterMemberRequest(BaseModel):
     email: str
     name: str
     birth_date: str
+    is_admin: bool = False
 
 
 class BulkMemberItem(BaseModel):
@@ -265,6 +266,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
         user_email=req.email,
         user_name=req.name,
         birth_date=req.birth_date,
+        is_admin=req.is_admin,
         force_password_change=True,
     )
     db.add(member)
