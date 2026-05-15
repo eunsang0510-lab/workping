@@ -16,6 +16,7 @@ interface Member {
   user_id: string;
   user_name: string;
   user_email: string;
+  is_admin: boolean;
   checkin: string | null;
   checkin_address: string | null;
   is_remote: boolean;
@@ -220,7 +221,10 @@ export default function Admin() {
 
 const fetchSubscription = async (companyId: string) => {
   try {
-    const res = await fetch(`${API_URL}/api/payment/subscription/${companyId}`);
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch(`${API_URL}/api/payment/subscription/${companyId}`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
     const data = await res.json();
     setSubscription(data);
   } catch {}
@@ -631,9 +635,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
       if (data.success) {
         showToast(`등록 완료! 초기 비밀번호: ${data.initial_password}`, "success");
         setMemberName(""); setMemberEmail(""); setMemberBirth(""); setMemberIsAdmin(false);
-        fetchAttendance(company!.id);
+        if (company?.id) fetchAttendance(company.id);
       } else {
-        showToast(data.message, "error");
+        showToast(data.message || data.detail || "등록 실패", "error");
       }
     } catch {
       showToast("등록 실패", "error");
@@ -716,7 +720,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
       if (data.success) {
         showToast("수정 완료!", "success");
         setEditMember(null);
-        fetchAttendance(company!.id);
+        if (company?.id) fetchAttendance(company.id);
+      } else {
+        showToast(data.detail || data.message || "수정 실패", "error");
       }
     } catch {
       showToast("수정 실패", "error");

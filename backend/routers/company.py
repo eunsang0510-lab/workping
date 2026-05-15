@@ -400,6 +400,7 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
             "user_id": member.user_id,
             "user_name": member.user_name or member.user_email,
             "user_email": member.user_email,
+            "is_admin": bool(member.is_admin),
             "checkin": checkin.recorded_at.isoformat() if checkin else None,
             "checkin_address": checkin.address if checkin else None,
             "is_remote": bool(checkin.is_remote) if checkin else False,
@@ -680,7 +681,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
 
 @router.put("/members/{member_id}")
 def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depends(get_db)):
-    member = db.query(CompanyMember).filter(CompanyMember.id == member_id).first()
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
 
