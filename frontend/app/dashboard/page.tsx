@@ -86,6 +86,7 @@ export default function Dashboard() {
   const [isRemote, setIsRemote] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
+  const [isManager, setIsManager] = useState(false);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -250,6 +251,9 @@ const fetchPlanStatus = async (userId: string) => {
       }
       if (data.force_password_change) {
         setForcePasswordChange(true);
+      }
+      if (data.is_manager) {
+        setIsManager(true);
       }
     }
   } catch {}
@@ -858,6 +862,17 @@ const checkTodayLeave = async (userId: string) => {
             </div>
           </div>
         </Link>
+        {isManager && !isAdmin && (
+          <Link href="/manager">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-lg">👑</span>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-bold">팀장 권한</div>
+                <div className="text-[#6b6b6b] text-xs">팀원 승인 및 현황</div>
+              </div>
+            </div>
+          </Link>
+        )}
         {isAdmin && (
           <Link href="/admin">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
