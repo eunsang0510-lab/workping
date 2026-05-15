@@ -17,6 +17,29 @@ class AdminPasswordResetRequest(BaseModel):
     email: str
     new_password: str
 
+@router.get("/member-debug")
+def debug_member(email: str, x_admin_secret: str = Header(...), db: Session = Depends(get_db)):
+    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET", "workping-admin-2026")
+    if x_admin_secret != expected:
+        raise HTTPException(status_code=403, detail="권한 없음")
+    members = db.query(CompanyMember).filter(CompanyMember.user_email == email).all()
+    companies = {c.id: c.name for c in db.query(Company).all()}
+    return {
+        "email": email,
+        "records": [
+            {
+                "id": m.id,
+                "company_id": m.company_id,
+                "company_name": companies.get(m.company_id, "?"),
+                "user_id": m.user_id,
+                "user_name": m.user_name,
+                "is_admin": m.is_admin,
+                "force_password_change": m.force_password_change,
+            }
+            for m in members
+        ]
+    }
+
 @router.post("/reset-firebase-password")
 def reset_firebase_password(req: AdminPasswordResetRequest, x_admin_secret: str = Header(...)):
     expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET", "workping-admin-2026")
