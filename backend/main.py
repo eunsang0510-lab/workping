@@ -42,6 +42,10 @@ def run_migrations():
             "CREATE INDEX IF NOT EXISTS ix_business_trips_user_id ON business_trips (user_id)",
             "CREATE TABLE IF NOT EXISTS company_registration_requests (id VARCHAR PRIMARY KEY, company_name VARCHAR NOT NULL, representative_name VARCHAR NOT NULL, business_number VARCHAR NOT NULL, phone VARCHAR, email VARCHAR NOT NULL, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
             "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN DEFAULT FALSE",
+            # is_admin NULL 값 보정: companies.admin_id 기준으로 TRUE 동기화
+            "UPDATE company_members SET is_admin = TRUE WHERE user_id IN (SELECT admin_id FROM companies) AND (is_admin IS NULL OR is_admin = FALSE)",
+            # 나머지 NULL은 FALSE로
+            "UPDATE company_members SET is_admin = FALSE WHERE is_admin IS NULL",
         ]
         for sql in migrations:
             try:
