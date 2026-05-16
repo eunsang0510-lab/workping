@@ -14,11 +14,21 @@ if DATABASE_URL.startswith("postgres://"):
 
 # Supabase Transaction pooler(PgBouncer) 호환: NullPool로 이중 풀링 방지
 is_supabase_pooler = "pooler.supabase.com" in DATABASE_URL
-engine = create_engine(
-    DATABASE_URL,
-    poolclass=NullPool if is_supabase_pooler else None,
-    pool_pre_ping=True,
-)
+
+if is_supabase_pooler:
+    engine = create_engine(
+        DATABASE_URL,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,   # 5분마다 연결 갱신 (idle timeout 방지)
+        pool_size=5,
+        max_overflow=10,
+    )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 

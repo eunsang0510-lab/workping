@@ -41,6 +41,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/^﻿/, "");
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -69,6 +71,13 @@ export default function RootLayout({
            });
           }
          `,
+          }}
+        />
+        <Script
+          id="server-warmup"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `fetch('${API_URL}/health').catch(function(){});`,
           }}
         />
       </head>

@@ -16,6 +16,8 @@ from models import team as team_model
 from models import business_trip as business_trip_model
 from models import company_request as company_request_model
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+import asyncio
 
 load_dotenv()
 
@@ -56,10 +58,35 @@ def run_migrations():
 
 run_migrations()
 
+
+async def _keep_db_alive():
+    """DB 연결이 끊기지 않도록 4분마다 SELECT 1 실행"""
+    from sqlalchemy import text
+    while True:
+        await asyncio.sleep(240)
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception as e:
+            print(f"[keep-alive] DB ping failed: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_keep_db_alive())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 app = FastAPI(
-    title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0"
+    title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter

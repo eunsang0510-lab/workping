@@ -733,8 +733,12 @@ const checkTodayLeave = async (userId: string) => {
           </div>
           <div className="bg-white border border-[#fecaca] rounded-xl p-3 space-y-2 mb-3">
             <div>
-              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">📱 안드로이드</div>
-              <div className="text-[#6b6b6b] text-xs">설정 → 앱 → WorkPing → 권한 → 위치 → 허용</div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">📱 안드로이드 (방법 1)</div>
+              <div className="text-[#6b6b6b] text-xs">설정 → 앱 → WorkPing → 권한 → 위치 → 앱 사용 중에 허용</div>
+            </div>
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">📱 안드로이드 (방법 2 · Chrome 사이트 설정)</div>
+              <div className="text-[#6b6b6b] text-xs">Chrome 앱 열기 → 오른쪽 상단 ⋮ → 설정 → 개인정보 보호 및 보안 → 사이트 설정 → 위치 → workping 허용</div>
             </div>
             <div>
               <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">🍎 아이폰 (iOS)</div>
