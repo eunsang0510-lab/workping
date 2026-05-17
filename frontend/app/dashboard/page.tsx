@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
   const [showNoticePopup, setShowNoticePopup] = useState(false);
   const [gpsPermission, setGpsPermission] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown");
+  const [locationServiceOff, setLocationServiceOff] = useState(false);
   const [isRemote, setIsRemote] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
@@ -284,13 +285,14 @@ const checkTodayLeave = async (userId: string) => {
         const code = error.code;
         const msg = error.message || "";
         if (code === error.PERMISSION_DENIED || msg.includes("NoTWAFound")) {
-          reject(new Error(`위치 권한이 거부됐어요. [code:${code}]\n` + GUIDE));
+          reject(new Error(`위치 권한이 거부됐어요.\n` + GUIDE));
         } else if (code === error.POSITION_UNAVAILABLE) {
-          reject(new Error(`위치를 가져올 수 없어요. [code:${code}]\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② Android 설정 → 위치 → 위치 모드 → '정확도 높음' 또는 '배터리 절약' 선택\n③ ` + GUIDE));
+          setLocationServiceOff(true);
+          reject(new Error(`기기 위치 서비스가 꺼져 있어요.`));
         } else if (code === error.TIMEOUT) {
-          reject(new Error(`위치 조회 시간이 초과됐어요. [code:${code}] GPS를 켜고 야외에서 다시 시도해주세요.`));
+          reject(new Error(`위치 조회 시간이 초과됐어요. GPS를 켜고 야외에서 다시 시도해주세요.`));
         } else {
-          reject(new Error(`위치 오류 [code:${code}]: ${msg}\n` + GUIDE));
+          reject(new Error(`위치 오류: ${msg}\n` + GUIDE));
         }
       };
 
@@ -780,6 +782,40 @@ const checkTodayLeave = async (userId: string) => {
             className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-bold py-2.5 rounded-xl transition-all"
           >
             권한 확인하기
+          </button>
+        </div>
+      )}
+
+      {/* 기기 위치 서비스 꺼짐 안내 */}
+      {locationServiceOff && (
+        <div className="bg-[#fff7ed] border border-[#fed7aa] rounded-2xl p-4 mb-4">
+          <div className="text-[#ea580c] text-sm font-bold mb-1">📡 기기 위치 서비스가 꺼져 있어요</div>
+          <div className="text-[#6b6b6b] text-xs leading-relaxed mb-3">
+            앱 위치 권한은 허용되어 있지만, 기기의 GPS 스위치가 꺼진 상태예요.<br />
+            아래 방법으로 위치 서비스를 켜주세요.
+          </div>
+          <div className="bg-white border border-[#fed7aa] rounded-xl p-3 space-y-2 mb-3">
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">📱 빠른 방법</div>
+              <div className="text-[#6b6b6b] text-xs">화면 상단을 아래로 내려 알림 패널 열기 → 위치(GPS) 아이콘 탭해서 켜기</div>
+            </div>
+            <div>
+              <div className="text-[#0a0a0a] text-xs font-bold mb-0.5">⚙️ 설정에서 변경</div>
+              <div className="text-[#6b6b6b] text-xs">Android 설정 → 위치 → 위치 켜기 → 위치 모드를 &apos;정확도 높음&apos; 또는 &apos;배터리 절약&apos;으로 선택</div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setLocationServiceOff(false);
+              navigator.geolocation.getCurrentPosition(
+                () => showToast("위치 서비스가 정상적으로 켜져 있어요!", "success"),
+                () => setLocationServiceOff(true),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+              );
+            }}
+            className="w-full bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold py-2.5 rounded-xl transition-all"
+          >
+            다시 확인하기
           </button>
         </div>
       )}
