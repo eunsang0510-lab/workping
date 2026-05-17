@@ -281,14 +281,16 @@ const checkTodayLeave = async (userId: string) => {
       const GUIDE = "Android 설정 → 앱 → WorkPing(또는 Chrome) → 권한 → 위치 → 허용";
 
       const handleFinalError = (error: GeolocationPositionError) => {
-        if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
-          reject(new Error("위치 권한이 거부됐어요.\n" + GUIDE));
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          reject(new Error("위치를 가져올 수 없어요.\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② Android 설정 → 위치 → 위치 모드 → '정확도 높음' 또는 '배터리 절약' 선택\n③ " + GUIDE));
-        } else if (error.code === error.TIMEOUT) {
-          reject(new Error("위치 조회 시간이 초과됐어요. GPS를 켜고 야외에서 다시 시도해주세요."));
+        const code = error.code;
+        const msg = error.message || "";
+        if (code === error.PERMISSION_DENIED || msg.includes("NoTWAFound")) {
+          reject(new Error(`위치 권한이 거부됐어요. [code:${code}]\n` + GUIDE));
+        } else if (code === error.POSITION_UNAVAILABLE) {
+          reject(new Error(`위치를 가져올 수 없어요. [code:${code}]\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② Android 설정 → 위치 → 위치 모드 → '정확도 높음' 또는 '배터리 절약' 선택\n③ ` + GUIDE));
+        } else if (code === error.TIMEOUT) {
+          reject(new Error(`위치 조회 시간이 초과됐어요. [code:${code}] GPS를 켜고 야외에서 다시 시도해주세요.`));
         } else {
-          reject(new Error("위치 오류: " + (error.message || "알 수 없는 오류") + "\n" + GUIDE));
+          reject(new Error(`위치 오류 [code:${code}]: ${msg}\n` + GUIDE));
         }
       };
 
