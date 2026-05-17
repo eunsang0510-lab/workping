@@ -277,25 +277,37 @@ const checkTodayLeave = async (userId: string) => {
         reject(new Error("GPS를 지원하지 않는 브라우저예요"));
         return;
       }
+
+      const GUIDE = "Android 설정 → 앱 → WorkPing(또는 Chrome) → 권한 → 위치 → 허용";
+
+      const handleFinalError = (error: GeolocationPositionError) => {
+        if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
+          reject(new Error("위치 권한이 거부됐어요.\n" + GUIDE));
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          reject(new Error("위치를 가져올 수 없어요.\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② Android 설정 → 위치 → 위치 모드 → '정확도 높음' 또는 '배터리 절약' 선택\n③ " + GUIDE));
+        } else if (error.code === error.TIMEOUT) {
+          reject(new Error("위치 조회 시간이 초과됐어요. GPS를 켜고 야외에서 다시 시도해주세요."));
+        } else {
+          reject(new Error("위치 오류: " + (error.message || "알 수 없는 오류") + "\n" + GUIDE));
+        }
+      };
+
+      // 네트워크 위치(빠름) 먼저 시도 → 실패 시 GPS로 재시도
       navigator.geolocation.getCurrentPosition(
         resolve,
         (error) => {
-          const GUIDE = "📱 Chrome 주소창 왼쪽 자물쇠 → 권한 → 위치 허용\n또는 Android 설정 → 앱 → Chrome → 권한 → 위치 → 허용";
           if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
-            reject(new Error("위치 권한이 거부됐어요.\n" + GUIDE));
-          } else if (error.code === error.POSITION_UNAVAILABLE) {
-            reject(new Error("위치를 가져올 수 없어요.\n① 휴대폰 GPS(위치)가 켜져 있는지 확인\n② " + GUIDE));
-          } else if (error.code === error.TIMEOUT) {
-            reject(new Error("위치 조회 시간이 초과됐어요. GPS를 켜고 야외에서 다시 시도해주세요."));
-          } else {
-            reject(new Error("위치 오류: " + (error.message || "알 수 없는 오류") + "\n" + GUIDE));
+            handleFinalError(error);
+            return;
           }
+          // POSITION_UNAVAILABLE / TIMEOUT → GPS(enableHighAccuracy: true)로 재시도
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            handleFinalError,
+            { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+          );
         },
-        {
-          enableHighAccuracy: false,
-          timeout: 30000,
-          maximumAge: 60000,
-        }
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
       );
     });
   };
