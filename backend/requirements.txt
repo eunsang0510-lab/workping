@@ -9,3 +9,5 @@ openpyxl
 firebase-admin
 sendgrid
 slowapi
+pywebpush
+apscheduler

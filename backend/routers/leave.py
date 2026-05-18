@@ -8,6 +8,24 @@ from routers.deps import get_current_user
 from datetime import datetime
 from typing import Optional
 from models.team import Team, TeamMember
+from utils.push import send_push_to_users
+
+
+def _get_manager_ids(db: Session, company_id: str, user_id: str) -> list[str]:
+    """신청자 팀의 팀장 uid 목록. 팀 없으면 회사 admin."""
+    teams = db.query(Team).filter(Team.company_id == company_id).all()
+    result = []
+    for team in teams:
+        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+        if any(m.user_id == user_id for m in members) and team.manager_id:
+            result.append(team.manager_id)
+    if not result:
+        admins = db.query(CompanyMember).filter(
+            CompanyMember.company_id == company_id,
+            CompanyMember.is_admin == True,
+        ).all()
+        result = [a.user_id for a in admins]
+    return result
 
 router = APIRouter()
 
@@ -91,6 +109,16 @@ def apply_leave(
     db.add(leave)
     db.commit()
     db.refresh(leave)
+
+    # 팀장/관리자에게 알림
+    manager_ids = _get_manager_ids(db, req.company_id, req.user_id)
+    if manager_ids:
+        send_push_to_users(
+            db, manager_ids,
+            title="📋 연차 신청",
+            body=f"{req.user_name or req.user_id}님이 {req.start_date} 연차를 신청했어요.",
+            url="/manager",
+        )
 
     return {"success": True, "leave_id": leave.id, "days": days}
 
@@ -266,6 +294,16 @@ def approve_leave(
             balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
 
     db.commit()
+
+    # 신청자에게 결과 알림
+    status_text = "승인" if req.status == "approved" else "반려"
+    send_push_to_users(
+        db, [leave.user_id],
+        title=f"📋 연차 {status_text}",
+        body=f"{leave.start_date} 연차 신청이 {status_text}됐어요.",
+        url="/leave",
+    )
+
     return {"success": True, "status": req.status}
 
 

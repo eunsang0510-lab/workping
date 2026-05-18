@@ -8,6 +8,23 @@ from models.team import Team, TeamMember
 from routers.deps import get_current_user
 from datetime import datetime
 from typing import Optional
+from utils.push import send_push_to_users
+
+
+def _get_manager_ids_for_trip(db: Session, company_id: str, user_id: str) -> list[str]:
+    teams = db.query(Team).filter(Team.company_id == company_id).all()
+    result = []
+    for team in teams:
+        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
+        if any(m.user_id == user_id for m in members) and team.manager_id:
+            result.append(team.manager_id)
+    if not result:
+        admins = db.query(CompanyMember).filter(
+            CompanyMember.company_id == company_id,
+            CompanyMember.is_admin == True,
+        ).all()
+        result = [a.user_id for a in admins]
+    return result
 
 router = APIRouter()
 
@@ -86,6 +103,16 @@ def apply_trip(
     db.add(trip)
     db.commit()
     db.refresh(trip)
+
+    manager_ids = _get_manager_ids_for_trip(db, req.company_id, req.user_id)
+    if manager_ids:
+        send_push_to_users(
+            db, manager_ids,
+            title="✈️ 출장 신청",
+            body=f"{req.user_name or req.user_id}님이 {req.start_date} 출장을 신청했어요.",
+            url="/manager",
+        )
+
     return {"success": True, "trip_id": trip.id}
 
 
@@ -168,6 +195,15 @@ def approve_trip(
     trip.approved_at = datetime.now()
     trip.reject_reason = req.reject_reason.strip() if req.status == "rejected" else None
     db.commit()
+
+    status_text = "승인" if req.status == "approved" else "반려"
+    send_push_to_users(
+        db, [trip.user_id],
+        title=f"✈️ 출장 {status_text}",
+        body=f"{trip.start_date} 출장 신청이 {status_text}됐어요.",
+        url="/business-trip",
+    )
+
     return {"success": True, "status": req.status}
 
 

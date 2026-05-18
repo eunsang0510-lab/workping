@@ -118,29 +118,25 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-  // ✅ Permissions API로 먼저 상태 확인
-  if (navigator.permissions) {
-    navigator.permissions.query({ name: "geolocation" }).then((result) => {
-      setGpsPermission(result.state as "granted" | "denied" | "prompt");
-      result.onchange = () => {
+    // GPS 권한 상태 확인 및 초기 요청
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: "geolocation" }).then((result) => {
         setGpsPermission(result.state as "granted" | "denied" | "prompt");
-      };
-    });
-  }
-
-  // ✅ 앱 진입 시 바로 권한 요청 (팝업 뜨게)
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      () => { setGpsPermission("granted"); },
-      (error) => {
-        if (error.code === error.PERMISSION_DENIED) {
-          setGpsPermission("denied");
-        }
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-  }
-}, []);
+        result.onchange = () => {
+          setGpsPermission(result.state as "granted" | "denied" | "prompt");
+        };
+      });
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => { setGpsPermission("granted"); },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) setGpsPermission("denied");
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -150,6 +146,7 @@ export default function Dashboard() {
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
         fetchUnreadNotices(user.uid);
+        registerPushNotification(user.uid);
       } else {
         router.push("/login");
       }
@@ -157,6 +154,53 @@ export default function Dashboard() {
     });
     return () => unsubscribe();
   }, [router]);
+
+  const registerPushNotification = async (userId: string) => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    // 권한 요청 (처음이면 팝업, 이미 허용/거부면 즉시 반환)
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+
+    try {
+      const reg = await navigator.serviceWorker.ready;
+
+      // VAPID 공개키 가져오기
+      const keyRes = await fetch(`${API_URL}/api/push/vapid-public-key`);
+      const { publicKey } = await keyRes.json();
+      if (!publicKey) return;
+
+      // 기존 구독 확인 또는 새로 구독
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const subJson = sub.toJSON() as any;
+      await fetch(`${API_URL}/api/push/subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys?.p256dh,
+          auth: subJson.keys?.auth,
+        }),
+      });
+    } catch (e) {
+      console.error("Push 구독 실패:", e);
+    }
+  };
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+  }
 
   const fetchUnreadNotices = async (userId: string) => {
     try {
@@ -296,18 +340,42 @@ const checkTodayLeave = async (userId: string) => {
         }
       };
 
-      // 네트워크 위치(빠름) 먼저 시도 → 실패 시 GPS로 재시도
+      // 1단계: 네트워크 위치 (빠름)
       navigator.geolocation.getCurrentPosition(
         resolve,
-        (error) => {
-          if (error.code === error.PERMISSION_DENIED || error.message?.includes("NoTWAFound")) {
-            handleFinalError(error);
+        (err1) => {
+          if (err1.code === err1.PERMISSION_DENIED || err1.message?.includes("NoTWAFound")) {
+            handleFinalError(err1);
             return;
           }
-          // POSITION_UNAVAILABLE / TIMEOUT → GPS(enableHighAccuracy: true)로 재시도
+          // 2단계: GPS (정밀)
           navigator.geolocation.getCurrentPosition(
             resolve,
-            handleFinalError,
+            (err2) => {
+              if (err2.code === err2.PERMISSION_DENIED) {
+                handleFinalError(err2);
+                return;
+              }
+              // 3단계: watchPosition으로 위치 신호 대기 (최대 20초)
+              let watchId: number;
+              const timer = setTimeout(() => {
+                navigator.geolocation.clearWatch(watchId);
+                handleFinalError(err2);
+              }, 20000);
+              watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                  clearTimeout(timer);
+                  navigator.geolocation.clearWatch(watchId);
+                  resolve(pos);
+                },
+                (err3) => {
+                  clearTimeout(timer);
+                  navigator.geolocation.clearWatch(watchId);
+                  handleFinalError(err3);
+                },
+                { enableHighAccuracy: true, maximumAge: 0 }
+              );
+            },
             { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
           );
         },

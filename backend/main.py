@@ -4,8 +4,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request
-from database.connection import engine, Base
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push
+from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
 from models import company as company_model
@@ -15,8 +15,11 @@ from models import leave as leave_model
 from models import team as team_model
 from models import business_trip as business_trip_model
 from models import company_request as company_request_model
+from models import push_subscription as push_subscription_model
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 import asyncio
 
 load_dotenv()
@@ -60,7 +63,6 @@ run_migrations()
 
 
 async def _keep_db_alive():
-    """DB 연결이 끊기지 않도록 4분마다 SELECT 1 실행"""
     from sqlalchemy import text
     while True:
         await asyncio.sleep(240)
@@ -71,10 +73,108 @@ async def _keep_db_alive():
             print(f"[keep-alive] DB ping failed: {e}")
 
 
+def _send_checkin_reminders():
+    """매일 09:00 KST — 오늘 미출근 직원에게 알림."""
+    from utils.push import send_push_to_users
+    from models.push_subscription import PushSubscription
+    from models.attendance import Attendance
+    from models.leave import Leave
+    from sqlalchemy import func, cast, Date
+    from datetime import date, timezone, timedelta
+
+    KST = timezone(timedelta(hours=9))
+    today_kst = date.today()  # 스케줄러가 KST 기준으로 실행되므로 date.today() 사용
+
+    db = SessionLocal()
+    try:
+        # 오늘 출근 기록 있는 user_id
+        checked_in = {
+            r.user_id for r in db.query(Attendance.user_id).filter(
+                Attendance.type == "checkin",
+                cast(Attendance.recorded_at, Date) == today_kst,
+            ).all()
+        }
+        # 오늘 연차 승인된 user_id
+        on_leave = {
+            r.user_id for r in db.query(Leave.user_id).filter(
+                Leave.status == "approved",
+                Leave.start_date <= str(today_kst),
+                Leave.end_date >= str(today_kst),
+                Leave.is_half == False,
+            ).all()
+        }
+        # 구독 중이고 출근 안 했고 연차도 아닌 직원
+        subs = db.query(PushSubscription).all()
+        target_ids = [
+            s.user_id for s in subs
+            if s.user_id not in checked_in and s.user_id not in on_leave
+        ]
+        if target_ids:
+            send_push_to_users(db, target_ids,
+                title="⏰ 출근 알림",
+                body="출근하셨나요? 출근 버튼을 눌러주세요!",
+                url="/dashboard")
+    finally:
+        db.close()
+
+
+def _send_checkout_reminders():
+    """매일 18:30 KST — 출근했지만 퇴근 미기록 직원에게 알림."""
+    from utils.push import send_push_to_users
+    from models.push_subscription import PushSubscription
+    from models.attendance import Attendance
+    from sqlalchemy import cast, Date
+    from datetime import date
+
+    today_kst = date.today()
+
+    db = SessionLocal()
+    try:
+        checked_in = {
+            r.user_id for r in db.query(Attendance.user_id).filter(
+                Attendance.type == "checkin",
+                cast(Attendance.recorded_at, Date) == today_kst,
+            ).all()
+        }
+        checked_out = {
+            r.user_id for r in db.query(Attendance.user_id).filter(
+                Attendance.type == "checkout",
+                cast(Attendance.recorded_at, Date) == today_kst,
+            ).all()
+        }
+        still_in = checked_in - checked_out
+        subs = db.query(PushSubscription).filter(
+            PushSubscription.user_id.in_(still_in)
+        ).all()
+        target_ids = [s.user_id for s in subs]
+        if target_ids:
+            send_push_to_users(db, target_ids,
+                title="🏠 퇴근 알림",
+                body="아직 퇴근 처리가 안 됐어요. 퇴근 버튼을 눌러주세요!",
+                url="/dashboard")
+    finally:
+        db.close()
+
+
+scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
+scheduler.add_job(_send_checkin_reminders, CronTrigger(hour=9, minute=0))
+scheduler.add_job(_send_checkout_reminders, CronTrigger(hour=18, minute=30))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # VAPID 키 초기화
+    db = SessionLocal()
+    try:
+        from utils.push import init_vapid
+        init_vapid(db)
+    finally:
+        db.close()
+
+    scheduler.start()
     task = asyncio.create_task(_keep_db_alive())
     yield
+    scheduler.shutdown(wait=False)
     task.cancel()
     try:
         await task
@@ -116,6 +216,7 @@ app.include_router(leave.router, prefix="/api/leave", tags=["연차관리"])
 app.include_router(team.router, prefix="/api/team", tags=["팀관리"])
 app.include_router(business_trip.router, prefix="/api/business-trip", tags=["출장관리"])
 app.include_router(company_request.router, prefix="/api/company-request", tags=["회사등록신청"])
+app.include_router(push.router, prefix="/api/push", tags=["푸시알림"])
 
 
 @app.get("/")
