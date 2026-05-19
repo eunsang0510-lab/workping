@@ -4,7 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -16,6 +16,7 @@ from models import team as team_model
 from models import business_trip as business_trip_model
 from models import company_request as company_request_model
 from models import push_subscription as push_subscription_model
+from models import notification as notification_model
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -65,7 +66,7 @@ run_migrations()
 async def _keep_db_alive():
     from sqlalchemy import text
     while True:
-        await asyncio.sleep(240)
+        await asyncio.sleep(50)   # 50초마다 — DB idle timeout보다 훨씬 짧게
         try:
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -217,6 +218,7 @@ app.include_router(team.router, prefix="/api/team", tags=["팀관리"])
 app.include_router(business_trip.router, prefix="/api/business-trip", tags=["출장관리"])
 app.include_router(company_request.router, prefix="/api/company-request", tags=["회사등록신청"])
 app.include_router(push.router, prefix="/api/push", tags=["푸시알림"])
+app.include_router(notification.router, prefix="/api/notifications", tags=["알림"])
 
 
 @app.get("/")
@@ -226,4 +228,10 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ok", "db": "ok"}
+    except Exception as e:
+        return {"status": "ok", "db": "error", "detail": str(e)}

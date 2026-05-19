@@ -75,7 +75,7 @@ export default function RootLayout({
         />
         <Script
           id="server-warmup"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `fetch('${API_URL}/health').catch(function(){});`,
           }}

@@ -60,8 +60,17 @@ def send_push(endpoint: str, p256dh: str, auth: str, title: str, body: str, url:
 
 
 def send_push_to_users(db, user_ids: list[str], title: str, body: str, url: str = "/dashboard"):
-    """여러 user_id에게 푸시 알림 전송."""
+    """여러 user_id에게 푸시 알림 전송 및 DB 저장."""
     from models.push_subscription import PushSubscription
+    from models.notification import Notification
+
     subs = db.query(PushSubscription).filter(PushSubscription.user_id.in_(user_ids)).all()
+    sent_user_ids = set()
     for sub in subs:
         send_push(sub.endpoint, sub.p256dh, sub.auth, title, body, url)
+        sent_user_ids.add(sub.user_id)
+
+    # 푸시 구독 없는 유저도 알림 기록 저장
+    for uid in user_ids:
+        db.add(Notification(user_id=uid, title=title, body=body, url=url))
+    db.commit()

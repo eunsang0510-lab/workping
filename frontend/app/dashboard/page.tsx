@@ -58,6 +58,15 @@ interface Notice {
   created_at: string;
 }
 
+interface NotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  url: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +101,9 @@ export default function Dashboard() {
   const [passwordError, setPasswordError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(true);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -146,6 +158,7 @@ export default function Dashboard() {
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
         fetchUnreadNotices(user.uid);
+        fetchNotifications(user.uid);
         registerPushNotification(user.uid);
       } else {
         router.push("/login");
@@ -316,6 +329,40 @@ const checkTodayLeave = async (userId: string) => {
     setIsOnLeave(onLeave);
   } catch {}
 };
+
+const fetchNotifications = async (userId: string) => {
+  try {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_URL}/api/notifications/${userId}`, { headers });
+    const data = await res.json();
+    setNotifications(data.notifications || []);
+    setUnreadCount(data.unread_count || 0);
+  } catch {}
+};
+
+const markNotificationRead = async (notif: NotificationItem) => {
+  if (!notif.is_read) {
+    try {
+      const headers = await getAuthHeader();
+      await fetch(`${API_URL}/api/notifications/read/${notif.id}`, { method: "POST", headers });
+      setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {}
+  }
+  router.push(notif.url);
+  setShowNotifPanel(false);
+};
+
+const markAllRead = async () => {
+  if (!user) return;
+  try {
+    const headers = await getAuthHeader();
+    await fetch(`${API_URL}/api/notifications/read-all/${user.uid}`, { method: "POST", headers });
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  } catch {}
+};
+
   const getCurrentPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -678,38 +725,98 @@ const checkTodayLeave = async (userId: string) => {
         <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight">
           Work<span className="text-[#5b5ef4]">Ping</span>
         </h1>
-        <div className="relative">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="w-9 h-9 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-sm hover:border-[#5b5ef4] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-          >
-            👤
-          </button>
-          {showUserMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-              <div className="absolute right-0 top-11 bg-white border border-[#e5e5e5] rounded-2xl p-3 w-52 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
-                <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
-                  <div className="text-[#0a0a0a] text-xs font-bold truncate">{user?.displayName || user?.email}</div>
-                  <div className="text-[#6b6b6b] text-xs truncate">{user?.email}</div>
+        <div className="flex items-center gap-2">
+          {/* 알림 벨 */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowNotifPanel(!showNotifPanel); setShowUserMenu(false); }}
+              className="w-9 h-9 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-sm hover:border-[#5b5ef4] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.06)] relative"
+            >
+              🔔
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#ef4444] text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 leading-none">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+            {showNotifPanel && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)} />
+                <div className="absolute right-0 top-11 bg-white border border-[#e5e5e5] rounded-2xl z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)] w-80 max-h-[70vh] flex flex-col">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e5e5]">
+                    <span className="text-[#0a0a0a] text-sm font-bold">알림</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        className="text-[#5b5ef4] text-xs font-semibold hover:underline"
+                      >
+                        전체 읽음
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {notifications.length === 0 ? (
+                      <div className="py-10 text-center text-[#a0a0a0] text-sm">알림이 없어요</div>
+                    ) : (
+                      notifications.map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => markNotificationRead(n)}
+                          className={`w-full text-left px-4 py-3 border-b border-[#f0f0f0] last:border-0 hover:bg-[#f8f8ff] transition-all ${!n.is_read ? "bg-[#f5f5ff]" : ""}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.is_read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#5b5ef4] shrink-0" />}
+                            <div className={!n.is_read ? "" : "pl-3.5"}>
+                              <div className="text-[#0a0a0a] text-xs font-bold">{n.title}</div>
+                              <div className="text-[#6b6b6b] text-xs mt-0.5 leading-relaxed">{n.body}</div>
+                              <div className="text-[#a0a0a0] text-[10px] mt-1">
+                                {new Date(n.created_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
-                {!user?.providerData?.some(p => p.providerId === "google.com") && (
+              </>
+            )}
+          </div>
+
+          {/* 유저 메뉴 */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifPanel(false); }}
+              className="w-9 h-9 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-sm hover:border-[#5b5ef4] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+            >
+              👤
+            </button>
+            {showUserMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                <div className="absolute right-0 top-11 bg-white border border-[#e5e5e5] rounded-2xl p-3 w-52 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                  <div className="px-2 py-1.5 mb-2 border-b border-[#e5e5e5]">
+                    <div className="text-[#0a0a0a] text-xs font-bold truncate">{user?.displayName || user?.email}</div>
+                    <div className="text-[#6b6b6b] text-xs truncate">{user?.email}</div>
+                  </div>
+                  {!user?.providerData?.some(p => p.providerId === "google.com") && (
+                    <button
+                      onClick={() => { setShowUserMenu(false); setShowPasswordModal(true); }}
+                      className="w-full text-left px-2 py-2 text-[#5b5ef4] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
+                    >
+                      🔑 비밀번호 변경
+                    </button>
+                  )}
                   <button
-                    onClick={() => { setShowUserMenu(false); setShowPasswordModal(true); }}
-                    className="w-full text-left px-2 py-2 text-[#5b5ef4] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
+                    onClick={async () => { await signOut(auth); router.push("/login"); }}
+                    className="w-full text-left px-2 py-2 text-[#ef4444] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
                   >
-                    🔑 비밀번호 변경
+                    🚪 로그아웃
                   </button>
-                )}
-                <button
-                  onClick={async () => { await signOut(auth); router.push("/login"); }}
-                  className="w-full text-left px-2 py-2 text-[#ef4444] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
-                >
-                  🚪 로그아웃
-                </button>
-              </div>
-            </>
-          )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
