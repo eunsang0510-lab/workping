@@ -106,6 +106,9 @@ export default function Dashboard() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const router = useRouter();
 
+  const trimCity = (addr: string) =>
+    addr === "-" ? addr : addr.replace(/^[^\s]+(특별시|광역시|특별자치시|특별자치도|도)\s*/, "").trim() || addr;
+
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
     setToast({ message, type });
   }, []);
@@ -865,7 +868,7 @@ const markAllRead = async () => {
               {isCheckedIn && checkInTime ? formatWorkTime(workMinutes) : workHours}
             </div>
             <div className="text-[#6b6b6b] text-xs mt-1">
-              {currentLocation !== "-" ? `📍 ${currentLocation}` : "위치 미확인"}
+              {currentLocation !== "-" ? `📍 ${trimCity(currentLocation)}` : "위치 미확인"}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -899,7 +902,7 @@ const markAllRead = async () => {
           <div>
             <div className="text-[#a0a0a0] text-xs mb-1">위치</div>
             <div className="text-[#6b6b6b] text-sm font-bold">
-              {currentLocation === "-" ? "--" : currentLocation}
+              {currentLocation === "-" ? "--" : trimCity(currentLocation)}
             </div>
           </div>
         </div>
@@ -1025,7 +1028,7 @@ const markAllRead = async () => {
                 <div className="w-2 h-2 rounded-full bg-[#16a34a]"></div>
                 <div>
                   <div className="text-[#0a0a0a] text-sm font-medium">출근</div>
-                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkInTime)} · {currentLocation}</div>
+                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkInTime)} · {trimCity(currentLocation)}</div>
                 </div>
               </div>
             )}
@@ -1034,7 +1037,7 @@ const markAllRead = async () => {
                 <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
                 <div>
                   <div className="text-[#0a0a0a] text-sm font-medium">퇴근</div>
-                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkOutTime)} · {checkOutLocation !== "-" ? checkOutLocation : "위치 미확인"}</div>
+                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkOutTime)} · {checkOutLocation !== "-" ? trimCity(checkOutLocation) : "위치 미확인"}</div>
                 </div>
               </div>
             )}
