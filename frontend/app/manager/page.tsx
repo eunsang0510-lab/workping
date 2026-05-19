@@ -117,7 +117,7 @@ export default function ManagerPage() {
       try {
         const res = await fetch(`${API_URL}/api/company/my/${user.uid}`);
         const data = await res.json();
-        if (!data.company_id || !data.is_manager) {
+        if (!data.company_id || (!data.is_manager && !data.is_admin)) {
           router.push("/dashboard");
           return;
         }
