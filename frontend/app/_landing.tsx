@@ -49,7 +49,7 @@ export default function Landing() {
             </div>
           </div>
           <div className="flex gap-5 border-t border-[#e5e5e5] pt-3 mb-4">
-            {[["출근", "09:15", "#16a34a"], ["퇴근", "--:--", "#a0a0a0"], ["위치", "강남구", "#6b6b6b"]].map(([label, val, color]) => (
+            {[["출근", "09:15", "#16a34a"], ["퇴근", "--:--", "#a0a0a0"]].map(([label, val, color]) => (
               <div key={label}>
                 <div className="text-[#a0a0a0] text-xs mb-1">{label}</div>
                 <div className="text-xs font-bold" style={{ color }}>{val}</div>

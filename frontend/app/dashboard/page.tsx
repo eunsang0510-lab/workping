@@ -899,12 +899,6 @@ const markAllRead = async () => {
               {formatTime(checkOutTime)}
             </div>
           </div>
-          <div>
-            <div className="text-[#a0a0a0] text-xs mb-1">위치</div>
-            <div className="text-[#6b6b6b] text-sm font-bold">
-              {currentLocation === "-" ? "--" : trimCity(currentLocation)}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1047,12 +1041,23 @@ const markAllRead = async () => {
 
       {/* 하단 메뉴 */}
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/report">
+        {leaveEnabled && (
+          <Link href="/leave">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-lg">🏖️</span>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-bold">연차관리</div>
+                <div className="text-[#6b6b6b] text-xs">신청 및 내역</div>
+              </div>
+            </div>
+          </Link>
+        )}
+        <Link href="/business-trip">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <span className="text-lg">📊</span>
+            <span className="text-lg">✈️</span>
             <div>
-              <div className="text-[#0a0a0a] text-sm font-bold">리포트</div>
-              <div className="text-[#6b6b6b] text-xs">주간/월간</div>
+              <div className="text-[#0a0a0a] text-sm font-bold">출장신청</div>
+              <div className="text-[#6b6b6b] text-xs">출장 신청 및 현황</div>
             </div>
           </div>
         </Link>
@@ -1065,27 +1070,16 @@ const markAllRead = async () => {
             </div>
           </div>
         </Link>
-        {leaveEnabled && (
-        <Link href="/leave">
+        <Link href="/report">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <span className="text-lg">🏖️</span>
+            <span className="text-lg">📊</span>
             <div>
-        <div className="text-[#0a0a0a] text-sm font-bold">연차관리</div>
-        <div className="text-[#6b6b6b] text-xs">신청 및 내역</div>
+              <div className="text-[#0a0a0a] text-sm font-bold">리포트</div>
+              <div className="text-[#6b6b6b] text-xs">주간/월간</div>
             </div>
           </div>
         </Link>
-      )}
-        <Link href="/business-trip">
-          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <span className="text-lg">✈️</span>
-            <div>
-              <div className="text-[#0a0a0a] text-sm font-bold">출장신청</div>
-              <div className="text-[#6b6b6b] text-xs">출장 신청 및 현황</div>
-            </div>
-          </div>
-        </Link>
-       <Link href="/notice">
+        <Link href="/notice">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <span className="text-lg">📢</span>
             <div>

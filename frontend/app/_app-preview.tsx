@@ -32,7 +32,7 @@ export default function AppPreview() {
           </div>
         </div>
         <div className="flex gap-4 pt-3 border-t border-[#e5e5e5]">
-          {[["출근", "09:15", "#16a34a"], ["퇴근", "--:--", "#a0a0a0"], ["위치", "재택", "#6b6b6b"]].map(([label, val, color]) => (
+          {[["출근", "09:15", "#16a34a"], ["퇴근", "--:--", "#a0a0a0"]].map(([label, val, color]) => (
             <div key={label}>
               <div className="text-[#a0a0a0] text-xs mb-0.5">{label}</div>
               <div className="text-xs font-bold" style={{ color }}>{val}</div>
@@ -62,11 +62,12 @@ export default function AppPreview() {
       {/* 메뉴 카드 */}
       <div className="grid grid-cols-2 gap-2">
         {[
-          ["📊", "리포트", "주간/월간"],
-          ["🗓️", "달력", "근로 기록"],
           ["🏖️", "연차관리", "신청 및 내역"],
           ["✈️", "출장신청", "출장 신청 및 현황"],
+          ["🗓️", "달력", "근로 기록"],
+          ["📊", "리포트", "주간/월간"],
           ["📢", "공지사항", "전체 공지 보기"],
+          ["👑", "팀장권한", "팀원 승인 및 현황"],
           ["🏢", "관리자", "팀 현황"],
         ].map(([icon, title, sub]) => (
           <div key={title} className="bg-white border border-[#e5e5e5] rounded-xl p-3 flex items-center gap-2 shadow-sm">
