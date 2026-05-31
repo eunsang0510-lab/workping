@@ -868,7 +868,10 @@ const markAllRead = async () => {
               {isCheckedIn && checkInTime ? formatWorkTime(workMinutes) : workHours}
             </div>
             <div className="text-[#6b6b6b] text-xs mt-1">
-              {currentLocation !== "-" ? `📍 ${trimCity(currentLocation)}` : "위치 미확인"}
+              {checkOutTime && !isCheckedIn
+                ? checkOutLocation !== "-" ? `📍 ${trimCity(checkOutLocation)}` : "위치 미확인"
+                : currentLocation !== "-" ? `📍 ${trimCity(currentLocation)}` : "위치 미확인"
+              }
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
