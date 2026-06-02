@@ -286,38 +286,46 @@ export default function Dashboard() {
   };
 
   const fetchAdminStatus = async (userId: string) => {
-    try {
-      const res = await fetch(`${API_URL}/api/auth/admin-check/${userId}`);
-      const data = await res.json();
-      setIsAdmin(data.is_admin || false);
-    } catch (error) {
-      console.error("관리자 확인 실패:", error);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/admin-check/${userId}`);
+        const data = await res.json();
+        setIsAdmin(data.is_admin || false);
+        return;
+      } catch (error) {
+        if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      }
     }
   };
 
 const fetchPlanStatus = async (userId: string) => {
-  try {
-    const res = await fetch(`${API_URL}/api/company/my/${userId}`);
-    const data = await res.json();
-    if (data.company_id) {
-      setCompanyId(data.company_id);
-      const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
-      const subData = await subRes.json();
-      if (subData.status === "expired") {
-        setPlanExpired(true);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${API_URL}/api/company/my/${userId}`);
+      const data = await res.json();
+      if (data.company_id) {
+        setCompanyId(data.company_id);
+        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
+        const subData = await subRes.json();
+        if (subData.status === "expired") {
+          setPlanExpired(true);
+        }
+        if (data.leave_enabled) {
+          setLeaveEnabled(true);
+          checkTodayLeave(userId);
+        }
+        if (data.force_password_change) {
+          setForcePasswordChange(true);
+        }
+        if (data.is_manager) {
+          setIsManager(true);
+        }
       }
-      if (data.leave_enabled) {
-        setLeaveEnabled(true);
-        checkTodayLeave(userId);
-      }
-      if (data.force_password_change) {
-        setForcePasswordChange(true);
-      }
-      if (data.is_manager) {
-        setIsManager(true);
-      }
+      return;
+    } catch {
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
     }
-  } catch {}
+  }
 };
 
 const checkTodayLeave = async (userId: string) => {
