@@ -540,10 +540,11 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
         calc_distance(req.latitude, req.longitude, nearest.latitude, nearest.longitude)
     )
 
+    nearest_address = nearest.address or nearest.name
     return {
         "allowed": False,
         "is_remote": False,
-        "message": f"출근 가능 위치가 아니에요 (가장 가까운 위치: {nearest.name}, {nearest_distance}m)",
+        "message": f"출근 가능 위치가 아니에요 (출근 가능 주소: {nearest_address})",
         "nearest_location": nearest.name,
         "distance": nearest_distance,
     }

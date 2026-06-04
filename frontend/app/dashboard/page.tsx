@@ -550,8 +550,9 @@ const markAllRead = async () => {
       showToast("모든 항목을 입력해주세요", "error");
       return;
     }
-    if (newPassword.length < 6) {
-      showToast("새 비밀번호는 6자 이상이어야 해요", "error");
+    const isValidPassword = newPassword.length >= 8 && /[a-zA-Z]/.test(newPassword) && /[0-9]/.test(newPassword);
+    if (!isValidPassword) {
+      setPasswordError("비밀번호는 영문+숫자 포함 8자 이상이어야 해요. 조건을 맞춰서 다시 입력해주세요.");
       return;
     }
     setPasswordLoading(true);
@@ -643,10 +644,13 @@ const markAllRead = async () => {
               </button>
             </div>
             <div className="p-5">
-              <p className="text-[#6b6b6b] text-sm mb-4 leading-relaxed">
+              <p className="text-[#6b6b6b] text-sm mb-3 leading-relaxed">
                 보안을 위해 초기 비밀번호를 새 비밀번호로 변경해야 해요.<br/>
                 변경 전까지 이 화면이 계속 표시됩니다.
               </p>
+              <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-3 py-2 mb-3 text-[#5b5ef4] text-xs leading-relaxed">
+                비밀번호 조건: 영문+숫자 포함 8자 이상
+              </div>
               <div className="space-y-3">
                 <div>
                   <div className="text-[#a0a0a0] text-xs mb-1">현재 비밀번호 (초기 비밀번호)</div>
@@ -664,7 +668,7 @@ const markAllRead = async () => {
                     type="password"
                     value={newPassword}
                     onChange={(e) => { setNewPassword(e.target.value); setPasswordError(""); }}
-                    placeholder="새 비밀번호 입력 (6자 이상)"
+                    placeholder="영문+숫자 포함 8자 이상"
                     className={`w-full bg-white border text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] ${passwordError ? "border-[#ef4444]" : "border-[#e5e5e5]"}`}
                   />
                 </div>
@@ -1138,9 +1142,12 @@ const markAllRead = async () => {
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="text-[#0a0a0a] font-black">비밀번호 변경</div>
-              <button onClick={() => { setShowPasswordModal(false); setCurrentPassword(""); setNewPassword(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+              <button onClick={() => { setShowPasswordModal(false); setCurrentPassword(""); setNewPassword(""); setPasswordError(""); }} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+            </div>
+            <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-3 py-2 mb-3 text-[#5b5ef4] text-xs leading-relaxed">
+              비밀번호 조건: 영문+숫자 포함 8자 이상
             </div>
             <div className="space-y-3">
               <div>
@@ -1148,9 +1155,9 @@ const markAllRead = async () => {
                 <input
                   type="password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(""); }}
                   placeholder="현재 비밀번호 입력"
-                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  className={`w-full bg-white border text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] ${passwordError ? "border-[#ef4444]" : "border-[#e5e5e5]"}`}
                 />
               </div>
               <div>
@@ -1158,11 +1165,14 @@ const markAllRead = async () => {
                 <input
                   type="password"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="새 비밀번호 입력 (6자 이상)"
-                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  onChange={(e) => { setNewPassword(e.target.value); setPasswordError(""); }}
+                  placeholder="영문+숫자 포함 8자 이상"
+                  className={`w-full bg-white border text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0] ${passwordError ? "border-[#ef4444]" : "border-[#e5e5e5]"}`}
                 />
               </div>
+              {passwordError && (
+                <div className="text-[#ef4444] text-xs">{passwordError}</div>
+              )}
               <button
                 onClick={handleChangePassword}
                 disabled={passwordLoading}
