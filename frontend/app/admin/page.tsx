@@ -158,6 +158,16 @@ export default function Admin() {
   const [businessTrips, setBusinessTrips] = useState<TripItem[]>([]);
   const [tripRejectModal, setTripRejectModal] = useState<{ id: string; userName: string } | null>(null);
   const [tripRejectReason, setTripRejectReason] = useState("");
+  const [leaveMonth, setLeaveMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [leavePage, setLeavePage] = useState(1);
+  const [tripMonth, setTripMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [tripPage, setTripPage] = useState(1);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [showCompanySelector, setShowCompanySelector] = useState(false);
   const [homeLocationMember, setHomeLocationMember] = useState<{ user_id: string; user_name: string } | null>(null);
@@ -973,6 +983,15 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   const checkoutCount = attendance.filter(m => m.status === "퇴근").length;
   const absentCount = attendance.filter(m => m.status === "미출근").length;
   const missingCount = attendance.filter(m => m.status === "미퇴근").length;
+
+  const PAGE_SIZE = 5;
+  const filteredLeaveRequests = leaveRequests.filter(l => l.start_date.startsWith(leaveMonth));
+  const leavePageCount = Math.ceil(filteredLeaveRequests.length / PAGE_SIZE);
+  const pagedLeaveRequests = filteredLeaveRequests.slice((leavePage - 1) * PAGE_SIZE, leavePage * PAGE_SIZE);
+
+  const filteredTrips = businessTrips.filter(t => t.start_date.startsWith(tripMonth));
+  const tripPageCount = Math.ceil(filteredTrips.length / PAGE_SIZE);
+  const pagedTrips = filteredTrips.slice((tripPage - 1) * PAGE_SIZE, tripPage * PAGE_SIZE);
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
 
@@ -1131,50 +1150,75 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
 
                 {/* 신청 현황 탭 */}
                 {leaveTab === "requests" && (
-                  <div className="space-y-3">
-                    {leaveRequests.length === 0 ? (
-                      <div className="text-[#a0a0a0] text-sm text-center py-6">연차 신청이 없어요</div>
-                    ) : (
-                      leaveRequests.map((leave) => (
-                        <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <div className="text-[#0a0a0a] text-sm font-bold">
-                                {leave.user_name} · {leave.is_half ? "반차" : `연차 ${leave.days}일`}
+                  <div>
+                    <input
+                      type="month"
+                      value={leaveMonth}
+                      onChange={(e) => { setLeaveMonth(e.target.value); setLeavePage(1); }}
+                      className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-sm mb-3"
+                    />
+                    <div className="space-y-3">
+                      {pagedLeaveRequests.length === 0 ? (
+                        <div className="text-[#a0a0a0] text-sm text-center py-6">연차 신청이 없어요</div>
+                      ) : (
+                        pagedLeaveRequests.map((leave) => (
+                          <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <div className="text-[#0a0a0a] text-sm font-bold">
+                                  {leave.user_name} · {leave.is_half ? "반차" : `연차 ${leave.days}일`}
+                                </div>
+                                <div className="text-[#6b6b6b] text-xs mt-0.5">
+                                  {leave.start_date} ~ {leave.end_date}
+                                </div>
+                                {leave.reason && (
+                                  <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
+                                )}
                               </div>
-                              <div className="text-[#6b6b6b] text-xs mt-0.5">
-                                {leave.start_date} ~ {leave.end_date}
+                              <div className={`text-xs font-bold px-2 py-1 rounded-lg border flex-shrink-0 ${
+                                leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
+                                leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
+                                "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
+                              }`}>
+                                {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
                               </div>
-                              {leave.reason && (
-                                <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
-                              )}
                             </div>
-                            <div className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                              leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
-                              leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
-                              "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
-                            }`}>
-                              {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
-                            </div>
+                            {leave.status === "pending" && (
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => handleApproveLeave(leave.id, "approved")}
+                                  className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
+                                >
+                                  승인
+                                </button>
+                                <button
+                                  onClick={() => handleApproveLeave(leave.id, "rejected")}
+                                  className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
+                                >
+                                  반려
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          {leave.status === "pending" && (
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => handleApproveLeave(leave.id, "approved")}
-                                className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#15803d]"
-                              >
-                                승인
-                              </button>
-                              <button
-                                onClick={() => handleApproveLeave(leave.id, "rejected")}
-                                className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
-                              >
-                                반려
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))
+                        ))
+                      )}
+                    </div>
+                    {leavePageCount > 1 && (
+                      <div className="flex justify-center gap-1 mt-3">
+                        {Array.from({ length: leavePageCount }, (_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setLeavePage(i + 1)}
+                            className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                              leavePage === i + 1
+                                ? "bg-[#5b5ef4] text-white"
+                                : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b] hover:border-[#5b5ef4]"
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
@@ -1238,7 +1282,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
 
           {/* 출장 승인 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">
                 출장 승인
                 {businessTrips.filter(t => t.status === "pending").length > 0 && (
@@ -1249,11 +1293,17 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
               </div>
               <button onClick={() => fetchBusinessTrips(company!.id)} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">새로고침</button>
             </div>
-            {businessTrips.length === 0 ? (
+            <input
+              type="month"
+              value={tripMonth}
+              onChange={(e) => { setTripMonth(e.target.value); setTripPage(1); }}
+              className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-sm mb-3"
+            />
+            {pagedTrips.length === 0 ? (
               <div className="text-[#a0a0a0] text-sm text-center py-6">출장 신청이 없어요</div>
             ) : (
               <div className="space-y-3">
-                {businessTrips.map((trip) => {
+                {pagedTrips.map((trip) => {
                   const isPending = trip.status === "pending";
                   const badgeMap: Record<string, { bg: string; color: string; border: string; text: string }> = {
                     pending:  { bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]", text: "대기중" },
@@ -1275,7 +1325,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                             <div className="text-[#a0a0a0] text-xs mt-1">{trip.purpose}</div>
                           )}
                         </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg border ${badge.bg} ${badge.color} ${badge.border}`}>
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg border flex-shrink-0 ${badge.bg} ${badge.color} ${badge.border}`}>
                           {badge.text}
                         </span>
                       </div>
@@ -1303,6 +1353,23 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {tripPageCount > 1 && (
+              <div className="flex justify-center gap-1 mt-3">
+                {Array.from({ length: tripPageCount }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setTripPage(i + 1)}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                      tripPage === i + 1
+                        ? "bg-[#5b5ef4] text-white"
+                        : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b] hover:border-[#5b5ef4]"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
               </div>
             )}
           </div>
