@@ -1321,28 +1321,33 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                   const config = statusConfig[member.status] || statusConfig["미출근"];
                   return (
                     <div key={i} className={`bg-[#f8f8f8] border rounded-xl p-4 ${member.is_missing_checkout ? "border-[#fecaca]" : "border-[#e5e5e5]"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className={`w-2 h-2 rounded-full ${config.dot}`}></div>
-                          <span className="text-[#0a0a0a] text-sm font-bold">{member.user_name || member.user_email}</span>
-                          {member.is_missing_checkout && <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>}
-                          {member.is_remote && <span className="text-xs px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] font-medium">🏠 재택</span>}
+                      {/* 1줄: 이름+태그 / 상태뱃지 */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${config.dot}`}></div>
+                          <span className="text-[#0a0a0a] text-sm font-bold break-all">{member.user_name || member.user_email}</span>
+                          {member.is_missing_checkout && <span className="text-[#ef4444] text-xs flex-shrink-0">⚠️ 미퇴근</span>}
+                          {member.is_remote && <span className="text-xs px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] font-medium flex-shrink-0">🏠 재택</span>}
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.is_remote && member.status === "출근중" ? "재택 출근중" : member.status}</span>
-                          <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
-                          <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택주소 설정</button>
-                          {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
-                          <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
-                          <button onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">근무시간 초기화</button>
-                          <button onClick={() => handleDeleteMember(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
-                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-lg border flex-shrink-0 ${config.bg} ${config.text} ${config.border}`}>
+                          {member.is_remote && member.status === "출근중" ? "재택 출근중" : member.status}
+                        </span>
                       </div>
-                      <div className="flex gap-4 flex-wrap">
+                      {/* 2줄: 근태 정보 */}
+                      <div className="flex gap-3 flex-wrap mb-2 pl-4">
                         <span className="text-[#a0a0a0] text-xs">출근 <span className="text-[#16a34a] font-medium">{formatTime(member.checkin)}</span></span>
-                        {member.checkin_address && <span className="text-[#a0a0a0] text-xs">📍 {member.checkin_address}</span>}
                         <span className="text-[#a0a0a0] text-xs">퇴근 <span className="text-[#ef4444] font-medium">{formatTime(member.checkout)}</span></span>
-                        <span className="text-[#a0a0a0] text-xs"><span className="text-[#4a4de0] font-medium">{member.work_hours}</span></span>
+                        <span className="text-[#4a4de0] text-xs font-medium">{member.work_hours}</span>
+                        {member.checkin_address && <span className="text-[#a0a0a0] text-xs">📍 {member.checkin_address}</span>}
+                      </div>
+                      {/* 3줄: 액션 버튼 */}
+                      <div className="flex items-center gap-3 flex-wrap pl-4 pt-1 border-t border-[#e5e5e5]">
+                        <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
+                        <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택주소 설정</button>
+                        {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
+                        <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
+                        <button onClick={() => handleResetAttendance(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">근무시간 초기화</button>
+                        <button onClick={() => handleDeleteMember(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">삭제</button>
                       </div>
                     </div>
                   );
