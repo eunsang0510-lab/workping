@@ -1327,10 +1327,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                           <span className="text-[#0a0a0a] text-sm font-bold">{member.user_name || member.user_email}</span>
                           {member.is_missing_checkout && <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>}
                           {member.is_remote && <span className="text-xs px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] font-medium">🏠 재택</span>}
-                          {member.home_address && <span className="text-[#a0a0a0] text-xs">재택:{member.home_address}</span>}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
-                          <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.status}</span>
+                          <span className={`text-xs px-2 py-1 rounded-lg border ${config.bg} ${config.text} ${config.border}`}>{member.is_remote && member.status === "출근중" ? "재택 출근중" : member.status}</span>
                           <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
                           <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택주소 설정</button>
                           {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
