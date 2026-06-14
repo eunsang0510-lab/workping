@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
+import KeepAlive from "./_keep-alive";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,8 +42,6 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/^﻿/, "");
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -73,15 +72,11 @@ export default function RootLayout({
          `,
           }}
         />
-        <Script
-          id="server-warmup"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `fetch('${API_URL}/health').catch(function(){});`,
-          }}
-        />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <KeepAlive />
+        {children}
+      </body>
     </html>
   );
 }

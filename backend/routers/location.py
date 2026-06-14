@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.attendance import Attendance
 from models.location import Location
+from models.company import CompanyMember, CompanyLocation
 from routers.deps import get_current_user
 import requests
 import re
 import os
+import math
 
 load_dotenv()
 
@@ -18,6 +20,15 @@ router = APIRouter()
 KST = timezone(timedelta(hours=9))
 
 _COORD_RE = re.compile(r"^-?\d+\.\d+,\s*-?\d+\.\d+$")
+
+
+def _calc_distance(lat1, lon1, lat2, lon2):
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _kakao_address(lat: float, lng: float) -> str:
@@ -67,6 +78,32 @@ def record_location(
             detail="본인의 기록만 저장할 수 있어요"
         )
 
+    # 출근 시 백엔드에서 위치 검증 (프론트 우회 방지)
+    is_remote = False
+    if data.type == "checkin":
+        member = db.query(CompanyMember).filter(
+            CompanyMember.user_id == data.user_id
+        ).first()
+        if member:
+            locations = db.query(CompanyLocation).filter(
+                CompanyLocation.company_id == member.company_id,
+                CompanyLocation.is_active == True,
+            ).all()
+
+            # 재택 주소 확인 (300m 이내)
+            if member.home_latitude and member.home_longitude:
+                home_dist = _calc_distance(data.latitude, data.longitude, member.home_latitude, member.home_longitude)
+                if home_dist <= 300:
+                    is_remote = True
+                elif locations:
+                    if not any(_calc_distance(data.latitude, data.longitude, l.latitude, l.longitude) <= l.radius for l in locations):
+                        nearest = min(locations, key=lambda l: _calc_distance(data.latitude, data.longitude, l.latitude, l.longitude))
+                        raise HTTPException(status_code=403, detail=f"출근 가능 위치가 아니에요 (출근 가능 주소: {nearest.address or nearest.name})")
+            elif locations:
+                if not any(_calc_distance(data.latitude, data.longitude, l.latitude, l.longitude) <= l.radius for l in locations):
+                    nearest = min(locations, key=lambda l: _calc_distance(data.latitude, data.longitude, l.latitude, l.longitude))
+                    raise HTTPException(status_code=403, detail=f"출근 가능 위치가 아니에요 (출근 가능 주소: {nearest.address or nearest.name})")
+
     if data.timestamp:
      ts = data.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
     else:
@@ -95,7 +132,7 @@ def record_location(
         latitude=data.latitude,
         longitude=data.longitude,
         address=address,
-        is_remote=data.is_remote,
+        is_remote=is_remote if data.type == "checkin" else data.is_remote,
         recorded_at=ts,
     )
     db.add(attendance)

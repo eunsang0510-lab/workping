@@ -103,7 +103,10 @@ export default function CalendarPage() {
 
   const formatTime = (iso: string | null) => {
     if (!iso) return "--:--";
-    return new Date(iso).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+    const str = iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z";
+    const date = new Date(str);
+    if (isNaN(date.getTime())) return "--:--";
+    return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" });
   };
 
   const formatWorkTime = (minutes: number | null) => {
