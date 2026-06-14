@@ -226,7 +226,7 @@ def root():
     return {"message": "WorkPing API 서버 실행 중 🚀"}
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     from sqlalchemy import text
     try:
