@@ -4,7 +4,8 @@
     "namespace": "android_app",
     "package_name": "com.workping.app",
     "sha256_cert_fingerprints": [
-      "E3:1D:E0:91:2A:A0:68:E4:94:C0:61:AE:54:DA:9B:E7:00:54:76:F4:F7:40:DB:A0:6D:58:8B:BB:39:05:89:E4"
+      "E3:1D:E0:91:2A:A0:68:E4:94:C0:61:AE:54:DA:9B:E7:00:54:76:F4:F7:40:DB:A0:6D:58:8B:BB:39:05:89:E4",
+      "B7:1D:69:FD:DE:D3:84:4B:5C:71:45:DB:75:32:6F:A9:D2:A5:CB:8D:43:9F:7C:AE:56:EC:2E:45:68:0D:24:E4"
     ]
   }
 }]
