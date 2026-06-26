@@ -4,7 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -17,6 +17,7 @@ from models import business_trip as business_trip_model
 from models import company_request as company_request_model
 from models import push_subscription as push_subscription_model
 from models import notification as notification_model
+from models import permission as permission_model
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -52,6 +53,12 @@ def run_migrations():
             "UPDATE company_members SET is_admin = FALSE WHERE is_admin IS NULL",
             # companies.admin_id 기준으로 해당 회사의 관리자 멤버 is_admin=TRUE 동기화
             "UPDATE company_members cm SET is_admin = TRUE FROM companies c WHERE cm.user_id = c.admin_id AND cm.company_id = c.id AND cm.is_admin = FALSE",
+            # 권한 관리 테이블
+            "CREATE TABLE IF NOT EXISTS custom_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, name VARCHAR NOT NULL, description VARCHAR, allowed_screens JSON, created_at TIMESTAMP DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS ix_custom_permissions_company_id ON custom_permissions (company_id)",
+            "CREATE TABLE IF NOT EXISTS user_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, user_id VARCHAR NOT NULL, permission_id VARCHAR NOT NULL, granted_by VARCHAR NOT NULL, granted_at TIMESTAMP DEFAULT NOW())",
+            "CREATE INDEX IF NOT EXISTS ix_user_permissions_company_id ON user_permissions (company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_permissions_user_id ON user_permissions (user_id)",
         ]
         for sql in migrations:
             try:
@@ -219,6 +226,8 @@ app.include_router(business_trip.router, prefix="/api/business-trip", tags=["출
 app.include_router(company_request.router, prefix="/api/company-request", tags=["회사등록신청"])
 app.include_router(push.router, prefix="/api/push", tags=["푸시알림"])
 app.include_router(notification.router, prefix="/api/notifications", tags=["알림"])
+app.include_router(permission.router, prefix="/api/permissions", tags=["권한관리"])
+app.include_router(internal.router, prefix="/internal", tags=["내부서비스"])
 
 
 @app.get("/")

@@ -211,6 +211,20 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
 
 @router.post("/members/register")
 def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # is_admin 권한 상승 방지: 관리자 또는 슈퍼어드민만 is_admin=True 허용
+    is_admin_to_set = req.is_admin
+    if req.is_admin:
+        SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+        is_superadmin = isinstance(current_user, dict) and current_user.get("email") == SUPERADMIN_EMAIL
+        if not is_superadmin:
+            requester = db.query(CompanyMember).filter(
+                CompanyMember.user_id == (current_user.get("uid") if isinstance(current_user, dict) else None),
+                CompanyMember.company_id == req.company_id,
+                CompanyMember.is_admin == True,
+            ).first()
+            if not requester:
+                is_admin_to_set = False
+
     # 플랜별 멤버 수 제한 체크
     current_count = db.query(CompanyMember).filter(CompanyMember.company_id == req.company_id).count()
     sub = db.query(Subscription).filter(Subscription.company_id == req.company_id).first()
@@ -269,7 +283,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
         user_email=req.email,
         user_name=req.name,
         birth_date=req.birth_date,
-        is_admin=req.is_admin,
+        is_admin=is_admin_to_set,
         force_password_change=True,
     )
     db.add(member)
@@ -284,7 +298,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
 
 
 @router.post("/members/bulk-register")
-def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db)):
+def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # 플랜별 멤버 수 제한 사전 체크
     if req.company_id:
         current_count = db.query(CompanyMember).filter(CompanyMember.company_id == req.company_id).count()
@@ -321,7 +335,7 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
             name=member_data.name,
             birth_date=member_data.birth_date,
         )
-        result = register_member(member_req, db)
+        result = register_member(member_req, db, current_user)
         results.append(result)
 
     success_count = len([r for r in results if r.get("success")])
@@ -329,7 +343,16 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
 
 
 @router.get("/members/{company_id}")
-def get_members(company_id: str, db: Session = Depends(get_db)):
+def get_members(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    membership = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+    ).first()
+    if not membership and not is_superadmin:
+        raise HTTPException(status_code=403, detail="해당 회사 소속만 조회할 수 있어요")
+
     members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
     return {
         "members": [
@@ -351,8 +374,18 @@ def search_company(name: str, db: Session = Depends(get_db)):
 
 
 @router.get("/attendance/{company_id}")
-def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
+def get_company_attendance(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     from routers.attendance import get_work_day_range
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 근태 현황을 조회할 수 있어요")
 
     start, end = get_work_day_range()
     now = datetime.now()
@@ -419,7 +452,16 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/locations/{company_id}")
-def get_locations(company_id: str, db: Session = Depends(get_db)):
+def get_locations(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    membership = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+    ).first()
+    if not membership and not is_superadmin:
+        raise HTTPException(status_code=403, detail="해당 회사 소속만 조회할 수 있어요")
+
     locations = db.query(CompanyLocation).filter(
         CompanyLocation.company_id == company_id,
         CompanyLocation.is_active == True
@@ -465,6 +507,16 @@ def geocode_address(address: str):
 
 @router.post("/locations/add")
 def add_location(req: LocationCreateRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == req.company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 위치를 추가할 수 있어요")
+
     location = CompanyLocation(
         company_id=req.company_id,
         name=req.name,
@@ -484,6 +536,17 @@ def delete_location(location_id: str, db: Session = Depends(get_db), current_use
     location = db.query(CompanyLocation).filter(CompanyLocation.id == location_id).first()
     if not location:
         raise HTTPException(status_code=404, detail="위치를 찾을 수 없습니다")
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == location.company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 위치를 삭제할 수 있어요")
+
     db.delete(location)
     db.commit()
     return {"message": "삭제 완료"}
@@ -552,6 +615,17 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
 
 @router.get("/members/{user_id}/home-location")
 def get_home_location(user_id: str, company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_self = current_user["uid"] == user_id
+    is_admin = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not is_self and not is_admin and not is_superadmin:
+        raise HTTPException(status_code=403, detail="본인 또는 관리자만 조회할 수 있어요")
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id,
         CompanyMember.company_id == company_id,
@@ -567,6 +641,9 @@ def get_home_location(user_id: str, company_id: str, db: Session = Depends(get_d
 
 @router.put("/members/{user_id}/home-location")
 def set_home_location(user_id: str, req: HomeLocationRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 재택 주소만 수정할 수 있어요")
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id,
     ).first()
@@ -581,6 +658,9 @@ def set_home_location(user_id: str, req: HomeLocationRequest, db: Session = Depe
 
 @router.delete("/members/{user_id}/home-location")
 def delete_home_location(user_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 재택 주소만 삭제할 수 있어요")
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id,
     ).first()
@@ -684,16 +764,29 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
 
 
 @router.put("/members/{member_id}")
-def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depends(get_db)):
+def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     member = db.query(CompanyMember).filter(CompanyMember.user_id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == member.company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 수정할 수 있어요")
 
     if req.user_name:
         member.user_name = req.user_name
     if req.user_email:
         member.user_email = req.user_email
-    if req.company_id:
+    # company_id 변경은 슈퍼어드민만 허용 (타사로 직원 이동 위조 방지)
+    if req.company_id and req.company_id != member.company_id:
+        if not is_superadmin:
+            raise HTTPException(status_code=403, detail="회사 이동은 슈퍼어드민만 가능해요")
         member.company_id = req.company_id
     member.is_admin = req.is_admin
 

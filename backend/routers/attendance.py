@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
+import os
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
@@ -71,6 +73,16 @@ def get_company_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 근태 현황을 조회할 수 있어요")
+
     start, end = get_work_day_range()
     now = datetime.now(KST)
 
@@ -276,21 +288,43 @@ import io
 @router.get("/export/{company_id}")
 def export_attendance_excel(
     company_id: str,
+    year: Optional[int] = Query(default=None),
+    month: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     from models.company import Company, CompanyMember
+    import calendar
 
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
 
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 내보내기 할 수 있어요")
+
     members = (
         db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
     )
 
-    end_date = datetime.now(KST).date()
-    start_date = end_date - timedelta(days=30)
+    now_kst = datetime.now(KST)
+    target_year = year if year else now_kst.year
+    target_month = month  # None이면 연도 전체
+
+    if target_month:
+        start_date = datetime(target_year, target_month, 1).date()
+        last_day = calendar.monthrange(target_year, target_month)[1]
+        end_date = datetime(target_year, target_month, last_day).date()
+    else:
+        start_date = datetime(target_year, 1, 1).date()
+        end_date = datetime(target_year, 12, 31).date()
 
     user_ids = [m.user_id for m in members]
     all_records = (
@@ -358,7 +392,11 @@ def export_attendance_excel(
     wb.save(stream)
     stream.seek(0)
 
-    filename = f"{company.name}_근무기록_{start_date}_{end_date}.xlsx"
+    if target_month:
+        period_label = f"{target_year}년{target_month}월"
+    else:
+        period_label = f"{target_year}년_전체"
+    filename = f"{company.name}_근무기록_{period_label}.xlsx"
     encoded_filename = quote(filename)
 
     return StreamingResponse(

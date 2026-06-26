@@ -40,6 +40,9 @@ def get_unread_notices(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 공지만 조회할 수 있어요")
+
     # 읽은 공지 ID 목록
     read_ids = [
         r.notice_id for r in
@@ -77,16 +80,16 @@ def get_unread_notices(
 @router.post("/read/{notice_id}")
 def mark_as_read(
     notice_id: str,
-    user_id: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    uid = current_user["uid"]
     existing = db.query(NoticeRead).filter(
         NoticeRead.notice_id == notice_id,
-        NoticeRead.user_id == user_id
+        NoticeRead.user_id == uid
     ).first()
     if not existing:
-        read = NoticeRead(notice_id=notice_id, user_id=user_id)
+        read = NoticeRead(notice_id=notice_id, user_id=uid)
         db.add(read)
         db.commit()
     return {"success": True}
@@ -97,6 +100,9 @@ def get_notice_list(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 공지만 조회할 수 있어요")
+
     member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
     company_id = member.company_id if member else None
 

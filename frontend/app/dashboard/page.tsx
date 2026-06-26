@@ -196,11 +196,14 @@ export default function Dashboard() {
       }
 
       const subJson = sub.toJSON() as any;
+      const token = await auth.currentUser?.getIdToken();
       await fetch(`${API_URL}/api/push/subscribe`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          user_id: userId,
           endpoint: subJson.endpoint,
           p256dh: subJson.keys?.p256dh,
           auth: subJson.keys?.auth,

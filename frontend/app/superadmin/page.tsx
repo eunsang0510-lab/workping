@@ -90,6 +90,12 @@ export default function SuperAdmin() {
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeContent, setNoticeContent] = useState("");
   const [noticeLoading, setNoticeLoading] = useState(false);
+  const [excelModal, setExcelModal] = useState<{
+    companyId: string;
+    companyName: string;
+    year: number;
+    month: number | 0;
+  } | null>(null);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -579,22 +585,9 @@ export default function SuperAdmin() {
                     <span className="text-[#0a0a0a] font-black">{c.name}</span>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={async () => {
-                          try {
-                            const token = await auth.currentUser?.getIdToken();
-                            const res = await fetch(`${API_URL}/api/attendance/export/${c.id}`, {
-                              headers: { "Authorization": `Bearer ${token}` }
-                            });
-                            const blob = await res.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `${c.name}_근무기록.xlsx`;
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                          } catch {
-                            showToast("다운로드 실패", "error");
-                          }
+                        onClick={() => {
+                          const now = new Date();
+                          setExcelModal({ companyId: c.id, companyName: c.name, year: now.getFullYear(), month: now.getMonth() + 1 });
                         }}
                         className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-[#dcfce7] transition-all"
                       >
@@ -815,6 +808,72 @@ export default function SuperAdmin() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* 엑셀 다운로드 기간 선택 모달 */}
+      {excelModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-xs shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[#0a0a0a] font-black">엑셀 다운로드</div>
+              <button onClick={() => setExcelModal(null)} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-sm">✕</button>
+            </div>
+            <div className="space-y-3 mb-5">
+              <div>
+                <div className="text-[#a0a0a0] text-xs mb-1">연도</div>
+                <select
+                  value={excelModal.year}
+                  onChange={(e) => setExcelModal({ ...excelModal, year: Number(e.target.value) })}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm"
+                >
+                  {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                    <option key={y} value={y}>{y}년</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-[#a0a0a0] text-xs mb-1">대상월</div>
+                <select
+                  value={excelModal.month}
+                  onChange={(e) => setExcelModal({ ...excelModal, month: Number(e.target.value) })}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm"
+                >
+                  <option value={0}>전체 (연도 전체)</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>{m}월</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const { companyId, companyName, year, month } = excelModal;
+                  const token = await auth.currentUser?.getIdToken();
+                  const params = new URLSearchParams({ year: String(year) });
+                  if (month !== 0) params.set("month", String(month));
+                  const res = await fetch(`${API_URL}/api/attendance/export/${companyId}?${params}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                  });
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  const period = month !== 0 ? `${year}년${month}월` : `${year}년_전체`;
+                  a.download = `${companyName}_근무기록_${period}.xlsx`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  setExcelModal(null);
+                } catch {
+                  showToast("다운로드 실패", "error");
+                }
+              }}
+              className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm"
+            >
+              출력
+            </button>
+          </div>
         </div>
       )}
 

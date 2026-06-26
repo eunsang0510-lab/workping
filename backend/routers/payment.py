@@ -59,6 +59,16 @@ def get_subscription(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    from models.company import CompanyMember
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    membership = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+    ).first()
+    if not membership and not is_superadmin:
+        raise HTTPException(status_code=403, detail="해당 회사 소속만 조회할 수 있어요")
+
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == company_id)

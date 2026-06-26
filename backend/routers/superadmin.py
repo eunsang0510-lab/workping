@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
 from models.company import Company, CompanyMember
+from routers.deps import get_current_user, get_superadmin
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -69,7 +70,7 @@ class MemberCreate(BaseModel):
 
 # 전체 통계
 @router.get("/stats")
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     total_companies = db.query(func.count(Company.id)).scalar()
     total_members = db.query(func.count(CompanyMember.id)).scalar()
     return {
@@ -80,7 +81,7 @@ def get_stats(db: Session = Depends(get_db)):
 
 # 전체 회사 목록
 @router.get("/companies")
-def get_companies(db: Session = Depends(get_db)):
+def get_companies(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     companies = db.query(Company).order_by(Company.created_at.desc()).all()
     result = []
     for c in companies:
@@ -105,7 +106,7 @@ def get_companies(db: Session = Depends(get_db)):
 
 # 회사 생성
 @router.post("/company")
-def create_company(body: CompanyCreate, db: Session = Depends(get_db)):
+def create_company(body: CompanyCreate, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     company = Company(
         id=str(uuid.uuid4()),
         name=body.name,
@@ -120,7 +121,7 @@ def create_company(body: CompanyCreate, db: Session = Depends(get_db)):
 
 # 회사 삭제
 @router.delete("/company/{company_id}")
-def delete_company(company_id: str, db: Session = Depends(get_db)):
+def delete_company(company_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
@@ -132,7 +133,7 @@ def delete_company(company_id: str, db: Session = Depends(get_db)):
 
 # 전체 직원 목록
 @router.get("/members")
-def get_members(db: Session = Depends(get_db)):
+def get_members(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     members = db.query(CompanyMember).order_by(CompanyMember.created_at.desc()).all()
     result = []
     for m in members:
@@ -162,7 +163,7 @@ class MemberCreate(BaseModel):
 
 # 멤버 추가
 @router.post("/member")
-def create_member(body: MemberCreate, db: Session = Depends(get_db)):
+def create_member(body: MemberCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_superadmin)):
     from routers.company import register_member, RegisterMemberRequest
 
     company = db.query(Company).filter(Company.id == body.company_id).first()
@@ -175,7 +176,7 @@ def create_member(body: MemberCreate, db: Session = Depends(get_db)):
         name=body.user_name or "",
         birth_date=body.birth_date or "00000000",
     )
-    result = register_member(req, db)
+    result = register_member(req, db, current_user)
 
     if body.is_admin:
         member = db.query(CompanyMember).filter(
@@ -190,7 +191,7 @@ def create_member(body: MemberCreate, db: Session = Depends(get_db)):
 
 # 직원 삭제
 @router.delete("/member/{member_id}")
-def delete_member(member_id: str, db: Session = Depends(get_db)):
+def delete_member(member_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     member = db.query(CompanyMember).filter(CompanyMember.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
@@ -203,7 +204,7 @@ from models.user import User
 
 # 회사 미소속 개인 유저 목록
 @router.get("/users")
-def get_individual_users(db: Session = Depends(get_db)):
+def get_individual_users(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     # company_members에 없는 유저들
     subquery = db.query(CompanyMember.user_id).subquery()
     users = db.query(User).filter(
@@ -224,7 +225,7 @@ def get_individual_users(db: Session = Depends(get_db)):
 
 # 개인 유저 계정 삭제
 @router.delete("/user/{user_id}")
-def delete_user(user_id: str, db: Session = Depends(get_db)):
+def delete_user(user_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     from models.attendance import Attendance
     from models.location import Location
     from firebase_admin import auth as firebase_auth
@@ -248,7 +249,7 @@ def delete_user(user_id: str, db: Session = Depends(get_db)):
 
 # 개인 유저 근태 초기화
 @router.delete("/user/attendance/{user_id}")
-def reset_user_attendance(user_id: str, db: Session = Depends(get_db)):
+def reset_user_attendance(user_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     from routers.attendance import get_work_day_range
     from models.attendance import Attendance
     from models.location import Location
