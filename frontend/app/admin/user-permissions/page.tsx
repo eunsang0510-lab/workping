@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,7 +42,7 @@ interface ConfirmState {
   onConfirm: () => void;
 }
 
-export default function UserPermissionsPage() {
+function UserPermissionsPageContent() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -371,5 +371,13 @@ export default function UserPermissionsPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function UserPermissionsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center"><div className="text-[#5b5ef4]">로딩 중...</div></div>}>
+      <UserPermissionsPageContent />
+    </Suspense>
   );
 }
