@@ -273,9 +273,6 @@ export default function PricingPage() {
                       현재 플랜
                     </span>
                   )}
-                  {plan.badge && !isCurrent && (
-                    <span className="bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">{plan.badge}</span>
-                  )}
                 </div>
               </div>
 
