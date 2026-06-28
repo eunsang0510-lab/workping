@@ -24,7 +24,7 @@ const PLANS = [
     period: "",
     priceLabel: "0원",
     features: ["직원 20명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
-    highlight: false,
+    highlight: true,
   },
   {
     id: "starter",
@@ -33,8 +33,7 @@ const PLANS = [
     period: "/ 월 (회사별)",
     priceLabel: "50,000원",
     features: ["직원 21명 이상", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)"],
-    highlight: true,
-    badge: "인기",
+    highlight: false,
   },
   {
     id: "business",
