@@ -121,15 +121,19 @@ export default function SuperAdmin() {
 
   const fetchAll = async () => {
     try {
+      const token = await auth.currentUser?.getIdToken();
+      const headers = { "Authorization": `Bearer ${token}` };
       const [statsRes, companiesRes, membersRes, usersRes] = await Promise.all([
-        fetch(`${API_URL}/api/superadmin/stats`),
-        fetch(`${API_URL}/api/superadmin/companies`),
-        fetch(`${API_URL}/api/superadmin/members`),
-        fetch(`${API_URL}/api/superadmin/users`),
+        fetch(`${API_URL}/api/superadmin/stats`, { headers }),
+        fetch(`${API_URL}/api/superadmin/companies`, { headers }),
+        fetch(`${API_URL}/api/superadmin/members`, { headers }),
+        fetch(`${API_URL}/api/superadmin/users`, { headers }),
       ]);
       setStats(await statsRes.json());
-      setCompanies(await companiesRes.json());
-      setMembers(await membersRes.json());
+      const companiesData = await companiesRes.json();
+      setCompanies(Array.isArray(companiesData) ? companiesData : []);
+      const membersData = await membersRes.json();
+      setMembers(Array.isArray(membersData) ? membersData : []);
       const usersData = await usersRes.json();
       setIndividualUsers(usersData.users || []);
     } catch (error) {
@@ -255,9 +259,10 @@ export default function SuperAdmin() {
     if (!newCompanyName.trim()) return;
     setCompanyLoading(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/superadmin/company`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ name: newCompanyName, plan: "team" }),
       });
       const data = await res.json();
@@ -281,9 +286,10 @@ export default function SuperAdmin() {
     }
     setMemberLoading(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/superadmin/member`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
           company_id: newMemberCompanyId,
           user_email: newMemberEmail,
@@ -346,7 +352,11 @@ export default function SuperAdmin() {
     showConfirm(`"${name}" 회사를 삭제할까요?\n소속 직원도 모두 삭제됩니다.`, async () => {
       setConfirm(null);
       try {
-        await fetch(`${API_URL}/api/superadmin/company/${id}`, { method: "DELETE" });
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/superadmin/company/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
         showToast("삭제 완료", "success");
         fetchAll();
       } catch {
@@ -359,7 +369,11 @@ export default function SuperAdmin() {
     showConfirm(`"${name}" 직원을 삭제할까요?`, async () => {
       setConfirm(null);
       try {
-        await fetch(`${API_URL}/api/superadmin/member/${id}`, { method: "DELETE" });
+        const token = await auth.currentUser?.getIdToken();
+        await fetch(`${API_URL}/api/superadmin/member/${id}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` },
+        });
         showToast("삭제 완료", "success");
         fetchAll();
       } catch {
@@ -451,9 +465,10 @@ export default function SuperAdmin() {
     if (!editMember) return;
     setEditLoading(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
           user_name: editMember.user_name,
           user_email: editMember.user_email,
