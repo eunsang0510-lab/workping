@@ -251,7 +251,11 @@ const loadCompanyData = (companyData: Company) => {
   setCompany(companyData);
   fetchAttendance(companyData.id);
   fetchLocations(companyData.id);
-  fetchCompanyNotices(companyData.id);
+  // 슈퍼어드민은 company_id를, 일반 관리자는 user_id를 전달
+  const noticeParam = auth.currentUser?.email === SYSTEM_ADMIN_EMAIL
+    ? companyData.id
+    : auth.currentUser!.uid;
+  fetchCompanyNotices(noticeParam);
   fetchLeaveData(companyData.id, auth.currentUser!.uid);
   fetchTeams(companyData.id);
   fetchSubscription(companyData.id);
@@ -260,7 +264,10 @@ const loadCompanyData = (companyData: Company) => {
 
   const fetchAttendance = async (companyId: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/attendance/${companyId}`);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company/attendance/${companyId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
       const data = await res.json();
       setAttendance(data.attendance || []);
     } catch (error) {
@@ -270,7 +277,10 @@ const loadCompanyData = (companyData: Company) => {
 
   const fetchLocations = async (companyId: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/locations/${companyId}`);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company/locations/${companyId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
       const data = await res.json();
       setLocations(data.locations || []);
     } catch (error) {

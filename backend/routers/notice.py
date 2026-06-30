@@ -100,16 +100,24 @@ def get_notice_list(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["uid"] != user_id:
+    import os
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+
+    if not is_superadmin and current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 공지만 조회할 수 있어요")
 
-    member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
-    company_id = member.company_id if member else None
-
-    read_ids = [
-        r.notice_id for r in
-        db.query(NoticeRead).filter(NoticeRead.user_id == user_id).all()
-    ]
+    if is_superadmin:
+        # 슈퍼어드민은 company_id를 직접 전달
+        company_id = user_id
+        read_ids: list = []
+    else:
+        member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
+        company_id = member.company_id if member else None
+        read_ids = [
+            r.notice_id for r in
+            db.query(NoticeRead).filter(NoticeRead.user_id == user_id).all()
+        ]
 
     from sqlalchemy import or_, and_
     notices = db.query(Notice).filter(
