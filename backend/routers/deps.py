@@ -21,9 +21,10 @@ async def get_current_user(
         decoded = firebase_auth.verify_id_token(token)
         return decoded
     except Exception as e:
+        print(f"[AUTH] 토큰 검증 실패: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"유효하지 않은 토큰이에요: {str(e)}",
+            detail="인증에 실패했어요",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

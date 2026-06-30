@@ -22,6 +22,23 @@ def create_notice(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    import os
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+
+    if req.notice_type == "system":
+        if not is_superadmin:
+            raise HTTPException(status_code=403, detail="시스템 공지는 시스템 관리자만 작성할 수 있어요")
+    elif req.notice_type == "company":
+        if not is_superadmin:
+            admin_member = db.query(CompanyMember).filter(
+                CompanyMember.user_id == current_user["uid"],
+                CompanyMember.company_id == req.company_id,
+                CompanyMember.is_admin == True,
+            ).first()
+            if not admin_member:
+                raise HTTPException(status_code=403, detail="해당 회사의 관리자만 공지를 작성할 수 있어요")
+
     notice = Notice(
         title=req.title,
         content=req.content,
@@ -148,9 +165,26 @@ def delete_notice(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    import os
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+
     notice = db.query(Notice).filter(Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(status_code=404, detail="공지를 찾을 수 없습니다")
+
+    is_creator = notice.created_by == current_user["uid"]
+    is_company_admin = False
+    if notice.company_id:
+        is_company_admin = db.query(CompanyMember).filter(
+            CompanyMember.user_id == current_user["uid"],
+            CompanyMember.company_id == notice.company_id,
+            CompanyMember.is_admin == True,
+        ).first() is not None
+
+    if not (is_superadmin or is_creator or is_company_admin):
+        raise HTTPException(status_code=403, detail="공지를 삭제할 권한이 없어요")
+
     notice.is_active = False
     db.commit()
     return {"success": True}

@@ -20,8 +20,8 @@ class AdminPasswordResetRequest(BaseModel):
 
 @router.get("/member-debug")
 def debug_member(email: str, x_admin_secret: str = Header(...), db: Session = Depends(get_db)):
-    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET", "workping-admin-2026")
-    if x_admin_secret != expected:
+    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET")
+    if not expected or x_admin_secret != expected:
         raise HTTPException(status_code=403, detail="권한 없음")
     members = db.query(CompanyMember).filter(CompanyMember.user_email == email).all()
     companies = {c.id: c.name for c in db.query(Company).all()}
@@ -43,15 +43,16 @@ def debug_member(email: str, x_admin_secret: str = Header(...), db: Session = De
 
 @router.post("/reset-firebase-password")
 def reset_firebase_password(req: AdminPasswordResetRequest, x_admin_secret: str = Header(...)):
-    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET", "workping-admin-2026")
-    if x_admin_secret != expected:
+    expected = os.getenv("SYSTEM_ADMIN_RESET_SECRET")
+    if not expected or x_admin_secret != expected:
         raise HTTPException(status_code=403, detail="권한 없음")
     try:
         user = firebase_auth.get_user_by_email(req.email)
         firebase_auth.update_user(user.uid, password=req.new_password)
         return {"success": True, "message": f"{req.email} 비밀번호 업데이트 완료"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[SUPERADMIN] Firebase 비밀번호 변경 실패: {e}")
+        raise HTTPException(status_code=500, detail="비밀번호 변경에 실패했어요")
 
 
 # 회사 생성 스키마

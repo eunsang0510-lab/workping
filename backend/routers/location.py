@@ -141,7 +141,7 @@ def record_location(
     except Exception as e:
         db.rollback()
         print(f"[ERROR] DB 저장 실패: {e}")
-        raise HTTPException(status_code=500, detail=f"DB 저장 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했어요")
 
     print(f"[OK] DB 저장 완료: {data.user_id} - {data.type} - {address} - {ts}")
 

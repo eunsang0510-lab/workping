@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from limiter import limiter
 from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
@@ -18,6 +18,7 @@ from models import company_request as company_request_model
 from models import push_subscription as push_subscription_model
 from models import notification as notification_model
 from models import permission as permission_model
+import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -190,8 +191,6 @@ async def lifespan(app: FastAPI):
         pass
 
 
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
-
 app = FastAPI(
     title="WorkPing API", description="GPS 기반 근태관리 서비스", version="1.0.0",
     lifespan=lifespan,
@@ -201,13 +200,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+_allowed_origins = ["https://workping-kappa.vercel.app"]
+if os.getenv("ENV") == "development":
+    _allowed_origins += ["http://localhost:3000", "http://127.0.0.1:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://workping-kappa.vercel.app",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -243,4 +242,5 @@ def health():
             conn.execute(text("SELECT 1"))
         return {"status": "ok", "db": "ok"}
     except Exception as e:
-        return {"status": "ok", "db": "error", "detail": str(e)}
+        print(f"[HEALTH] DB 오류: {e}")
+        return {"status": "ok", "db": "error"}

@@ -116,7 +116,12 @@ class UpdateMemberRequest(BaseModel):
 
 
 @router.post("/create")
-def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db)):
+def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    if not is_superadmin and current_user["uid"] != req.admin_id:
+        raise HTTPException(status_code=403, detail="본인 계정으로만 회사를 생성할 수 있어요")
+
     company = Company(name=req.name, admin_id=req.admin_id)
     db.add(company)
     db.flush()
@@ -189,7 +194,18 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/members/add")
-def add_member(req: AddMemberRequest, db: Session = Depends(get_db)):
+def add_member(req: AddMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    if not is_superadmin:
+        requester = db.query(CompanyMember).filter(
+            CompanyMember.user_id == current_user["uid"],
+            CompanyMember.company_id == req.company_id,
+            CompanyMember.is_admin == True,
+        ).first()
+        if not requester:
+            raise HTTPException(status_code=403, detail="해당 회사의 관리자만 팀원을 추가할 수 있어요")
+
     existing = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_id == req.user_id,
@@ -687,12 +703,25 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
     import random
     import string
 
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+
     member = db.query(CompanyMember).filter(
         CompanyMember.user_email == req.email
     ).first()
 
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
+
+    # 슈퍼어드민이 아닌 경우, 요청자가 해당 직원과 같은 회사의 관리자인지 확인
+    if not is_superadmin:
+        requester = db.query(CompanyMember).filter(
+            CompanyMember.user_id == current_user["uid"],
+            CompanyMember.company_id == member.company_id,
+            CompanyMember.is_admin == True,
+        ).first()
+        if not requester:
+            raise HTTPException(status_code=403, detail="해당 직원의 회사 관리자만 비밀번호를 초기화할 수 있어요")
 
     # 랜덤 비밀번호 생성
     chars = string.ascii_letters + string.digits
@@ -710,7 +739,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
         print(f"Firebase 비밀번호 변경 성공: {req.email}")
     except Exception as e:
         print(f"Firebase 비밀번호 변경 실패: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
+        raise HTTPException(status_code=400, detail="비밀번호 변경에 실패했어요")
 
     # SendGrid 이메일 발송
     try:
@@ -760,7 +789,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
     member.force_password_change = True
     db.commit()
 
-    return {"success": True, "message": f"임시 비밀번호가 {req.email}로 발송됐어요", "new_password": new_password}
+    return {"success": True, "message": f"임시 비밀번호가 {req.email}로 발송됐어요"}
 
 
 @router.put("/members/{member_id}")

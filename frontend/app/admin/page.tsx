@@ -622,9 +622,10 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   const handleCreateCompany = async () => {
     if (!companyName.trim()) return;
     try {
+      const token = await auth.currentUser?.getIdToken();
       await fetch(`${API_URL}/api/company/create`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ name: companyName, admin_id: user?.uid })
       });
       setShowCreateForm(false);

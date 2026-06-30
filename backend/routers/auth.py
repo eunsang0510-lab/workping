@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
 from models.user import User
 from models.company import CompanyMember
+from limiter import limiter
 import os
 
 router = APIRouter()
@@ -76,7 +77,8 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/find-email")
-def find_email(req: FindEmailRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def find_email(request: Request, req: FindEmailRequest, db: Session = Depends(get_db)):
     member = db.query(CompanyMember).filter(
         CompanyMember.company_id == req.company_id,
         CompanyMember.user_name == req.user_name,
@@ -91,7 +93,8 @@ def find_email(req: FindEmailRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/reset-password-self")
-def reset_password_self(req: ResetPasswordSelfRequest, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")
+def reset_password_self(request: Request, req: ResetPasswordSelfRequest, db: Session = Depends(get_db)):
     import random
     import string
     from firebase_admin import auth as firebase_auth
@@ -115,7 +118,8 @@ def reset_password_self(req: ResetPasswordSelfRequest, db: Session = Depends(get
             member.user_id = user.uid
             db.commit()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"비밀번호 변경 실패: {str(e)}")
+        print(f"[AUTH] 비밀번호 변경 실패: {e}")
+        raise HTTPException(status_code=400, detail="비밀번호 변경에 실패했어요")
 
     try:
         from sendgrid import SendGridAPIClient
