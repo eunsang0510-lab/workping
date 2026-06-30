@@ -29,6 +29,20 @@ export default function Login() {
   const [regError, setRegError] = useState("");
   const [regResult, setRegResult] = useState<{ email: string; password: string; companyName: string } | null>(null);
 
+  // 아이디·비밀번호 찾기 모달
+  const [showFindModal, setShowFindModal] = useState(false);
+  const [findTab, setFindTab] = useState<"id" | "pw">("id");
+  const [findName, setFindName] = useState("");
+  const [findBirth, setFindBirth] = useState("");
+  const [findIdResult, setFindIdResult] = useState<string | null>(null);
+  const [findIdLoading, setFindIdLoading] = useState(false);
+  const [findIdError, setFindIdError] = useState("");
+  const [findEmail, setFindEmail] = useState("");
+  const [findPwBirth, setFindPwBirth] = useState("");
+  const [findPwDone, setFindPwDone] = useState(false);
+  const [findPwLoading, setFindPwLoading] = useState(false);
+  const [findPwError, setFindPwError] = useState("");
+
   const router = useRouter();
   // 회사 소속 검증 중에는 onAuthStateChanged의 자동 리디렉트를 차단
   const verifyingRef = useRef(false);
@@ -140,6 +154,60 @@ export default function Login() {
   const resetRegForm = () => {
     setRegCompanyName(""); setRegRepName(""); setRegBizNumber("");
     setRegPhone(""); setRegEmail(""); setRegError(""); setRegResult(null);
+  };
+
+  const openFindModal = (tab: "id" | "pw" = "id") => {
+    setFindTab(tab);
+    setFindName(""); setFindBirth(""); setFindIdResult(null); setFindIdError("");
+    setFindEmail(""); setFindPwBirth(""); setFindPwDone(false); setFindPwError("");
+    setShowFindModal(true);
+  };
+
+  const handleFindId = async () => {
+    if (!findName.trim() || !findBirth.trim() || !selectedCompany) return;
+    setFindIdLoading(true);
+    setFindIdError("");
+    setFindIdResult(null);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/find-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: selectedCompany.id, user_name: findName.trim(), birth_date: findBirth.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFindIdResult(data.masked_email);
+      } else {
+        setFindIdError(data.detail || "일치하는 정보가 없어요");
+      }
+    } catch {
+      setFindIdError("서버 오류가 발생했어요");
+    } finally {
+      setFindIdLoading(false);
+    }
+  };
+
+  const handleFindPw = async () => {
+    if (!findEmail.trim() || !findPwBirth.trim()) return;
+    setFindPwLoading(true);
+    setFindPwError("");
+    try {
+      const res = await fetch(`${API_URL}/api/auth/reset-password-self`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: findEmail.trim(), birth_date: findPwBirth.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFindPwDone(true);
+      } else {
+        setFindPwError(data.detail || "일치하는 정보가 없어요");
+      }
+    } catch {
+      setFindPwError("서버 오류가 발생했어요");
+    } finally {
+      setFindPwLoading(false);
+    }
   };
 
   return (
@@ -312,6 +380,12 @@ export default function Login() {
                 <div className="text-[#a0a0a0] text-xs text-center">
                   초기 비밀번호: 이메일 앞부분 + 생년월일 (예: hong19901225)
                 </div>
+                <button
+                  onClick={() => openFindModal("id")}
+                  className="w-full text-[#a0a0a0] hover:text-[#5b5ef4] text-xs text-center transition-colors py-1"
+                >
+                  아이디 · 비밀번호 찾기
+                </button>
               </>
             )}
           </div>
@@ -398,6 +472,123 @@ export default function Login() {
           로그인 시 <Link href="/terms" className="text-[#5b5ef4] hover:underline">서비스 이용약관</Link> 및 <Link href="/privacy" className="text-[#5b5ef4] hover:underline">개인정보처리방침</Link>에 동의합니다
         </p>
       </div>
+
+      {/* 아이디·비밀번호 찾기 모달 */}
+      {showFindModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden">
+            <div className="px-5 pt-5 pb-0">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[#0a0a0a] font-black text-base">아이디 · 비밀번호 찾기</div>
+                <button onClick={() => setShowFindModal(false)} className="text-[#a0a0a0] hover:text-[#0a0a0a] text-2xl font-light leading-none">×</button>
+              </div>
+              <div className="flex border-b border-[#e5e5e5]">
+                <button
+                  onClick={() => { setFindTab("id"); setFindIdResult(null); setFindIdError(""); }}
+                  className={`flex-1 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px ${findTab === "id" ? "border-[#5b5ef4] text-[#5b5ef4]" : "border-transparent text-[#a0a0a0] hover:text-[#6b6b6b]"}`}
+                >
+                  아이디 찾기
+                </button>
+                <button
+                  onClick={() => { setFindTab("pw"); setFindPwDone(false); setFindPwError(""); }}
+                  className={`flex-1 py-2.5 text-sm font-bold transition-all border-b-2 -mb-px ${findTab === "pw" ? "border-[#5b5ef4] text-[#5b5ef4]" : "border-transparent text-[#a0a0a0] hover:text-[#6b6b6b]"}`}
+                >
+                  비밀번호 찾기
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {findTab === "id" && (
+                <>
+                  {selectedCompany && (
+                    <div className="bg-[#f8f8f8] rounded-xl px-4 py-2.5 flex items-center gap-2">
+                      <span>🏢</span>
+                      <span className="text-[#0a0a0a] text-sm">{selectedCompany.name}</span>
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="이름"
+                    value={findName}
+                    onChange={(e) => setFindName(e.target.value)}
+                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  />
+                  <input
+                    type="text"
+                    placeholder="생년월일 8자리 (예: 19901225)"
+                    value={findBirth}
+                    onChange={(e) => setFindBirth(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleFindId()}
+                    maxLength={8}
+                    className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                  />
+                  {findIdError && <div className="text-[#ef4444] text-xs text-center">{findIdError}</div>}
+                  {findIdResult && (
+                    <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-xl p-4 text-center">
+                      <div className="text-[#a0a0a0] text-xs mb-1">등록된 이메일</div>
+                      <div className="text-[#5b5ef4] font-black text-lg">{findIdResult}</div>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleFindId}
+                    disabled={findIdLoading || !findName.trim() || !findBirth.trim()}
+                    className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+                  >
+                    {findIdLoading ? "조회 중..." : "아이디 찾기"}
+                  </button>
+                </>
+              )}
+
+              {findTab === "pw" && (
+                <>
+                  {!findPwDone ? (
+                    <>
+                      <input
+                        type="email"
+                        placeholder="회사 이메일"
+                        value={findEmail}
+                        onChange={(e) => setFindEmail(e.target.value)}
+                        className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="생년월일 8자리 (예: 19901225)"
+                        value={findPwBirth}
+                        onChange={(e) => setFindPwBirth(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleFindPw()}
+                        maxLength={8}
+                        className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
+                      />
+                      {findPwError && <div className="text-[#ef4444] text-xs text-center">{findPwError}</div>}
+                      <button
+                        onClick={handleFindPw}
+                        disabled={findPwLoading || !findEmail.trim() || !findPwBirth.trim()}
+                        className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all text-sm"
+                      >
+                        {findPwLoading ? "발송 중..." : "임시 비밀번호 발송"}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="text-4xl mb-3">📧</div>
+                      <div className="text-[#0a0a0a] font-black text-base mb-1">이메일을 확인해주세요</div>
+                      <div className="text-[#6b6b6b] text-sm">{findEmail}로<br/>임시 비밀번호가 발송됐어요</div>
+                      <div className="text-[#a0a0a0] text-xs mt-3">로그인 후 반드시 비밀번호를 변경해주세요</div>
+                      <button
+                        onClick={() => setShowFindModal(false)}
+                        className="mt-4 w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-3 rounded-xl transition-all text-sm"
+                      >
+                        로그인하러 가기
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 등록 완료 팝업 - 계정 정보 표시 */}
       {regResult && (
