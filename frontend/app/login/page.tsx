@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { signInWithPopup, signInWithEmailAndPassword } from "firebase/auth";
+import { useState, useEffect, useRef } from "react";
+import { signInWithPopup, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -30,10 +30,12 @@ export default function Login() {
   const [regResult, setRegResult] = useState<{ email: string; password: string; companyName: string } | null>(null);
 
   const router = useRouter();
+  // 회사 소속 검증 중에는 onAuthStateChanged의 자동 리디렉트를 차단
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) router.push("/dashboard");
+      if (user && !verifyingRef.current) router.push("/dashboard");
     });
     return () => unsubscribe();
   }, [router]);
@@ -74,16 +76,30 @@ export default function Login() {
     }
     setLoading(true);
     setError("");
+    verifyingRef.current = true;
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+
+      // 선택한 회사 소속 여부 검증
+      const res = await fetch(`${API_URL}/api/company/my/${uid}`);
+      const data = await res.json();
+
+      if (!data.company_id || data.company_id !== selectedCompany.id) {
+        await signOut(auth);
+        setError("선택한 회사에 등록되지 않은 계정이에요");
+        return;
+      }
+
       router.push("/dashboard");
     } catch (error: any) {
       if (error.code === "auth/invalid-credential") {
         setError("이메일 또는 비밀번호가 올바르지 않아요");
-      } else {
+      } else if (error.code) {
         setError("로그인에 실패했어요. 다시 시도해주세요");
       }
     } finally {
+      verifyingRef.current = false;
       setLoading(false);
     }
   };
