@@ -55,6 +55,9 @@ class LeaveBalanceRequest(BaseModel):
 class ToggleLeaveRequest(BaseModel):
     leave_enabled: bool
 
+class ToggleApprovalRequest(BaseModel):
+    leave_approval_required: bool
+
 
 def calc_days(start_date: str, end_date: str, is_half: bool) -> float:
     if is_half:
@@ -106,6 +109,9 @@ def apply_leave(
         status_label = "승인된" if conflict.status == "approved" else "신청 중인"
         raise HTTPException(status_code=400, detail=f"{conflict.start_date}에 이미 {status_label} {type_label}가 있어요")
 
+    approval_required = getattr(company, "leave_approval_required", True)
+    initial_status = "pending" if approval_required else "approved"
+
     leave = Leave(
         company_id=req.company_id,
         user_id=req.user_id,
@@ -116,23 +122,28 @@ def apply_leave(
         days=days,
         is_half=req.is_half,
         reason=req.reason,
-        status="pending",
+        status=initial_status,
     )
     db.add(leave)
+
+    # 승인 불필요 → 즉시 차감
+    if not approval_required:
+        balance.used_days = balance.used_days + (0.5 if req.is_half else days)
+
     db.commit()
     db.refresh(leave)
 
-    # 팀장/관리자에게 알림
-    manager_ids = _get_manager_ids(db, req.company_id, req.user_id)
-    if manager_ids:
-        send_push_to_users(
-            db, manager_ids,
-            title="📋 연차 신청",
-            body=f"{req.user_name or req.user_id}님이 {req.start_date} 연차를 신청했어요.",
-            url="/manager",
-        )
+    if approval_required:
+        manager_ids = _get_manager_ids(db, req.company_id, req.user_id)
+        if manager_ids:
+            send_push_to_users(
+                db, manager_ids,
+                title="📋 연차 신청",
+                body=f"{req.user_name or req.user_id}님이 {req.start_date} 연차를 신청했어요.",
+                url="/manager",
+            )
 
-    return {"success": True, "leave_id": leave.id, "days": days}
+    return {"success": True, "leave_id": leave.id, "days": days, "auto_approved": not approval_required}
 
 
 # ── 내 연차 목록 ───────────────────────────────────────
@@ -501,6 +512,33 @@ def toggle_leave(
     company.leave_enabled = req.leave_enabled
     db.commit()
     return {"success": True, "leave_enabled": req.leave_enabled}
+
+
+# ── 연차 승인 필요 여부 ON/OFF (관리자/superadmin) ──────
+@router.put("/toggle-approval/{company_id}")
+def toggle_leave_approval(
+    company_id: str,
+    req: ToggleApprovalRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+
+    if not member and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 설정할 수 있어요")
+
+    company.leave_approval_required = req.leave_approval_required
+    db.commit()
+    return {"success": True, "leave_approval_required": req.leave_approval_required}
 
 
 # ── 팀장 지정/해제 (관리자/superadmin) ────────────────

@@ -60,6 +60,7 @@ def run_migrations():
             "CREATE TABLE IF NOT EXISTS user_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, user_id VARCHAR NOT NULL, permission_id VARCHAR NOT NULL, granted_by VARCHAR NOT NULL, granted_at TIMESTAMP DEFAULT NOW())",
             "CREATE INDEX IF NOT EXISTS ix_user_permissions_company_id ON user_permissions (company_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_permissions_user_id ON user_permissions (user_id)",
+            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS leave_approval_required BOOLEAN DEFAULT TRUE",
         ]
         for sql in migrations:
             try:

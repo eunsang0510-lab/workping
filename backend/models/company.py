@@ -10,7 +10,8 @@ class Company(Base):
     name       = Column(String, nullable=False)
     admin_id   = Column(String, nullable=False, index=True)
     plan       = Column(String, default="team")
-    leave_enabled  = Column(Boolean, default=False)  # 연차 기능 ON/OFF
+    leave_enabled           = Column(Boolean, default=False)  # 연차 기능 ON/OFF
+    leave_approval_required = Column(Boolean, default=True)   # 연차 승인 필요 여부
     created_at = Column(DateTime, default=datetime.now)
 
 class CompanyMember(Base):

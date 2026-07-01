@@ -151,6 +151,7 @@ export default function Admin() {
   const [teamLoading, setTeamLoading] = useState(false);
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [leaveEnabled, setLeaveEnabled] = useState(false);
+  const [leaveApprovalRequired, setLeaveApprovalRequired] = useState(true);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
@@ -475,12 +476,14 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
       const companyData = await companyRes.json();
       const currentCompany = companyData.companies?.find((c: any) => c.id === companyId);
       setLeaveEnabled(currentCompany?.leave_enabled || false);
+      setLeaveApprovalRequired(currentCompany?.leave_approval_required ?? true);
       setIsManager(false);
       if (!currentCompany?.leave_enabled) return;
     } else {
       const myRes = await fetch(`${API_URL}/api/company/my/${userId}`);
       const myData = await myRes.json();
       setLeaveEnabled(myData.leave_enabled || false);
+      setLeaveApprovalRequired(myData.leave_approval_required ?? true);
       setIsManager(myData.is_manager || false);
       if (!myData.leave_enabled) return;
     }
@@ -565,6 +568,26 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     showToast("설정 변경 실패", "error");
   }
 };
+
+  const handleToggleApproval = async () => {
+    if (!company?.id) return;
+    const newValue = !leaveApprovalRequired;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/leave/toggle-approval/${company.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ leave_approval_required: newValue }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeaveApprovalRequired(newValue);
+        showToast(`승인 필요 ${newValue ? "활성화" : "비활성화"} 완료!`, "success");
+      }
+    } catch {
+      showToast("설정 변경 실패", "error");
+    }
+  };
 
   const fetchBusinessTrips = async (companyId: string) => {
   try {
@@ -1118,13 +1141,28 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 관리</div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#6b6b6b]">{leaveEnabled ? "사용중" : "미사용"}</span>
-                <div
-                  onClick={handleToggleLeave}
-                  className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveEnabled ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveEnabled ? "left-7" : "left-1"}`} />
+              <div className="flex items-center gap-4">
+                {/* 승인 필요 토글 (연차 ON일 때만) */}
+                {leaveEnabled && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#6b6b6b]">승인 필요</span>
+                    <div
+                      onClick={handleToggleApproval}
+                      className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveApprovalRequired ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveApprovalRequired ? "left-7" : "left-1"}`} />
+                    </div>
+                  </div>
+                )}
+                {/* 연차 사용 토글 */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#6b6b6b]">{leaveEnabled ? "사용중" : "미사용"}</span>
+                  <div
+                    onClick={handleToggleLeave}
+                    className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${leaveEnabled ? "bg-[#5b5ef4]" : "bg-[#e5e5e5]"}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${leaveEnabled ? "left-7" : "left-1"}`} />
+                  </div>
                 </div>
               </div>
             </div>

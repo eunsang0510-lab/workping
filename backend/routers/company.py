@@ -158,6 +158,7 @@ def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depen
             "member_count": member_counts.get(c.id, 0),
             "company_code": c.id[:8],
             "leave_enabled": c.leave_enabled,
+            "leave_approval_required": getattr(c, "leave_approval_required", True),
         }
         for c in companies
     ]
@@ -840,6 +841,7 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
         "is_admin": member.is_admin,
         "is_manager": member.is_manager,
         "leave_enabled": company.leave_enabled if company else False,
+        "leave_approval_required": getattr(company, "leave_approval_required", True) if company else True,
         "force_password_change": member.force_password_change or False,
     }
 
