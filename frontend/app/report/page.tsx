@@ -22,10 +22,55 @@ interface DailyData {
 
 interface Report {
   period: string;
+  week_start?: string;
+  year?: number;
+  month?: number;
   total_work_hours: string;
   work_days?: number;
   avg_work_hours?: string;
   daily: Record<string, DailyData>;
+}
+
+function getCurrentMonday(): Date {
+  const today = new Date();
+  const d = today.getDay();
+  const diff = d === 0 ? -6 : 1 - d;
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + diff);
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+}
+
+function getCurrentMonthStart(): Date {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getWeekLabel(mon: Date): string {
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return `${mon.getMonth() + 1}/${mon.getDate()} ~ ${sun.getMonth() + 1}/${sun.getDate()}`;
+}
+
+function getMonthLabel(d: Date): string {
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+}
+
+function isCurrentWeek(mon: Date): boolean {
+  const current = getCurrentMonday();
+  return mon.getTime() === current.getTime();
+}
+
+function isCurrentMonth(d: Date): boolean {
+  const today = new Date();
+  return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
 }
 
 export default function Report() {
@@ -33,26 +78,24 @@ export default function Report() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"weekly" | "monthly">("weekly");
   const [report, setReport] = useState<Report | null>(null);
+  const [weekStart, setWeekStart] = useState<Date>(getCurrentMonday);
+  const [monthDate, setMonthDate] = useState<Date>(getCurrentMonthStart);
   const router = useRouter();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        fetchReport(user.uid, "weekly");
-      } else {
-        router.push("/login");
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-   const fetchReport = async (userId: string, type: "weekly" | "monthly") => {
+  const fetchReport = async (
+    userId: string,
+    type: "weekly" | "monthly",
+    wStart: Date,
+    mDate: Date
+  ) => {
     try {
-      const res = await fetch(`${API_URL}/api/attendance/${type}/${userId}`, {
-        headers: await getAuthHeader(),
-      });
+      let url = `${API_URL}/api/attendance/${type}/${userId}`;
+      if (type === "weekly") {
+        url += `?start_date=${toYMD(wStart)}`;
+      } else {
+        url += `?year=${mDate.getFullYear()}&month=${mDate.getMonth() + 1}`;
+      }
+      const res = await fetch(url, { headers: await getAuthHeader() });
       const data = await res.json();
       setReport(data);
     } catch (error) {
@@ -60,9 +103,58 @@ export default function Report() {
     }
   };
 
+  useEffect(() => {
+    const mon = getCurrentMonday();
+    const mDate = getCurrentMonthStart();
+    setWeekStart(mon);
+    setMonthDate(mDate);
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUser(user);
+        fetchReport(user.uid, "weekly", mon, mDate);
+      } else {
+        router.push("/login");
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
   const handleTabChange = (tab: "weekly" | "monthly") => {
     setActiveTab(tab);
-    if (user) fetchReport(user.uid, tab);
+    if (user) fetchReport(user.uid, tab, weekStart, monthDate);
+  };
+
+  const handlePrev = () => {
+    if (activeTab === "weekly") {
+      const prev = new Date(weekStart);
+      prev.setDate(prev.getDate() - 7);
+      setWeekStart(prev);
+      if (user) fetchReport(user.uid, "weekly", prev, monthDate);
+    } else {
+      const prev = new Date(monthDate);
+      prev.setMonth(prev.getMonth() - 1);
+      setMonthDate(prev);
+      if (user) fetchReport(user.uid, "monthly", weekStart, prev);
+    }
+  };
+
+  const handleNext = () => {
+    if (activeTab === "weekly") {
+      if (isCurrentWeek(weekStart)) return;
+      const next = new Date(weekStart);
+      next.setDate(next.getDate() + 7);
+      setWeekStart(next);
+      if (user) fetchReport(user.uid, "weekly", next, monthDate);
+    } else {
+      if (isCurrentMonth(monthDate)) return;
+      const next = new Date(monthDate);
+      next.setMonth(next.getMonth() + 1);
+      setMonthDate(next);
+      if (user) fetchReport(user.uid, "monthly", weekStart, next);
+    }
   };
 
   const formatTime = (isoString: string | null) => {
@@ -77,6 +169,8 @@ export default function Report() {
   const getWorkBarWidth = (minutes: number) => {
     return Math.min((minutes / 600) * 100, 100);
   };
+
+  const atCurrentPeriod = activeTab === "weekly" ? isCurrentWeek(weekStart) : isCurrentMonth(monthDate);
 
   if (loading) {
     return (
@@ -99,7 +193,7 @@ export default function Report() {
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-2 mb-5 bg-white border border-[#e5e5e5] rounded-xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+      <div className="flex gap-2 mb-3 bg-white border border-[#e5e5e5] rounded-xl p-1 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         {(["weekly", "monthly"] as const).map((tab) => (
           <button
             key={tab}
@@ -111,6 +205,30 @@ export default function Report() {
             {tab === "weekly" ? "주간" : "월간"}
           </button>
         ))}
+      </div>
+
+      {/* 기간 네비게이션 */}
+      <div className="flex items-center justify-between bg-white border border-[#e5e5e5] rounded-xl px-4 py-3 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <button
+          onClick={handlePrev}
+          className="w-8 h-8 flex items-center justify-center text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0] rounded-lg transition-all"
+        >
+          ←
+        </button>
+        <span className="text-[#0a0a0a] text-sm font-semibold">
+          {activeTab === "weekly" ? getWeekLabel(weekStart) : getMonthLabel(monthDate)}
+        </span>
+        <button
+          onClick={handleNext}
+          disabled={atCurrentPeriod}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+            atCurrentPeriod
+              ? "text-[#d0d0d0] cursor-not-allowed"
+              : "text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
+          }`}
+        >
+          →
+        </button>
       </div>
 
       {report && (

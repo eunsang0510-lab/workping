@@ -355,11 +355,11 @@ export default function LeavePage() {
       {/* 신청 내역 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">신청 내역</div>
-        {leaves.length === 0 ? (
+        {leaves.filter(l => l.status !== "cancelled").length === 0 ? (
           <div className="text-[#a0a0a0] text-sm text-center py-8">신청 내역이 없어요</div>
         ) : (
           <div className="space-y-3">
-            {leaves.map((leave) => {
+            {leaves.filter(l => l.status !== "cancelled").map((leave) => {
               const s = statusLabel(leave.status);
               return (
                 <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">

@@ -149,6 +149,7 @@ def get_company_attendance(
 @router.get("/weekly/{user_id}")
 def get_weekly_report(
     user_id: str,
+    start_date: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -156,11 +157,24 @@ def get_weekly_report(
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
     today = datetime.now(KST).date()
-    week_ago = today - timedelta(days=7)
+
+    if start_date:
+        try:
+            week_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except ValueError:
+            week_start = today - timedelta(days=today.weekday())
+    else:
+        week_start = today - timedelta(days=today.weekday())
+
+    week_end = week_start + timedelta(days=6)
 
     records = (
         db.query(Attendance)
-        .filter(Attendance.user_id == user_id, Attendance.recorded_at >= week_ago)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= week_start,
+            Attendance.recorded_at < week_end + timedelta(days=1),
+        )
         .order_by(Attendance.recorded_at)
         .all()
     )
@@ -191,7 +205,8 @@ def get_weekly_report(
 
     return {
         "user_id": user_id,
-        "period": f"{week_ago} ~ {today}",
+        "period": f"{week_start} ~ {week_end}",
+        "week_start": str(week_start),
         "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
         "daily": daily,
     }
@@ -200,18 +215,31 @@ def get_weekly_report(
 @router.get("/monthly/{user_id}")
 def get_monthly_report(
     user_id: str,
+    year: Optional[int] = Query(default=None),
+    month: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    import calendar as _cal
+
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
     today = datetime.now(KST).date()
-    month_ago = today - timedelta(days=30)
+    target_year = year if year else today.year
+    target_month = month if month else today.month
+
+    _, last_day = _cal.monthrange(target_year, target_month)
+    month_start = datetime(target_year, target_month, 1).date()
+    month_end = datetime(target_year, target_month, last_day).date()
 
     records = (
         db.query(Attendance)
-        .filter(Attendance.user_id == user_id, Attendance.recorded_at >= month_ago)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= month_start,
+            Attendance.recorded_at < month_end + timedelta(days=1),
+        )
         .order_by(Attendance.recorded_at)
         .all()
     )
@@ -241,7 +269,9 @@ def get_monthly_report(
 
     return {
         "user_id": user_id,
-        "period": f"{month_ago} ~ {today}",
+        "period": f"{target_year}년 {target_month}월",
+        "year": target_year,
+        "month": target_month,
         "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
         "work_days": work_days,
         "avg_work_hours": (
