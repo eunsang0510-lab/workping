@@ -39,6 +39,8 @@ export default function BusinessTripPage() {
   const [endDate, setEndDate] = useState("");
   const [applying, setApplying] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: ToastState["type"] = "info") => {
@@ -120,28 +122,37 @@ export default function BusinessTripPage() {
   };
 
   const handleCancel = async (tripId: string) => {
-    if (!confirm("출장 신청을 취소할까요?")) return;
+    setCancelLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/business-trip/${tripId}`, {
-        method: "DELETE",
+      const res = await fetch(`${API_URL}/api/business-trip/cancel/${tripId}`, {
+        method: "POST",
         headers: await getAuthHeader(),
       });
       const data = await res.json();
       if (data.success) {
-        showToast("신청이 취소됐어요", "info");
+        if (data.action === "cancel_requested") {
+          showToast("취소 신청 완료! 관리자 승인 후 취소됩니다", "info");
+        } else {
+          showToast("출장 신청이 취소됐어요", "success");
+        }
         fetchTrips(user!.uid);
       } else {
         showToast(data.detail || "취소 실패", "error");
       }
     } catch {
-      showToast("취소 실패", "error");
+      showToast("취소 처리 실패", "error");
+    } finally {
+      setCancelLoading(false);
+      setCancelConfirm(null);
     }
   };
 
   const statusBadge = (status: string) => {
-    if (status === "pending")  return { text: "대기중",  bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]" };
-    if (status === "approved") return { text: "승인",    bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]" };
-    return                            { text: "반려",    bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]" };
+    if (status === "pending")          return { text: "대기중",    bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]" };
+    if (status === "approved")         return { text: "승인",      bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]" };
+    if (status === "cancel_requested") return { text: "취소신청중", bg: "bg-[#fff7ed]", color: "text-[#c2410c]", border: "border-[#fed7aa]" };
+    if (status === "cancelled")        return { text: "취소됨",    bg: "bg-[#f3f4f6]", color: "text-[#9ca3af]", border: "border-[#e5e7eb]" };
+    return                                    { text: "반려",      bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]" };
   };
 
   const fmtDate = (d: string) =>
@@ -266,13 +277,38 @@ export default function BusinessTripPage() {
                       반려 사유: {trip.reject_reason}
                     </div>
                   )}
-                  {trip.status === "pending" && (
-                    <button
-                      onClick={() => handleCancel(trip.id)}
-                      className="text-[#a0a0a0] text-xs hover:text-[#ef4444] transition-colors"
-                    >
-                      신청 취소
-                    </button>
+                  {(trip.status === "pending" || trip.status === "approved") && (
+                    cancelConfirm === trip.id ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs text-[#6b6b6b] flex-1">
+                          {trip.status === "pending" ? "신청을 취소할까요?" : "취소를 신청할까요?"}
+                        </span>
+                        <button
+                          onClick={() => handleCancel(trip.id)}
+                          disabled={cancelLoading}
+                          className="text-xs text-white bg-[#ef4444] px-3 py-1.5 rounded-lg font-bold disabled:opacity-50"
+                        >
+                          {cancelLoading ? "처리중" : "예"}
+                        </button>
+                        <button
+                          onClick={() => setCancelConfirm(null)}
+                          className="text-xs text-[#6b6b6b] border border-[#e5e5e5] bg-white px-3 py-1.5 rounded-lg"
+                        >
+                          아니오
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCancelConfirm(trip.id)}
+                        className={`mt-2 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                          trip.status === "pending"
+                            ? "text-[#ef4444] border-[#fecaca] hover:bg-[#fef2f2]"
+                            : "text-[#f59e0b] border-[#fde68a] hover:bg-[#fffbeb]"
+                        }`}
+                      >
+                        {trip.status === "pending" ? "신청취소" : "취소신청"}
+                      </button>
+                    )
                   )}
                 </div>
               );

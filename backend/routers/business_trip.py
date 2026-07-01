@@ -190,6 +190,30 @@ def approve_trip(
         if managed is not None and trip.user_id not in managed:
             raise HTTPException(status_code=403, detail="담당 팀원의 신청만 승인할 수 있어요")
 
+    prev_status = trip.status
+
+    # 취소 신청 처리 (cancel_requested)
+    if prev_status == "cancel_requested":
+        trip.approved_by = uid
+        trip.approved_at = datetime.now()
+        if req.status == "approved":
+            trip.status = "cancelled"
+            db.commit()
+            send_push_to_users(db, [trip.user_id],
+                title="✈️ 출장 취소 승인",
+                body=f"{trip.start_date} 출장 취소가 승인됐어요.",
+                url="/business-trip")
+            return {"success": True, "status": "cancelled"}
+        else:
+            trip.status = "approved"
+            db.commit()
+            send_push_to_users(db, [trip.user_id],
+                title="✈️ 출장 취소 반려",
+                body=f"{trip.start_date} 출장 취소 신청이 반려됐어요.",
+                url="/business-trip")
+            return {"success": True, "status": "approved"}
+
+    # 일반 승인/반려 처리 (pending)
     trip.status = req.status
     trip.approved_by = uid
     trip.approved_at = datetime.now()
@@ -207,8 +231,8 @@ def approve_trip(
     return {"success": True, "status": req.status}
 
 
-# ── 출장 신청 취소 (본인, pending 상태만) ─────────────
-@router.delete("/{trip_id}")
+# ── 출장 신청취소 (본인) ──────────────────────────────
+@router.post("/cancel/{trip_id}")
 def cancel_trip(
     trip_id: str,
     db: Session = Depends(get_db),
@@ -219,11 +243,26 @@ def cancel_trip(
         raise HTTPException(status_code=404, detail="출장 신청을 찾을 수 없어요")
     if trip.user_id != current_user["uid"]:
         raise HTTPException(status_code=403, detail="본인의 신청만 취소할 수 있어요")
-    if trip.status != "pending":
-        raise HTTPException(status_code=400, detail="대기 중인 신청만 취소할 수 있어요")
-    db.delete(trip)
-    db.commit()
-    return {"success": True}
+
+    if trip.status == "pending":
+        trip.status = "cancelled"
+        db.commit()
+        return {"success": True, "action": "cancelled"}
+
+    if trip.status == "approved":
+        trip.status = "cancel_requested"
+        db.commit()
+        manager_ids = _get_manager_ids_for_trip(db, trip.company_id, trip.user_id)
+        if manager_ids:
+            send_push_to_users(
+                db, manager_ids,
+                title="✈️ 출장 취소 신청",
+                body=f"{trip.user_name or trip.user_id}님이 {trip.start_date} 출장 취소를 신청했어요.",
+                url="/manager",
+            )
+        return {"success": True, "action": "cancel_requested"}
+
+    raise HTTPException(status_code=400, detail="취소할 수 없는 상태예요")
 
 
 def _serialize(t: BusinessTrip) -> dict:
