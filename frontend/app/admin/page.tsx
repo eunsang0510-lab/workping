@@ -618,10 +618,16 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
     });
     const data = await res.json();
     if (data.success) {
-      showToast(status === "approved" ? "승인 완료!" : "반려 완료!", "success");
+      const msg =
+        data.status === "cancelled" ? "취소 승인 완료!" :
+        data.status === "approved" && status === "rejected" ? "취소 반려 완료!" :
+        status === "approved" ? "승인 완료!" : "반려 완료!";
+      showToast(msg, "success");
       fetchBusinessTrips(company!.id);
       setTripRejectModal(null);
       setTripRejectReason("");
+    } else {
+      showToast(data.detail || "처리 실패", "error");
     }
   } catch {
     showToast("처리 실패", "error");
@@ -1375,10 +1381,13 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
               <div className="space-y-3">
                 {pagedTrips.map((trip) => {
                   const isPending = trip.status === "pending";
+                  const isCancelRequested = trip.status === "cancel_requested";
                   const badgeMap: Record<string, { bg: string; color: string; border: string; text: string }> = {
-                    pending:  { bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]", text: "대기중" },
-                    approved: { bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]", text: "승인" },
-                    rejected: { bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]", text: "반려" },
+                    pending:          { bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]", text: "대기중" },
+                    approved:         { bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]", text: "승인" },
+                    rejected:         { bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]", text: "반려" },
+                    cancel_requested: { bg: "bg-[#fff7ed]", color: "text-[#c2410c]", border: "border-[#fed7aa]", text: "취소신청" },
+                    cancelled:        { bg: "bg-[#f8f8f8]", color: "text-[#a0a0a0]", border: "border-[#e5e5e5]", text: "취소됨" },
                   };
                   const badge = badgeMap[trip.status] || badgeMap.pending;
                   return (
@@ -1404,6 +1413,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                           반려 사유: {trip.reject_reason}
                         </div>
                       )}
+                      {isCancelRequested && (
+                        <div className="text-[#c2410c] text-xs mb-2 font-medium">취소 신청이 들어왔어요</div>
+                      )}
                       {isPending && (
                         <div className="flex gap-2 mt-2">
                           <button
@@ -1417,6 +1429,22 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                             className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
                           >
                             반려
+                          </button>
+                        </div>
+                      )}
+                      {isCancelRequested && (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleApproveTrip(trip.id, "approved")}
+                            className="flex-1 bg-[#ef4444] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#dc2626]"
+                          >
+                            취소 승인
+                          </button>
+                          <button
+                            onClick={() => handleApproveTrip(trip.id, "rejected")}
+                            className="flex-1 bg-white border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#f8f8f8]"
+                          >
+                            취소 반려
                           </button>
                         </div>
                       )}

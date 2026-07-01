@@ -214,6 +214,9 @@ def approve_trip(
             return {"success": True, "status": "approved"}
 
     # 일반 승인/반려 처리 (pending)
+    if prev_status != "pending":
+        raise HTTPException(status_code=400, detail="대기 중인 신청만 처리할 수 있어요")
+
     trip.status = req.status
     trip.approved_by = uid
     trip.approved_at = datetime.now()
