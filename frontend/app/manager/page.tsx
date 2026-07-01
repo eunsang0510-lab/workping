@@ -47,9 +47,67 @@ interface AttendanceMember {
   is_missing_checkout: boolean;
 }
 
+interface MemberReport {
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  work_days: number;
+  total_work_hours: string;
+  total_minutes: number;
+  daily: Record<string, { checkin: string | null; checkout: string | null; work_minutes: number }>;
+}
+
+interface CompanyReport {
+  period: string;
+  period_start: string;
+  period_end: string;
+  members: MemberReport[];
+}
+
 interface Toast {
   message: string;
   type: "success" | "error";
+}
+
+function toYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getCurrentMonday(): Date {
+  const today = new Date();
+  const d = today.getDay();
+  const diff = d === 0 ? -6 : 1 - d;
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + diff);
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+}
+
+function getCurrentMonthStart(): Date {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
+}
+
+function getWeekLabel(mon: Date): string {
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return `${mon.getMonth() + 1}/${mon.getDate()} ~ ${sun.getMonth() + 1}/${sun.getDate()}`;
+}
+
+function getMonthLabel(d: Date): string {
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+}
+
+function isCurrentWeek(mon: Date): boolean {
+  return mon.getTime() === getCurrentMonday().getTime();
+}
+
+function isCurrentMonth(d: Date): boolean {
+  const today = new Date();
+  return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
 }
 
 function formatTime(iso: string | null) {
@@ -61,7 +119,6 @@ export default function ManagerPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("leave");
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -71,6 +128,12 @@ export default function ManagerPage() {
 
   const [rejectModal, setRejectModal] = useState<{ id: string; type: "leave" | "trip" } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  // 기간 네비게이션 상태 (근태현황·현황 탭 공유)
+  const [reportType, setReportType] = useState<"weekly" | "monthly">("weekly");
+  const [reportWeekStart, setReportWeekStart] = useState<Date>(getCurrentMonday);
+  const [reportMonthDate, setReportMonthDate] = useState<Date>(getCurrentMonthStart);
+  const [companyReport, setCompanyReport] = useState<CompanyReport | null>(null);
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
@@ -114,10 +177,31 @@ export default function ManagerPage() {
     }
   }, []);
 
+  const fetchCompanyReport = useCallback(async (
+    cid: string,
+    type: "weekly" | "monthly",
+    wStart: Date,
+    mDate: Date
+  ) => {
+    try {
+      const headers = await getAuthHeader();
+      let url = `${API_URL}/api/attendance/company-report/${cid}?type=${type}`;
+      if (type === "weekly") {
+        url += `&start_date=${toYMD(wStart)}`;
+      } else {
+        url += `&year=${mDate.getFullYear()}&month=${mDate.getMonth() + 1}`;
+      }
+      const res = await fetch(url, { headers });
+      const data = await res.json();
+      setCompanyReport(data);
+    } catch {
+      showToast("리포트 로딩 실패", "error");
+    }
+  }, []);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) { router.push("/login"); return; }
-      setUserId(user.uid);
       try {
         const res = await fetch(`${API_URL}/api/company/my/${user.uid}`);
         const data = await res.json();
@@ -138,6 +222,50 @@ export default function ManagerPage() {
     return () => unsub();
   }, [router, fetchLeaves, fetchTrips, fetchAttendance]);
 
+  const handleTabChange = (newTab: Tab) => {
+    setTab(newTab);
+    if (newTab === "attendance" && companyId) {
+      fetchCompanyReport(companyId, reportType, reportWeekStart, reportMonthDate);
+    }
+  };
+
+  const handleReportTypeChange = (type: "weekly" | "monthly") => {
+    setReportType(type);
+    if (companyId) {
+      fetchCompanyReport(companyId, type, reportWeekStart, reportMonthDate);
+    }
+  };
+
+  const handleReportPrev = () => {
+    if (reportType === "weekly") {
+      const prev = new Date(reportWeekStart);
+      prev.setDate(prev.getDate() - 7);
+      setReportWeekStart(prev);
+      if (companyId) fetchCompanyReport(companyId, "weekly", prev, reportMonthDate);
+    } else {
+      const prev = new Date(reportMonthDate);
+      prev.setMonth(prev.getMonth() - 1);
+      setReportMonthDate(prev);
+      if (companyId) fetchCompanyReport(companyId, "monthly", reportWeekStart, prev);
+    }
+  };
+
+  const handleReportNext = () => {
+    if (reportType === "weekly") {
+      if (isCurrentWeek(reportWeekStart)) return;
+      const next = new Date(reportWeekStart);
+      next.setDate(next.getDate() + 7);
+      setReportWeekStart(next);
+      if (companyId) fetchCompanyReport(companyId, "weekly", next, reportMonthDate);
+    } else {
+      if (isCurrentMonth(reportMonthDate)) return;
+      const next = new Date(reportMonthDate);
+      next.setMonth(next.getMonth() + 1);
+      setReportMonthDate(next);
+      if (companyId) fetchCompanyReport(companyId, "monthly", reportWeekStart, next);
+    }
+  };
+
   const approveLeave = async (leaveId: string, status: "approved" | "rejected") => {
     if (!companyId) return;
     try {
@@ -154,7 +282,7 @@ export default function ManagerPage() {
           d.status === "approved" && status === "rejected" ? "연차 취소 반려 완료" :
           status === "approved" ? "연차 승인 완료" : "연차 반려 완료";
         showToast(msg, "success");
-        fetchLeaves(companyId!!);
+        fetchLeaves(companyId);
       } else {
         const d = await res.json();
         showToast(d.detail || "처리 실패", "error");
@@ -180,7 +308,7 @@ export default function ManagerPage() {
           d.status === "approved" && status === "rejected" ? "출장 취소 반려 완료" :
           status === "approved" ? "출장 승인 완료" : "출장 반려 완료";
         showToast(msg, "success");
-        fetchTrips(companyId!!);
+        fetchTrips(companyId);
       } else {
         const d = await res.json();
         showToast(d.detail || "처리 실패", "error");
@@ -214,12 +342,13 @@ export default function ManagerPage() {
   const pendingTrips = trips.filter(t => t.status === "pending" || t.status === "cancel_requested");
   const doneTrips = trips.filter(t => t.status !== "pending" && t.status !== "cancel_requested");
 
-  // 현황 탭: 승인된 휴가·출장 합산 후 날짜 역순
-  const approvedHistory: { date: string; name: string; label: string; detail: string }[] = [
+  // 현황 탭: 승인된 휴가·출장 목록 (end_date 포함)
+  const approvedHistory: { date: string; end_date: string; name: string; label: string; detail: string }[] = [
     ...leaves
       .filter(l => l.status === "approved")
       .map(l => ({
         date: l.start_date,
+        end_date: l.end_date,
         name: l.user_name || "이름 없음",
         label: "🏖️ 휴가",
         detail: l.is_half ? `반차 (${l.start_date})` : `${l.start_date}${l.start_date !== l.end_date ? ` ~ ${l.end_date}` : ""} · ${l.days}일`,
@@ -228,13 +357,32 @@ export default function ManagerPage() {
       .filter(t => t.status === "approved")
       .map(t => ({
         date: t.start_date,
+        end_date: t.end_date,
         name: t.user_name || "이름 없음",
         label: "✈️ 출장",
         detail: `${t.destination} · ${t.start_date}${t.start_date !== t.end_date ? ` ~ ${t.end_date}` : ""}`,
       })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
-  // 근태현황 분류
+  // 현황 탭: 선택된 기간에 해당하는 이력 필터
+  const getPeriodRange = () => {
+    if (reportType === "weekly") {
+      const start = toYMD(reportWeekStart);
+      const end = toYMD(new Date(reportWeekStart.getFullYear(), reportWeekStart.getMonth(), reportWeekStart.getDate() + 6));
+      return { start, end };
+    } else {
+      const start = toYMD(reportMonthDate);
+      const lastDay = new Date(reportMonthDate.getFullYear(), reportMonthDate.getMonth() + 1, 0);
+      return { start, end: toYMD(lastDay) };
+    }
+  };
+
+  const filteredHistory = (() => {
+    const { start, end } = getPeriodRange();
+    return approvedHistory.filter(h => h.date <= end && h.end_date >= start);
+  })();
+
+  // 근태현황 분류 (오늘 실시간)
   const checkinCount = attendance.filter(m => m.status === "출근중").length;
   const checkoutCount = attendance.filter(m => m.status === "퇴근").length;
   const absentCount = attendance.filter(m => m.status === "미출근").length;
@@ -246,6 +394,8 @@ export default function ManagerPage() {
     if (s === "미퇴근") return "text-[#f59e0b] bg-[#fffbeb] border-[#fde68a]";
     return "text-[#a0a0a0] bg-[#f8f8f8] border-[#e5e5e5]";
   };
+
+  const atCurrentPeriod = reportType === "weekly" ? isCurrentWeek(reportWeekStart) : isCurrentMonth(reportMonthDate);
 
   if (loading) {
     return (
@@ -309,7 +459,7 @@ export default function ManagerPage() {
         ] as { key: Tab; label: string; badge: number }[]).map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => handleTabChange(t.key)}
             className={`py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${tab === t.key ? "bg-[#5b5ef4] text-white shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"}`}
           >
             {t.label}
@@ -440,7 +590,7 @@ export default function ManagerPage() {
       {/* ── 근태현황 탭 ── */}
       {tab === "attendance" && (
         <div>
-          {/* 요약 카드 */}
+          {/* 오늘 실시간 요약 */}
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
               { label: "출근중", count: checkinCount, color: "text-[#16a34a]", bg: "bg-[#f0fdf4]" },
@@ -455,41 +605,64 @@ export default function ManagerPage() {
             ))}
           </div>
 
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1">오늘 팀원 현황</div>
-            <button
-              onClick={() => companyId && fetchAttendance(companyId)}
-              className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors"
-            >
-              새로고침
-            </button>
+          {/* 주간/월간 토글 */}
+          <div className="flex gap-2 mb-3 bg-white border border-[#e5e5e5] rounded-xl p-1 shadow-sm">
+            {(["weekly", "monthly"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => handleReportTypeChange(t)}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                  reportType === t ? "bg-[#5b5ef4] text-white" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                {t === "weekly" ? "주간" : "월간"}
+              </button>
+            ))}
           </div>
 
-          {attendance.length === 0 ? (
-            <div className="text-center py-12 text-[#a0a0a0] text-sm">팀원 데이터가 없어요</div>
+          {/* 기간 네비게이션 */}
+          <div className="flex items-center justify-between bg-white border border-[#e5e5e5] rounded-xl px-4 py-3 mb-4 shadow-sm">
+            <button onClick={handleReportPrev} className="w-8 h-8 flex items-center justify-center text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0] rounded-lg transition-all">←</button>
+            <span className="text-[#0a0a0a] text-sm font-semibold">
+              {reportType === "weekly" ? getWeekLabel(reportWeekStart) : getMonthLabel(reportMonthDate)}
+            </span>
+            <button
+              onClick={handleReportNext}
+              disabled={atCurrentPeriod}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                atCurrentPeriod ? "text-[#d0d0d0] cursor-not-allowed" : "text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
+              }`}
+            >→</button>
+          </div>
+
+          {/* 팀원별 근무 리포트 */}
+          {!companyReport ? (
+            <div className="text-center py-8 text-[#a0a0a0] text-sm">기간을 선택하면 리포트가 표시돼요</div>
           ) : (
             <div className="space-y-2">
-              {attendance.map((m, i) => (
-                <div key={i} className={`bg-white border rounded-2xl p-4 shadow-sm ${m.is_missing_checkout ? "border-[#fecaca]" : "border-[#e5e5e5]"}`}>
-                  <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1">
+                  팀원별 근무 ({companyReport.period})
+                </div>
+                <button
+                  onClick={() => companyId && fetchCompanyReport(companyId, reportType, reportWeekStart, reportMonthDate)}
+                  className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors"
+                >
+                  새로고침
+                </button>
+              </div>
+              {companyReport.members.map(m => (
+                <div key={m.user_id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[#0a0a0a] text-sm font-bold flex items-center gap-1.5">
-                        {m.user_name || m.user_email}
-                        {m.is_missing_checkout && <span className="text-[#ef4444] text-xs">⚠️ 미퇴근</span>}
-                      </div>
-                      <div className="text-[#a0a0a0] text-xs">{m.user_email}</div>
+                      <div className="text-[#0a0a0a] text-sm font-bold">{m.user_name || m.user_email}</div>
+                      <div className="text-[#a0a0a0] text-xs mt-0.5">{m.user_email}</div>
                     </div>
-                    <span className={`text-xs font-bold border px-2 py-0.5 rounded-full ${statusColor(m.status)}`}>
-                      {m.status}
-                    </span>
+                    <div className="text-right">
+                      <div className="text-[#5b5ef4] font-bold text-sm">{m.total_minutes > 0 ? m.total_work_hours : "-"}</div>
+                      <div className="text-[#a0a0a0] text-xs">{m.work_days > 0 ? `${m.work_days}일 출근` : "출근 없음"}</div>
+                    </div>
                   </div>
-                  {m.checkin && (
-                    <div className="flex gap-3 text-xs text-[#6b6b6b] flex-wrap">
-                      <span>출근 <span className="text-[#16a34a] font-semibold">{formatTime(m.checkin)}</span></span>
-                      {m.checkin_address && <span className="text-[#a0a0a0]">📍 {m.checkin_address}</span>}
-                      {m.checkout && <span>퇴근 <span className="text-[#5b5ef4] font-semibold">{formatTime(m.checkout)}</span></span>}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -497,17 +670,72 @@ export default function ManagerPage() {
         </div>
       )}
 
-      {/* ── 현황 탭 ── 승인된 휴가·출장 이력 */}
+      {/* ── 현황 탭 ── 승인된 휴가·출장 이력 (기간 필터) */}
       {tab === "status" && (
         <div>
+          {/* 주간/월간 토글 */}
+          <div className="flex gap-2 mb-3 bg-white border border-[#e5e5e5] rounded-xl p-1 shadow-sm">
+            {(["weekly", "monthly"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setReportType(t)}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                  reportType === t ? "bg-[#5b5ef4] text-white" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                {t === "weekly" ? "주간" : "월간"}
+              </button>
+            ))}
+          </div>
+
+          {/* 기간 네비게이션 */}
+          <div className="flex items-center justify-between bg-white border border-[#e5e5e5] rounded-xl px-4 py-3 mb-4 shadow-sm">
+            <button
+              onClick={() => {
+                if (reportType === "weekly") {
+                  const prev = new Date(reportWeekStart);
+                  prev.setDate(prev.getDate() - 7);
+                  setReportWeekStart(prev);
+                } else {
+                  const prev = new Date(reportMonthDate);
+                  prev.setMonth(prev.getMonth() - 1);
+                  setReportMonthDate(prev);
+                }
+              }}
+              className="w-8 h-8 flex items-center justify-center text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0] rounded-lg transition-all"
+            >←</button>
+            <span className="text-[#0a0a0a] text-sm font-semibold">
+              {reportType === "weekly" ? getWeekLabel(reportWeekStart) : getMonthLabel(reportMonthDate)}
+            </span>
+            <button
+              onClick={() => {
+                if (reportType === "weekly") {
+                  if (isCurrentWeek(reportWeekStart)) return;
+                  const next = new Date(reportWeekStart);
+                  next.setDate(next.getDate() + 7);
+                  setReportWeekStart(next);
+                } else {
+                  if (isCurrentMonth(reportMonthDate)) return;
+                  const next = new Date(reportMonthDate);
+                  next.setMonth(next.getMonth() + 1);
+                  setReportMonthDate(next);
+                }
+              }}
+              disabled={atCurrentPeriod}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                atCurrentPeriod ? "text-[#d0d0d0] cursor-not-allowed" : "text-[#6b6b6b] hover:text-[#0a0a0a] hover:bg-[#f0f0f0]"
+              }`}
+            >→</button>
+          </div>
+
           <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1 mb-3">
             휴가 · 출장 이력
           </div>
-          {approvedHistory.length === 0 ? (
-            <div className="text-center py-12 text-[#a0a0a0] text-sm">승인된 휴가·출장 내역이 없어요</div>
+          {filteredHistory.length === 0 ? (
+            <div className="text-center py-12 text-[#a0a0a0] text-sm">해당 기간에 승인된 휴가·출장 내역이 없어요</div>
           ) : (
             <div className="space-y-2">
-              {approvedHistory.map((h, i) => (
+              {filteredHistory.map((h, i) => (
                 <div key={i} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>

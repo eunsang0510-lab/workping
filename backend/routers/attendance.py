@@ -282,6 +282,107 @@ def get_monthly_report(
     }
 
 
+@router.get("/company-report/{company_id}")
+def get_company_report(
+    company_id: str,
+    type: str = Query(default="weekly"),
+    start_date: Optional[str] = Query(default=None),
+    year: Optional[int] = Query(default=None),
+    month: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    import calendar as _cal
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="해당 기업의 멤버만 조회할 수 있어요")
+
+    today = datetime.now(KST).date()
+    period_label = ""
+
+    if type == "weekly":
+        if start_date:
+            try:
+                period_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                period_start = today - timedelta(days=today.weekday())
+        else:
+            period_start = today - timedelta(days=today.weekday())
+        period_end = period_start + timedelta(days=6)
+        period_label = f"{period_start} ~ {period_end}"
+    else:
+        target_year = year if year else today.year
+        target_month = month if month else today.month
+        _, last_day = _cal.monthrange(target_year, target_month)
+        period_start = datetime(target_year, target_month, 1).date()
+        period_end = datetime(target_year, target_month, last_day).date()
+        period_label = f"{target_year}년 {target_month}월"
+
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    user_ids = [m.user_id for m in members]
+
+    all_records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id.in_(user_ids),
+            Attendance.recorded_at >= period_start,
+            Attendance.recorded_at < period_end + timedelta(days=1),
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
+
+    records_by_user: dict = {}
+    for r in all_records:
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    result = []
+    for member in members:
+        recs = records_by_user.get(member.user_id, [])
+        daily: dict = {}
+        for r in recs:
+            date_str = r.recorded_at.date().isoformat()
+            if date_str not in daily:
+                daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0}
+            if r.type == "checkin" and not daily[date_str]["checkin"]:
+                daily[date_str]["checkin"] = r.recorded_at.isoformat()
+            if r.type == "checkout":
+                daily[date_str]["checkout"] = r.recorded_at.isoformat()
+
+        total_minutes = 0
+        work_days = 0
+        for d in daily.values():
+            if d["checkin"] and d["checkout"]:
+                diff = datetime.fromisoformat(d["checkout"]) - datetime.fromisoformat(d["checkin"])
+                mins = int(diff.total_seconds() / 60)
+                d["work_minutes"] = mins
+                total_minutes += mins
+                work_days += 1
+
+        result.append({
+            "user_id": member.user_id,
+            "user_name": member.user_name,
+            "user_email": member.user_email,
+            "work_days": work_days,
+            "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
+            "total_minutes": total_minutes,
+            "daily": daily,
+        })
+
+    return {
+        "period": period_label,
+        "period_start": str(period_start),
+        "period_end": str(period_end),
+        "members": result,
+    }
+
+
 @router.delete("/reset/{user_id}")
 def reset_attendance(
     user_id: str,
