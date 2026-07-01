@@ -1068,7 +1068,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 >
                   <div className="text-[#0a0a0a] font-bold text-sm">{c.name}</div>
                   <div className="text-[#a0a0a0] text-xs mt-1">
-                    코드: {c.id.slice(0, 8)} · 팀원 {c.member_count}명
+                    총 인원 {c.member_count}명
                   </div>
                 </div>
               ))}
@@ -1085,10 +1085,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
             <div className="text-[#0a0a0a] text-xl font-black">{company.name}</div>
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-3">
-                <div className="text-[#6b6b6b] text-xs">팀원 {company.member_count}명</div>
-                <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
-                  <span className="text-[#4a4de0] text-xs font-mono">코드: {company.id.slice(0, 8)}</span>
-                </div>
+                <div className="text-[#6b6b6b] text-xs">총 인원 {company.member_count}명</div>
               </div>
               <button
                 onClick={() => {
@@ -1115,27 +1112,6 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 <div className="text-[#a0a0a0] text-xs mt-1">{item.label}</div>
               </div>
             ))}
-          </div>
-
-          {/* 권한 관리 */}
-          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">권한 관리</div>
-            <div className="grid grid-cols-2 gap-3">
-              <Link href={`/admin/permissions?company_id=${company.id}`}>
-                <div className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all">
-                  <div className="text-xl mb-1">🔑</div>
-                  <div className="text-[#0a0a0a] font-bold text-sm">권한 목록 관리</div>
-                  <div className="text-[#a0a0a0] text-xs mt-1">권한 생성 및 접근 화면 설정</div>
-                </div>
-              </Link>
-              <Link href={`/admin/user-permissions?company_id=${company.id}`}>
-                <div className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all">
-                  <div className="text-xl mb-1">👤</div>
-                  <div className="text-[#0a0a0a] font-bold text-sm">사용자별 권한 설정</div>
-                  <div className="text-[#a0a0a0] text-xs mt-1">직원에게 권한 부여/삭제</div>
-                </div>
-              </Link>
-            </div>
           </div>
 
         {/* 연차 관리 */}
@@ -1751,11 +1727,11 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
             </div>
           </div>
 
-          {/* 엑셀 일괄 등록 */}
+          {/* 임직원 일괄 등록 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div className="flex items-center justify-between mb-4">
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">
-                엑셀 일괄 등록 {isSystemAdmin && <span className="ml-2 text-[#4a4de0]">(회사코드 포함)</span>}
+                임직원 일괄 등록 {isSystemAdmin && <span className="ml-2 text-[#4a4de0]">(회사코드 포함)</span>}
               </div>
               <button onClick={handleDownloadTemplate} className="text-[#5b5ef4] text-xs hover:text-[#4a4de0] transition-colors">양식 다운로드</button>
             </div>
@@ -1786,6 +1762,27 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 </button>
               </>
             )}
+          </div>
+
+          {/* 권한 관리 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-3">권한 관리</div>
+            <div className="grid grid-cols-2 gap-3">
+              <Link href={`/admin/permissions?company_id=${company.id}`}>
+                <div className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all">
+                  <div className="text-xl mb-1">🔑</div>
+                  <div className="text-[#0a0a0a] font-bold text-sm">권한 목록 관리</div>
+                  <div className="text-[#a0a0a0] text-xs mt-1">권한 생성 및 접근 화면 설정</div>
+                </div>
+              </Link>
+              <Link href={`/admin/user-permissions?company_id=${company.id}`}>
+                <div className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all">
+                  <div className="text-xl mb-1">👤</div>
+                  <div className="text-[#0a0a0a] font-bold text-sm">사용자별 권한 설정</div>
+                  <div className="text-[#a0a0a0] text-xs mt-1">직원에게 권한 부여/삭제</div>
+                </div>
+              </Link>
+            </div>
           </div>
 
         </>
