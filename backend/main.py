@@ -61,6 +61,12 @@ def run_migrations():
             "CREATE INDEX IF NOT EXISTS ix_user_permissions_company_id ON user_permissions (company_id)",
             "CREATE INDEX IF NOT EXISTS ix_user_permissions_user_id ON user_permissions (user_id)",
             "ALTER TABLE companies ADD COLUMN IF NOT EXISTS leave_approval_required BOOLEAN DEFAULT TRUE",
+            # business_trips: 승인/반려 관련 컬럼 (모델에만 있고 기존 테이블에 없을 수 있음)
+            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_by VARCHAR",
+            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
+            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS reject_reason VARCHAR",
+            # company_members: 팀장 여부 컬럼
+            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
         ]
         for sql in migrations:
             try:
