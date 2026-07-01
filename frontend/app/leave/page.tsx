@@ -55,6 +55,8 @@ export default function LeavePage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [userName, setUserName] = useState("");
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -182,9 +184,38 @@ export default function LeavePage() {
     }
   };
 
+  const handleCancel = async (leaveId: string) => {
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/leave/cancel/${leaveId}`, {
+        method: "POST",
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.action === "cancel_requested") {
+          showToast("취소 신청 완료! 관리자 승인 후 취소됩니다", "info");
+        } else {
+          showToast("연차 신청이 취소됐어요", "success");
+        }
+        fetchBalance(user!.uid);
+        fetchLeaves(user!.uid);
+      } else {
+        showToast(data.detail || "취소 실패", "error");
+      }
+    } catch {
+      showToast("취소 처리 실패", "error");
+    } finally {
+      setCancelLoading(false);
+      setCancelConfirm(null);
+    }
+  };
+
   const statusLabel = (status: string) => {
     if (status === "pending") return { text: "대기중", bg: "bg-[#fef9c3]", color: "text-[#854d0e]", border: "border-[#fde047]" };
     if (status === "approved") return { text: "승인", bg: "bg-[#f0fdf4]", color: "text-[#16a34a]", border: "border-[#bbf7d0]" };
+    if (status === "cancel_requested") return { text: "취소신청중", bg: "bg-[#fff7ed]", color: "text-[#c2410c]", border: "border-[#fed7aa]" };
+    if (status === "cancelled") return { text: "취소됨", bg: "bg-[#f3f4f6]", color: "text-[#9ca3af]", border: "border-[#e5e7eb]" };
     return { text: "반려", bg: "bg-[#fef2f2]", color: "text-[#ef4444]", border: "border-[#fecaca]" };
   };
 
@@ -347,7 +378,41 @@ export default function LeavePage() {
                     </span>
                   </div>
                   {leave.reason && (
-                    <div className="text-[#a0a0a0] text-xs">{leave.reason}</div>
+                    <div className="text-[#a0a0a0] text-xs mb-2">{leave.reason}</div>
+                  )}
+                  {/* 신청취소 / 취소신청 버튼 */}
+                  {(leave.status === "pending" || leave.status === "approved") && (
+                    cancelConfirm === leave.id ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs text-[#6b6b6b] flex-1">
+                          {leave.status === "pending" ? "신청을 취소할까요?" : "취소를 신청할까요?"}
+                        </span>
+                        <button
+                          onClick={() => handleCancel(leave.id)}
+                          disabled={cancelLoading}
+                          className="text-xs text-white bg-[#ef4444] px-3 py-1.5 rounded-lg font-bold disabled:opacity-50"
+                        >
+                          {cancelLoading ? "처리중" : "예"}
+                        </button>
+                        <button
+                          onClick={() => setCancelConfirm(null)}
+                          className="text-xs text-[#6b6b6b] border border-[#e5e5e5] bg-white px-3 py-1.5 rounded-lg"
+                        >
+                          아니오
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCancelConfirm(leave.id)}
+                        className={`mt-2 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                          leave.status === "pending"
+                            ? "text-[#ef4444] border-[#fecaca] hover:bg-[#fef2f2]"
+                            : "text-[#f59e0b] border-[#fde68a] hover:bg-[#fffbeb]"
+                        }`}
+                      >
+                        {leave.status === "pending" ? "신청취소" : "취소신청"}
+                      </button>
+                    )
                   )}
                 </div>
               );

@@ -148,7 +148,12 @@ export default function ManagerPage() {
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
-        showToast(status === "approved" ? "연차 승인 완료" : "연차 반려 완료", "success");
+        const d = await res.json();
+        const msg =
+          d.status === "cancelled" ? "연차 취소 승인 완료" :
+          d.status === "approved" && status === "rejected" ? "연차 취소 반려 완료" :
+          status === "approved" ? "연차 승인 완료" : "연차 반려 완료";
+        showToast(msg, "success");
         fetchLeaves(companyId);
       } else {
         const d = await res.json();
@@ -194,11 +199,13 @@ export default function ManagerPage() {
   const statusBadge = (status: string) => {
     if (status === "approved") return <span className="text-xs font-bold text-[#16a34a] bg-[#f0fdf4] border border-[#bbf7d0] px-2 py-0.5 rounded-full">승인</span>;
     if (status === "rejected") return <span className="text-xs font-bold text-[#ef4444] bg-[#fef2f2] border border-[#fecaca] px-2 py-0.5 rounded-full">반려</span>;
+    if (status === "cancel_requested") return <span className="text-xs font-bold text-[#c2410c] bg-[#fff7ed] border border-[#fed7aa] px-2 py-0.5 rounded-full">취소신청</span>;
+    if (status === "cancelled") return <span className="text-xs font-bold text-[#9ca3af] bg-[#f3f4f6] border border-[#e5e7eb] px-2 py-0.5 rounded-full">취소됨</span>;
     return <span className="text-xs font-bold text-[#f59e0b] bg-[#fffbeb] border border-[#fde68a] px-2 py-0.5 rounded-full">대기</span>;
   };
 
-  const pendingLeaves = leaves.filter(l => l.status === "pending");
-  const doneLeaves = leaves.filter(l => l.status !== "pending");
+  const pendingLeaves = leaves.filter(l => l.status === "pending" || l.status === "cancel_requested");
+  const doneLeaves = leaves.filter(l => l.status !== "pending" && l.status !== "cancel_requested");
   const pendingTrips = trips.filter(t => t.status === "pending");
   const doneTrips = trips.filter(t => t.status !== "pending");
 
@@ -318,21 +325,31 @@ export default function ManagerPage() {
             <>
               <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1">대기 중 ({pendingLeaves.length})</div>
               {pendingLeaves.map(l => (
-                <div key={l.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+                <div key={l.id} className={`bg-white border rounded-2xl p-4 shadow-sm ${l.status === "cancel_requested" ? "border-[#fed7aa]" : "border-[#e5e5e5]"}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="text-[#0a0a0a] text-sm font-bold">{l.user_name || "이름 없음"}</div>
                       <div className="text-[#6b6b6b] text-xs mt-0.5">
                         {l.is_half ? "반차" : `연차 ${l.days}일`} · {l.start_date}{l.start_date !== l.end_date ? ` ~ ${l.end_date}` : ""}
                       </div>
+                      {l.status === "cancel_requested" && (
+                        <div className="text-[#c2410c] text-xs mt-1 font-medium">취소 신청이 들어왔어요</div>
+                      )}
                     </div>
                     {statusBadge(l.status)}
                   </div>
                   {l.reason && <div className="text-[#6b6b6b] text-xs bg-[#f8f8f8] rounded-lg px-3 py-2 mb-3">사유: {l.reason}</div>}
-                  <div className="flex gap-2">
-                    <button onClick={() => approveLeave(l.id, "approved")} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all">승인</button>
-                    <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all">반려</button>
-                  </div>
+                  {l.status === "cancel_requested" ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => approveLeave(l.id, "approved")} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-bold py-2 rounded-xl transition-all">취소 승인</button>
+                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] text-sm font-bold py-2 rounded-xl hover:bg-[#f8f8f8] transition-all">취소 반려</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={() => approveLeave(l.id, "approved")} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all">승인</button>
+                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all">반려</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </>

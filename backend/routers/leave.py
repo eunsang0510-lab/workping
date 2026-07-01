@@ -258,6 +258,40 @@ def get_company_leaves(
     }
 
 
+# ── 연차 신청취소 (본인) ───────────────────────────────
+@router.post("/cancel/{leave_id}")
+def cancel_leave(
+    leave_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    leave = db.query(Leave).filter(Leave.id == leave_id).first()
+    if not leave:
+        raise HTTPException(status_code=404, detail="연차 신청을 찾을 수 없어요")
+    if current_user["uid"] != leave.user_id:
+        raise HTTPException(status_code=403, detail="본인의 신청만 취소할 수 있어요")
+
+    if leave.status == "pending":
+        leave.status = "cancelled"
+        db.commit()
+        return {"success": True, "action": "cancelled"}
+
+    if leave.status == "approved":
+        leave.status = "cancel_requested"
+        db.commit()
+        manager_ids = _get_manager_ids(db, leave.company_id, leave.user_id)
+        if manager_ids:
+            send_push_to_users(
+                db, manager_ids,
+                title="📋 연차 취소 신청",
+                body=f"{leave.user_name or leave.user_id}님이 {leave.start_date} 연차 취소를 신청했어요.",
+                url="/manager",
+            )
+        return {"success": True, "action": "cancel_requested"}
+
+    raise HTTPException(status_code=400, detail="취소할 수 없는 상태예요")
+
+
 # ── 연차 승인/반려 (팀장/관리자용) ────────────────────
 @router.put("/approve/{leave_id}")
 def approve_leave(
@@ -283,11 +317,6 @@ def approve_leave(
     if req.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="status는 approved 또는 rejected만 가능해요")
 
-    prev_status = leave.status
-    leave.status = req.status
-    leave.approved_by = current_user["uid"]
-    leave.approved_at = datetime.now()
-
     year = datetime.now().year
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.user_id == leave.user_id,
@@ -295,19 +324,46 @@ def approve_leave(
         LeaveBalance.year == year,
     ).first()
 
-    # 승인 시 연차 차감
+    prev_status = leave.status
+
+    # 취소 신청 처리 (cancel_requested)
+    if prev_status == "cancel_requested":
+        leave.approved_by = current_user["uid"]
+        leave.approved_at = datetime.now()
+        if req.status == "approved":
+            leave.status = "cancelled"
+            if balance:
+                balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
+            db.commit()
+            send_push_to_users(db, [leave.user_id],
+                title="📋 연차 취소 승인",
+                body=f"{leave.start_date} 연차 취소가 승인됐어요.",
+                url="/leave")
+            return {"success": True, "status": "cancelled"}
+        else:
+            leave.status = "approved"
+            db.commit()
+            send_push_to_users(db, [leave.user_id],
+                title="📋 연차 취소 반려",
+                body=f"{leave.start_date} 연차 취소 신청이 반려됐어요.",
+                url="/leave")
+            return {"success": True, "status": "approved"}
+
+    # 일반 승인/반려 처리 (pending)
+    leave.status = req.status
+    leave.approved_by = current_user["uid"]
+    leave.approved_at = datetime.now()
+
     if req.status == "approved" and prev_status != "approved":
         if balance:
             balance.used_days = balance.used_days + (0.5 if leave.is_half else leave.days)
 
-    # 반려 시 연차 복구 (이전에 승인됐다가 반려된 경우)
     if req.status == "rejected" and prev_status == "approved":
         if balance:
             balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
 
     db.commit()
 
-    # 신청자에게 결과 알림
     status_text = "승인" if req.status == "approved" else "반려"
     send_push_to_users(
         db, [leave.user_id],
