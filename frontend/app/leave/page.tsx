@@ -127,6 +127,26 @@ export default function LeavePage() {
       showToast("소속 회사가 없어요", "error");
       return;
     }
+
+    // 기존 연차와 날짜 중복 체크
+    const applyEnd = isHalf ? startDate : endDate;
+    const conflict = leaves.find((leave) => {
+      if (leave.status === "rejected") return false;
+      const ls = leave.start_date.slice(0, 10);
+      const le = leave.end_date.slice(0, 10);
+      return startDate <= le && applyEnd >= ls;
+    });
+    if (conflict) {
+      const typeLabel = conflict.is_half ? "반차" : "연차";
+      const statusLabel = conflict.status === "approved" ? "승인된" : "신청 중인";
+      const dateLabel =
+        conflict.start_date.slice(0, 10) === conflict.end_date.slice(0, 10)
+          ? formatDate(conflict.start_date)
+          : `${formatDate(conflict.start_date)} ~ ${formatDate(conflict.end_date)}`;
+      showToast(`${dateLabel}에 이미 ${statusLabel} ${typeLabel}가 있어요`, "error");
+      return;
+    }
+
     setApplying(true);
     try {
       const res = await fetch(`${API_URL}/api/leave/apply`, {

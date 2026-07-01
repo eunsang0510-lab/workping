@@ -94,6 +94,18 @@ def apply_leave(
     if remaining < days:
         raise HTTPException(status_code=400, detail=f"잔여 연차가 부족해요 (잔여: {remaining}일)")
 
+    # 기간 중복 확인 (pending/approved 상태인 연차)
+    conflict = db.query(Leave).filter(
+        Leave.user_id == req.user_id,
+        Leave.status.in_(["pending", "approved"]),
+        Leave.start_date <= req.end_date,
+        Leave.end_date >= req.start_date,
+    ).first()
+    if conflict:
+        type_label = "반차" if conflict.is_half else "연차"
+        status_label = "승인된" if conflict.status == "approved" else "신청 중인"
+        raise HTTPException(status_code=400, detail=f"{conflict.start_date}에 이미 {status_label} {type_label}가 있어요")
+
     leave = Leave(
         company_id=req.company_id,
         user_id=req.user_id,
