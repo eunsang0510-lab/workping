@@ -744,15 +744,12 @@ const markAllRead = async () => {
 
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex flex-col">
-          <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight leading-tight">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight">
             Work<span className="text-[#5b5ef4]">Ping</span>
           </h1>
           {companyName && (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#5b5ef4] opacity-70" />
-              <span className="text-[#6b6b6b] text-xs font-semibold truncate max-w-[160px]">{companyName}</span>
-            </div>
+            <span className="text-[#a0a0a0] text-xs font-medium truncate max-w-[130px]">{companyName}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
