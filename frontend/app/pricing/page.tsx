@@ -75,7 +75,10 @@ export default function PricingPage() {
       if (data.company_id) {
         setCompanyId(data.company_id);
         setSelectedCompany({ id: data.company_id, name: data.company_name || "내 회사" });
-        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
+        const token = await auth.currentUser?.getIdToken();
+        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`, {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
         const subData = await subRes.json();
         setSubscription(subData);
       }
@@ -104,7 +107,10 @@ export default function PricingPage() {
     setSearchResults([]);
     setCompanySearch("");
     try {
-      const subRes = await fetch(`${API_URL}/api/payment/subscription/${company.id}`);
+      const token = await auth.currentUser?.getIdToken();
+      const subRes = await fetch(`${API_URL}/api/payment/subscription/${company.id}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
       const subData = await subRes.json();
       setSubscription(subData);
     } catch {}

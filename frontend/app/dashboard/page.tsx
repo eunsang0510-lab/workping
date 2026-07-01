@@ -308,7 +308,9 @@ const fetchPlanStatus = async (userId: string) => {
       const data = await res.json();
       if (data.company_id) {
         setCompanyId(data.company_id);
-        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`);
+        const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`, {
+          headers: await getAuthHeader(),
+        });
         const subData = await subRes.json();
         if (subData.status === "expired") {
           setPlanExpired(true);
