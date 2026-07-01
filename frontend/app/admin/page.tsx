@@ -512,8 +512,14 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     });
     const data = await res.json();
     if (data.success) {
-      showToast(status === "approved" ? "승인 완료!" : "반려 완료!", "success");
+      const msg =
+        data.status === "cancelled" ? "취소 승인 완료!" :
+        data.status === "approved" && status === "rejected" ? "취소 반려 완료!" :
+        status === "approved" ? "승인 완료!" : "반려 완료!";
+      showToast(msg, "success");
       fetchLeaveData(company!.id, user!.uid);
+    } else {
+      showToast(data.detail || "처리 실패", "error");
     }
   } catch {
     showToast("처리 실패", "error");
@@ -1025,7 +1031,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   const missingCount = attendance.filter(m => m.status === "미퇴근").length;
 
   const PAGE_SIZE = 5;
-  const filteredLeaveRequests = leaveRequests.filter(l => l.start_date.startsWith(leaveMonth));
+  const filteredLeaveRequests = leaveRequests.filter(
+    l => l.start_date.startsWith(leaveMonth) && l.status !== "cancelled"
+  );
   const leavePageCount = Math.ceil(filteredLeaveRequests.length / PAGE_SIZE);
   const pagedLeaveRequests = filteredLeaveRequests.slice((leavePage - 1) * PAGE_SIZE, leavePage * PAGE_SIZE);
 
@@ -1181,7 +1189,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                           : "bg-[#f8f8f8] border border-[#e5e5e5] text-[#6b6b6b]"
                       }`}
                     >
-                      {t === "requests" ? `신청 현황 (${leaveRequests.filter(l => l.status === "pending").length})` : "연차 현황"}
+                      {t === "requests"
+                        ? `신청 현황 (${leaveRequests.filter(l => l.status === "pending" || l.status === "cancel_requested").length})`
+                        : "연차 현황"}
                     </button>
                   ))}
                 </div>
@@ -1213,14 +1223,20 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                                   <div className="text-[#a0a0a0] text-xs mt-1">{leave.reason}</div>
                                 )}
                               </div>
-                              <div className={`text-xs font-bold px-2 py-1 rounded-lg border flex-shrink-0 ${
-                                leave.status === "pending" ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
-                                leave.status === "approved" ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
-                                "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
+                                  <div className={`text-xs font-bold px-2 py-1 rounded-lg border flex-shrink-0 ${
+                                leave.status === "pending"          ? "bg-[#fef9c3] text-[#854d0e] border-[#fde047]" :
+                                leave.status === "approved"         ? "bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]" :
+                                leave.status === "cancel_requested" ? "bg-[#fff7ed] text-[#c2410c] border-[#fed7aa]" :
+                                                                      "bg-[#fef2f2] text-[#ef4444] border-[#fecaca]"
                               }`}>
-                                {leave.status === "pending" ? "대기중" : leave.status === "approved" ? "승인" : "반려"}
+                                {leave.status === "pending" ? "대기중" :
+                                 leave.status === "approved" ? "승인" :
+                                 leave.status === "cancel_requested" ? "취소신청" : "반려"}
                               </div>
                             </div>
+                            {leave.status === "cancel_requested" && (
+                              <div className="text-[#c2410c] text-xs mb-2 font-medium">취소 신청이 들어왔어요</div>
+                            )}
                             {leave.status === "pending" && (
                               <div className="flex gap-2 mt-2">
                                 <button
@@ -1234,6 +1250,22 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                                   className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#fef2f2]"
                                 >
                                   반려
+                                </button>
+                              </div>
+                            )}
+                            {leave.status === "cancel_requested" && (
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => handleApproveLeave(leave.id, "approved")}
+                                  className="flex-1 bg-[#ef4444] text-white text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#dc2626]"
+                                >
+                                  취소 승인
+                                </button>
+                                <button
+                                  onClick={() => handleApproveLeave(leave.id, "rejected")}
+                                  className="flex-1 bg-white border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold py-2 rounded-lg transition-all hover:bg-[#f8f8f8]"
+                                >
+                                  취소 반려
                                 </button>
                               </div>
                             )}
