@@ -97,6 +97,7 @@ export default function Dashboard() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [isManager, setIsManager] = useState(false);
+  const [companyName, setCompanyName] = useState<string | null>(null);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -308,6 +309,7 @@ const fetchPlanStatus = async (userId: string) => {
       const data = await res.json();
       if (data.company_id) {
         setCompanyId(data.company_id);
+        if (data.company_name) setCompanyName(data.company_name);
         const subRes = await fetch(`${API_URL}/api/payment/subscription/${data.company_id}`, {
           headers: await getAuthHeader(),
         });
@@ -742,9 +744,17 @@ const markAllRead = async () => {
 
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight">
-          Work<span className="text-[#5b5ef4]">Ping</span>
-        </h1>
+        <div className="flex flex-col">
+          <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight leading-tight">
+            Work<span className="text-[#5b5ef4]">Ping</span>
+          </h1>
+          {companyName && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#5b5ef4] opacity-70" />
+              <span className="text-[#6b6b6b] text-xs font-semibold truncate max-w-[160px]">{companyName}</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {/* 알림 벨 */}
           <div className="relative">
