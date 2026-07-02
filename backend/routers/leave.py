@@ -293,14 +293,17 @@ def cancel_leave(
     if leave.status == "approved":
         leave.status = "cancel_requested"
         db.commit()
-        manager_ids = _get_manager_ids(db, leave.company_id, leave.user_id)
-        if manager_ids:
-            send_push_to_users(
-                db, manager_ids,
-                title="📋 연차 취소 신청",
-                body=f"{leave.user_name or leave.user_id}님이 {leave.start_date} 연차 취소를 신청했어요.",
-                url="/manager",
-            )
+        try:
+            manager_ids = _get_manager_ids(db, leave.company_id, leave.user_id)
+            if manager_ids:
+                send_push_to_users(
+                    db, manager_ids,
+                    title="📋 연차 취소 신청",
+                    body=f"{leave.user_name or leave.user_id}님이 {leave.start_date} 연차 취소를 신청했어요.",
+                    url="/manager",
+                )
+        except Exception as e:
+            print(f"[cancel_leave] 알림 전송 실패: {e}")
         return {"success": True, "action": "cancel_requested"}
 
     raise HTTPException(status_code=400, detail="취소할 수 없는 상태예요")
@@ -349,18 +352,24 @@ def approve_leave(
             if balance:
                 balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
             db.commit()
-            send_push_to_users(db, [leave.user_id],
-                title="📋 연차 취소 승인",
-                body=f"{leave.start_date} 연차 취소가 승인됐어요.",
-                url="/leave")
+            try:
+                send_push_to_users(db, [leave.user_id],
+                    title="📋 연차 취소 승인",
+                    body=f"{leave.start_date} 연차 취소가 승인됐어요.",
+                    url="/leave")
+            except Exception as e:
+                print(f"[approve_leave] 알림 전송 실패: {e}")
             return {"success": True, "status": "cancelled"}
         else:
             leave.status = "approved"
             db.commit()
-            send_push_to_users(db, [leave.user_id],
-                title="📋 연차 취소 반려",
-                body=f"{leave.start_date} 연차 취소 신청이 반려됐어요.",
-                url="/leave")
+            try:
+                send_push_to_users(db, [leave.user_id],
+                    title="📋 연차 취소 반려",
+                    body=f"{leave.start_date} 연차 취소 신청이 반려됐어요.",
+                    url="/leave")
+            except Exception as e:
+                print(f"[approve_leave] 알림 전송 실패: {e}")
             return {"success": True, "status": "approved"}
 
     # 일반 승인/반려 처리 (pending)
@@ -382,12 +391,15 @@ def approve_leave(
     db.commit()
 
     status_text = "승인" if req.status == "approved" else "반려"
-    send_push_to_users(
-        db, [leave.user_id],
-        title=f"📋 연차 {status_text}",
-        body=f"{leave.start_date} 연차 신청이 {status_text}됐어요.",
-        url="/leave",
-    )
+    try:
+        send_push_to_users(
+            db, [leave.user_id],
+            title=f"📋 연차 {status_text}",
+            body=f"{leave.start_date} 연차 신청이 {status_text}됐어요.",
+            url="/leave",
+        )
+    except Exception as e:
+        print(f"[approve_leave] 알림 전송 실패: {e}")
 
     return {"success": True, "status": req.status}
 
