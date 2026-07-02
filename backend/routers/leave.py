@@ -134,14 +134,17 @@ def apply_leave(
     db.refresh(leave)
 
     if approval_required:
-        manager_ids = _get_manager_ids(db, req.company_id, req.user_id)
-        if manager_ids:
-            send_push_to_users(
-                db, manager_ids,
-                title="📋 연차 신청",
-                body=f"{req.user_name or req.user_id}님이 {req.start_date} 연차를 신청했어요.",
-                url="/manager",
-            )
+        try:
+            manager_ids = _get_manager_ids(db, req.company_id, req.user_id)
+            if manager_ids:
+                send_push_to_users(
+                    db, manager_ids,
+                    title="📋 연차 신청",
+                    body=f"{req.user_name or req.user_id}님이 {req.start_date} 연차를 신청했어요.",
+                    url="/manager",
+                )
+        except Exception as e:
+            print(f"[apply_leave] 알림 전송 실패: {e}")
 
     return {"success": True, "leave_id": leave.id, "days": days, "auto_approved": not approval_required}
 

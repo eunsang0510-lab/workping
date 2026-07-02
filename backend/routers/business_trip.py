@@ -104,14 +104,17 @@ def apply_trip(
     db.commit()
     db.refresh(trip)
 
-    manager_ids = _get_manager_ids_for_trip(db, req.company_id, req.user_id)
-    if manager_ids:
-        send_push_to_users(
-            db, manager_ids,
-            title="✈️ 출장 신청",
-            body=f"{req.user_name or req.user_id}님이 {req.start_date} 출장을 신청했어요.",
-            url="/manager",
-        )
+    try:
+        manager_ids = _get_manager_ids_for_trip(db, req.company_id, req.user_id)
+        if manager_ids:
+            send_push_to_users(
+                db, manager_ids,
+                title="✈️ 출장 신청",
+                body=f"{req.user_name or req.user_id}님이 {req.start_date} 출장을 신청했어요.",
+                url="/manager",
+            )
+    except Exception as e:
+        print(f"[apply_trip] 알림 전송 실패: {e}")
 
     return {"success": True, "trip_id": trip.id}
 

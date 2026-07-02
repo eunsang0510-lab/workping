@@ -32,48 +32,48 @@ Base.metadata.create_all(bind=engine)
 # 기존 테이블에 새 컬럼 추가 (없을 경우에만)
 def run_migrations():
     from sqlalchemy import text
-    with engine.connect() as conn:
-        migrations = [
-            "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS address VARCHAR",
-            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_address VARCHAR",
-            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_latitude FLOAT",
-            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_longitude FLOAT",
-            "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE",
-            # 성능 인덱스
-            "CREATE INDEX IF NOT EXISTS ix_attendances_user_id ON attendances (user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_attendances_recorded_at ON attendances (recorded_at)",
-            "CREATE INDEX IF NOT EXISTS ix_attendances_user_recorded ON attendances (user_id, recorded_at)",
-            "CREATE INDEX IF NOT EXISTS ix_company_members_company_id ON company_members (company_id)",
-            "CREATE INDEX IF NOT EXISTS ix_company_members_user_id ON company_members (user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_companies_admin_id ON companies (admin_id)",
-            "CREATE INDEX IF NOT EXISTS ix_business_trips_company_id ON business_trips (company_id)",
-            "CREATE INDEX IF NOT EXISTS ix_business_trips_user_id ON business_trips (user_id)",
-            "CREATE TABLE IF NOT EXISTS company_registration_requests (id VARCHAR PRIMARY KEY, company_name VARCHAR NOT NULL, representative_name VARCHAR NOT NULL, business_number VARCHAR NOT NULL, phone VARCHAR, email VARCHAR NOT NULL, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
-            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN DEFAULT FALSE",
-            # is_admin NULL 보정: 나머지 NULL → FALSE
-            "UPDATE company_members SET is_admin = FALSE WHERE is_admin IS NULL",
-            # companies.admin_id 기준으로 해당 회사의 관리자 멤버 is_admin=TRUE 동기화
-            "UPDATE company_members cm SET is_admin = TRUE FROM companies c WHERE cm.user_id = c.admin_id AND cm.company_id = c.id AND cm.is_admin = FALSE",
-            # 권한 관리 테이블
-            "CREATE TABLE IF NOT EXISTS custom_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, name VARCHAR NOT NULL, description VARCHAR, allowed_screens JSON, created_at TIMESTAMP DEFAULT NOW())",
-            "CREATE INDEX IF NOT EXISTS ix_custom_permissions_company_id ON custom_permissions (company_id)",
-            "CREATE TABLE IF NOT EXISTS user_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, user_id VARCHAR NOT NULL, permission_id VARCHAR NOT NULL, granted_by VARCHAR NOT NULL, granted_at TIMESTAMP DEFAULT NOW())",
-            "CREATE INDEX IF NOT EXISTS ix_user_permissions_company_id ON user_permissions (company_id)",
-            "CREATE INDEX IF NOT EXISTS ix_user_permissions_user_id ON user_permissions (user_id)",
-            "ALTER TABLE companies ADD COLUMN IF NOT EXISTS leave_approval_required BOOLEAN DEFAULT TRUE",
-            # business_trips: 승인/반려 관련 컬럼 (모델에만 있고 기존 테이블에 없을 수 있음)
-            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_by VARCHAR",
-            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
-            "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS reject_reason VARCHAR",
-            # company_members: 팀장 여부 컬럼
-            "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
-        ]
-        for sql in migrations:
-            try:
+    migrations = [
+        "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS address VARCHAR",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_address VARCHAR",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_latitude FLOAT",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_longitude FLOAT",
+        "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE",
+        # 성능 인덱스
+        "CREATE INDEX IF NOT EXISTS ix_attendances_user_id ON attendances (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_attendances_recorded_at ON attendances (recorded_at)",
+        "CREATE INDEX IF NOT EXISTS ix_attendances_user_recorded ON attendances (user_id, recorded_at)",
+        "CREATE INDEX IF NOT EXISTS ix_company_members_company_id ON company_members (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_company_members_user_id ON company_members (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_companies_admin_id ON companies (admin_id)",
+        "CREATE INDEX IF NOT EXISTS ix_business_trips_company_id ON business_trips (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_business_trips_user_id ON business_trips (user_id)",
+        "CREATE TABLE IF NOT EXISTS company_registration_requests (id VARCHAR PRIMARY KEY, company_name VARCHAR NOT NULL, representative_name VARCHAR NOT NULL, business_number VARCHAR NOT NULL, phone VARCHAR, email VARCHAR NOT NULL, status VARCHAR DEFAULT 'pending', created_at TIMESTAMP DEFAULT NOW())",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN DEFAULT FALSE",
+        # is_admin NULL 보정: 나머지 NULL → FALSE
+        "UPDATE company_members SET is_admin = FALSE WHERE is_admin IS NULL",
+        # companies.admin_id 기준으로 해당 회사의 관리자 멤버 is_admin=TRUE 동기화
+        "UPDATE company_members cm SET is_admin = TRUE FROM companies c WHERE cm.user_id = c.admin_id AND cm.company_id = c.id AND cm.is_admin = FALSE",
+        # 권한 관리 테이블
+        "CREATE TABLE IF NOT EXISTS custom_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, name VARCHAR NOT NULL, description VARCHAR, allowed_screens JSON, created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS ix_custom_permissions_company_id ON custom_permissions (company_id)",
+        "CREATE TABLE IF NOT EXISTS user_permissions (id VARCHAR PRIMARY KEY, company_id VARCHAR NOT NULL, user_id VARCHAR NOT NULL, permission_id VARCHAR NOT NULL, granted_by VARCHAR NOT NULL, granted_at TIMESTAMP DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS ix_user_permissions_company_id ON user_permissions (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_permissions_user_id ON user_permissions (user_id)",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS leave_approval_required BOOLEAN DEFAULT TRUE",
+        # business_trips: 승인/반려 관련 컬럼 (모델에만 있고 기존 테이블에 없을 수 있음)
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_by VARCHAR",
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP",
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS reject_reason VARCHAR",
+        # company_members: 팀장 여부 컬럼
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
+    ]
+    # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
+    for sql in migrations:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text(sql))
-            except Exception as e:
-                print(f"Migration skipped: {e}")
-        conn.commit()
+        except Exception as e:
+            print(f"Migration skipped: {e}")
 
 run_migrations()
 
