@@ -128,6 +128,7 @@ export default function ManagerPage() {
 
   const [rejectModal, setRejectModal] = useState<{ id: string; type: "leave" | "trip" } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   // 기간 네비게이션 상태 (전체 탭 공유)
   const [reportType, setReportType] = useState<"weekly" | "monthly">("weekly");
@@ -267,7 +268,8 @@ export default function ManagerPage() {
   };
 
   const approveLeave = async (leaveId: string, status: "approved" | "rejected") => {
-    if (!companyId) return;
+    if (!companyId || processingId === leaveId) return;
+    setProcessingId(leaveId);
     try {
       const headers = await getAuthHeader();
       const res = await fetch(`${API_URL}/api/leave/approve/${leaveId}`, {
@@ -289,11 +291,14 @@ export default function ManagerPage() {
       }
     } catch {
       showToast("처리 중 오류", "error");
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const approveTrip = async (tripId: string, status: "approved" | "rejected", reason = "") => {
-    if (!companyId) return;
+    if (!companyId || processingId === tripId) return;
+    setProcessingId(tripId);
     try {
       const headers = await getAuthHeader();
       const res = await fetch(`${API_URL}/api/business-trip/approve/${tripId}`, {
@@ -315,6 +320,8 @@ export default function ManagerPage() {
       }
     } catch {
       showToast("처리 중 오류", "error");
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -496,8 +503,10 @@ export default function ManagerPage() {
               <p className="text-[#6b6b6b] text-sm mb-3">반려 처리하시겠어요?</p>
             )}
             <div className="flex gap-2">
-              <button onClick={() => { setRejectModal(null); setRejectReason(""); }} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] font-bold py-2.5 rounded-xl text-sm">취소</button>
-              <button onClick={handleReject} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-2.5 rounded-xl text-sm">반려</button>
+              <button onClick={() => { setRejectModal(null); setRejectReason(""); }} disabled={processingId !== null} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] font-bold py-2.5 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed">취소</button>
+              <button onClick={handleReject} disabled={processingId !== null} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                {processingId !== null ? "처리중..." : "반려"}
+              </button>
             </div>
           </div>
         </div>
@@ -561,14 +570,18 @@ export default function ManagerPage() {
                   </div>
                   {l.reason && <div className="text-[#6b6b6b] text-xs bg-[#f8f8f8] rounded-lg px-3 py-2 mb-3">사유: {l.reason}</div>}
                   {l.status === "cancel_requested" ? (
-                    <div className="flex gap-2">
-                      <button onClick={() => approveLeave(l.id, "approved")} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-bold py-2 rounded-xl transition-all">취소 승인</button>
-                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] text-sm font-bold py-2 rounded-xl hover:bg-[#f8f8f8] transition-all">취소 반려</button>
+                    <div className={`flex gap-2 ${processingId === l.id ? "opacity-50 pointer-events-none" : ""}`}>
+                      <button onClick={() => approveLeave(l.id, "approved")} disabled={processingId === l.id} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-bold py-2 rounded-xl transition-all disabled:cursor-not-allowed">
+                        {processingId === l.id ? "처리중..." : "취소 승인"}
+                      </button>
+                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} disabled={processingId === l.id} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] text-sm font-bold py-2 rounded-xl hover:bg-[#f8f8f8] transition-all disabled:cursor-not-allowed">취소 반려</button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => approveLeave(l.id, "approved")} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all">승인</button>
-                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all">반려</button>
+                    <div className={`flex gap-2 ${processingId === l.id ? "opacity-50 pointer-events-none" : ""}`}>
+                      <button onClick={() => approveLeave(l.id, "approved")} disabled={processingId === l.id} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all disabled:cursor-not-allowed">
+                        {processingId === l.id ? "처리중..." : "승인"}
+                      </button>
+                      <button onClick={() => setRejectModal({ id: l.id, type: "leave" })} disabled={processingId === l.id} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all disabled:cursor-not-allowed">반려</button>
                     </div>
                   )}
                 </div>
@@ -620,14 +633,18 @@ export default function ManagerPage() {
                   </div>
                   {t.purpose && <div className="text-[#6b6b6b] text-xs bg-[#f8f8f8] rounded-lg px-3 py-2 mb-3">목적: {t.purpose}</div>}
                   {t.status === "cancel_requested" ? (
-                    <div className="flex gap-2">
-                      <button onClick={() => approveTrip(t.id, "approved")} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-bold py-2 rounded-xl transition-all">취소 승인</button>
-                      <button onClick={() => setRejectModal({ id: t.id, type: "trip" })} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] text-sm font-bold py-2 rounded-xl hover:bg-[#f8f8f8] transition-all">취소 반려</button>
+                    <div className={`flex gap-2 ${processingId === t.id ? "opacity-50 pointer-events-none" : ""}`}>
+                      <button onClick={() => approveTrip(t.id, "approved")} disabled={processingId === t.id} className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white text-sm font-bold py-2 rounded-xl transition-all disabled:cursor-not-allowed">
+                        {processingId === t.id ? "처리중..." : "취소 승인"}
+                      </button>
+                      <button onClick={() => setRejectModal({ id: t.id, type: "trip" })} disabled={processingId === t.id} className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] text-sm font-bold py-2 rounded-xl hover:bg-[#f8f8f8] transition-all disabled:cursor-not-allowed">취소 반려</button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => approveTrip(t.id, "approved")} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all">승인</button>
-                      <button onClick={() => setRejectModal({ id: t.id, type: "trip" })} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all">반려</button>
+                    <div className={`flex gap-2 ${processingId === t.id ? "opacity-50 pointer-events-none" : ""}`}>
+                      <button onClick={() => approveTrip(t.id, "approved")} disabled={processingId === t.id} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all disabled:cursor-not-allowed">
+                        {processingId === t.id ? "처리중..." : "승인"}
+                      </button>
+                      <button onClick={() => setRejectModal({ id: t.id, type: "trip" })} disabled={processingId === t.id} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all disabled:cursor-not-allowed">반려</button>
                     </div>
                   )}
                 </div>
