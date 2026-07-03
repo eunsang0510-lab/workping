@@ -37,29 +37,22 @@ export default function Landing() {
         <p className="text-[#a0a0a0] text-xs mt-3">
           🔒 이름 · 이메일만 있으면 돼요. 개인정보 걱정 없이 시작하세요.
         </p>
-        {/* 앱 미리보기 */}
-        <div className="mx-auto mt-12 max-w-xs bg-[#f4f4f8] border border-[#e5e5e5] rounded-3xl p-5 text-left shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-[#a0a0a0] text-xs mb-1">4월 22일 (화)</div>
-              <div className="text-[#0a0a0a] text-3xl font-black tracking-tight">3h 42m</div>
+        {/* 기능 뱃지 */}
+        <div className="flex flex-wrap justify-center gap-2 mt-10">
+          {[
+            { icon: "📍", label: "GPS 출퇴근" },
+            { icon: "🏖️", label: "연차 관리" },
+            { icon: "✈️", label: "출장 관리" },
+            { icon: "📅", label: "달력 시각화" },
+            { icon: "👑", label: "팀장 승인" },
+            { icon: "🔐", label: "권한 관리" },
+            { icon: "📥", label: "엑셀 다운로드" },
+          ].map(({ icon, label }) => (
+            <div key={label} className="flex items-center gap-1.5 bg-white border border-[#e5e5e5] rounded-full px-3 py-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-sm">{icon}</span>
+              <span className="text-[#0a0a0a] text-xs font-semibold">{label}</span>
             </div>
-            <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg px-3 py-1">
-              <span className="text-[#16a34a] text-xs font-bold">근무중</span>
-            </div>
-          </div>
-          <div className="flex gap-5 border-t border-[#e5e5e5] pt-3 mb-4">
-            {[["출근", "09:15", "#16a34a"], ["퇴근", "--:--", "#a0a0a0"]].map(([label, val, color]) => (
-              <div key={label}>
-                <div className="text-[#a0a0a0] text-xs mb-1">{label}</div>
-                <div className="text-xs font-bold" style={{ color }}>{val}</div>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-[#5b5ef4] rounded-xl py-3 text-center text-white text-xs font-bold">📍 출근하기</div>
-            <div className="bg-[#f0f0f0] rounded-xl py-3 text-center text-[#a0a0a0] text-xs font-bold">🏠 퇴근하기</div>
-          </div>
+          ))}
         </div>
       </section>
 
