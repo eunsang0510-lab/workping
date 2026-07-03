@@ -339,7 +339,7 @@ export default function Login() {
                     🏢 회사 등록 신청
                   </button>
                   <p className="text-[#a0a0a0] text-xs text-center mt-2">
-                    처음 사용하시나요? 회사를 등록하고 관리자 계정을 받으세요
+                    처음 사용하시나요? 회사를 등록하고 사용해보세요
                   </p>
                 </div>
               </>
