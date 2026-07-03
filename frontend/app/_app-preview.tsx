@@ -4,13 +4,16 @@ import { useState } from "react";
 export default function AppPreview() {
   const [activeTab, setActiveTab] = useState(0);
 
-  const tabs = ["대시보드", "달력", "리포트", "연차", "출장", "관리자"];
+  const tabs = ["대시보드", "달력", "리포트", "연차", "출장", "팀장"];
 
   const mockups = [
     // ── 대시보드 ──────────────────────────────────────────
     <div key="dashboard" className="bg-[#f4f4f8] rounded-3xl p-4 text-left">
       <div className="flex items-center justify-between mb-4">
-        <span className="text-[#0a0a0a] text-base font-black">Work<span className="text-[#5b5ef4]">Ping</span></span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[#0a0a0a] text-base font-black">Work<span className="text-[#5b5ef4]">Ping</span></span>
+          <span className="text-[#a0a0a0] text-[10px] font-medium">워크핑 주식회사</span>
+        </div>
         <div className="w-7 h-7 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-xs">👤</div>
       </div>
 
@@ -96,45 +99,68 @@ export default function AppPreview() {
         </div>
         <div className="grid grid-cols-7 mb-1">
           {["일","월","화","수","목","금","토"].map((w, i) => (
-            <div key={w} className={`text-center text-xs font-bold py-1 ${i===0?"text-[#ef4444]":i===6?"text-[#5b5ef4]":"text-[#a0a0a0]"}`}>{w}</div>
+            <div key={w} className={`text-center text-xs font-bold py-0.5 ${i===0?"text-[#ef4444]":i===6?"text-[#5b5ef4]":"text-[#a0a0a0]"}`}>{w}</div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-1">
-          {[null,null,null,null,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31].map((d, i) => (
-            <div key={i} className={`relative mx-auto flex flex-col items-center justify-center w-7 h-7 rounded-lg text-xs font-semibold
-              ${d===15?"bg-[#5b5ef4] text-white shadow-sm":d===null?"":"text-[#0a0a0a]"}
-              ${(i+3)%7===0&&d?"text-[#ef4444]":""}
-              ${d===15?"text-white":""}
-            `}>
-              {d}
-              {[1,2,7,8,9,12,13,14,15,16,19,20,21,22,23].includes(d as number) && (
-                <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${d===15?"bg-white":"bg-[#5b5ef4]"}`} />
-              )}
-              {d===5 && <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-[#f59e0b]" />}
-            </div>
-          ))}
+        {/* 연차(5~7, 초록), 출장(12~13, 주황) 줄선 표시 */}
+        <div className="grid grid-cols-7">
+          {[null,null,null,null,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31].map((d, i) => {
+            const leaveDays = [5,6,7];
+            const tripDays  = [12,13];
+            const hasLeave = d !== null && leaveDays.includes(d);
+            const hasTrip  = d !== null && tripDays.includes(d);
+            const leavePos = d===5?'start':d===7?'end':'mid';
+            const tripPos  = d===12?'start':'end';
+            const attendanceDays = [1,2,8,9,14,15,16,19,20,21,22,23];
+            const hasAttendance = d !== null && attendanceDays.includes(d);
+            const isSelected = d === 7;
+            return (
+              <div key={i} className="flex flex-col">
+                <div className={`relative mx-auto flex items-center justify-center w-7 h-7 rounded-lg text-xs font-semibold
+                  ${isSelected?"bg-[#5b5ef4] text-white shadow-sm":""}
+                  ${!isSelected&&d?"text-[#0a0a0a]":""}
+                `}>
+                  {d}
+                  {hasAttendance && (
+                    <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isSelected?"bg-white":"bg-[#5b5ef4]"}`} />
+                  )}
+                </div>
+                {/* 연차 바 */}
+                <div className={`w-full h-[3px] mt-px ${hasLeave?"bg-[#16a34a]":"opacity-0"} ${
+                  hasLeave?(leavePos==="start"?"ml-[5px] rounded-l-full":leavePos==="end"?"mr-[5px] rounded-r-full"):""}
+                `} />
+                {/* 출장 바 */}
+                <div className={`w-full h-[3px] mt-px ${hasTrip?"bg-[#f59e0b]":"opacity-0"} ${
+                  hasTrip?(tripPos==="start"?"ml-[5px] rounded-l-full":"mr-[5px] rounded-r-full"):""}
+                `} />
+              </div>
+            );
+          })}
+        </div>
+        {/* 범례 */}
+        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-[#f0f0f0]">
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-[3px] rounded-full bg-[#16a34a]" />
+            <span className="text-[#6b6b6b] text-xs">연차</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-[3px] rounded-full bg-[#f59e0b]" />
+            <span className="text-[#6b6b6b] text-xs">출장</span>
+          </div>
         </div>
       </div>
+      {/* 선택 날짜 상세 — 연차 기간 중 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
-        <div className="text-[#a0a0a0] text-xs font-semibold mb-3 uppercase tracking-wider">2026-05-15 근로 기록</div>
-        <div className="bg-[#f8f8f8] rounded-xl p-3 flex items-center justify-between mb-3">
-          <div className="text-[#6b6b6b] text-xs">총 근무시간</div>
-          <div className="text-[#5b5ef4] text-lg font-black">6h 42m</div>
+        <div className="text-[#a0a0a0] text-xs font-semibold mb-3 uppercase tracking-wider">2026-05-07</div>
+        <div className="flex items-stretch gap-2 bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl px-3 py-2 mb-2">
+          <div className="w-[3px] self-stretch rounded-full bg-[#16a34a] shrink-0" />
+          <div>
+            <div className="text-[#16a34a] text-[10px] font-bold mb-0.5">연차</div>
+            <div className="text-[#0a0a0a] text-xs font-bold">연차 3일</div>
+            <div className="text-[#6b6b6b] text-xs">05/05 ~ 05/07</div>
+          </div>
         </div>
-        <div className="space-y-2">
-          {[["출근", "09:15", "#16a34a", "bg-[#16a34a]", "재택 (승인된 주소)"], ["퇴근", "진행중", "#a0a0a0", "bg-[#a0a0a0]", ""]].map(([label, time, color, dot, addr]) => (
-            <div key={label} className="flex items-start gap-2">
-              <div className={`w-2 h-2 rounded-full ${dot} mt-1 shrink-0`} />
-              <div className="flex-1">
-                <div className="flex justify-between">
-                  <span className="text-xs font-bold text-[#0a0a0a]">{label}</span>
-                  <span className="text-xs font-bold" style={{ color }}>{time}</span>
-                </div>
-                {addr && <div className="text-[#6b6b6b] text-xs">📍 {addr}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="text-center py-2 text-[#a0a0a0] text-xs">출퇴근 기록 없음</div>
       </div>
     </div>,
 
@@ -293,120 +319,81 @@ export default function AppPreview() {
       </div>
     </div>,
 
-    // ── 관리자 ────────────────────────────────────────────
-    <div key="admin" className="bg-[#f4f4f8] rounded-3xl p-4 text-left">
-      <div className="flex items-center justify-between mb-3">
+    // ── 팀장 권한 ─────────────────────────────────────────
+    <div key="manager" className="bg-[#f4f4f8] rounded-3xl p-4 text-left">
+      <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-xs">←</div>
-        <span className="text-[#0a0a0a] text-base font-black">Work<span className="text-[#5b5ef4]">Ping</span></span>
-        <div className="w-7" />
-      </div>
-
-      {/* 회사 정보 */}
-      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[#a0a0a0] text-xs">회사</div>
-            <div className="text-[#0a0a0a] text-sm font-black">워크핑 주식회사</div>
-            <div className="text-[#a0a0a0] text-xs">팀원 8명 · 코드: a1b2c3d4</div>
-          </div>
-          <div className="bg-[#f0fdf4] border border-[#bbf7d0] text-[#16a34a] text-xs font-bold px-2 py-1 rounded-lg">📥 엑셀</div>
+        <div>
+          <div className="text-[#0a0a0a] text-sm font-black">팀장 권한</div>
+          <div className="text-[#6b6b6b] text-xs">연차·출장 승인 및 근태현황</div>
         </div>
       </div>
 
-      {/* 상태 카드 */}
-      <div className="grid grid-cols-4 gap-1.5 mb-3">
-        {[["출근중","6","#16a34a"],["퇴근","2","#4a4de0"],["미출근","1","#a0a0a0"],["미퇴근","1","#ef4444"]].map(([label,val,color]) => (
-          <div key={label} className="bg-white border border-[#e5e5e5] rounded-xl p-2 text-center shadow-sm">
-            <div className="font-black text-sm" style={{ color }}>{val}</div>
-            <div className="text-[#a0a0a0] text-xs">{label}</div>
+      {/* 4탭 내비게이션 */}
+      <div className="grid grid-cols-4 bg-white border border-[#e5e5e5] rounded-xl p-0.5 mb-3 shadow-sm gap-0.5">
+        {[{label:"연차",badge:2},{label:"출장",badge:1},{label:"근태",badge:0},{label:"현황",badge:0}].map((t, i) => (
+          <div key={t.label} className={`py-1.5 rounded-lg text-xs font-bold text-center flex items-center justify-center gap-0.5 ${i===0?"bg-[#5b5ef4] text-white":"text-[#6b6b6b]"}`}>
+            {t.label}
+            {t.badge > 0 && <span className={`text-[10px] px-1 rounded-full font-black ${i===0?"bg-white/30 text-white":"bg-[#ef4444] text-white"}`}>{t.badge}</span>}
           </div>
         ))}
       </div>
 
-      {/* 오늘 근태 현황 */}
-      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
-        <div className="text-[#a0a0a0] text-xs font-semibold mb-2 uppercase tracking-wider">오늘 근태 현황</div>
-        <div className="space-y-2">
-          {[
-            { name: "김민준", time: "09:05", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: false },
-            { name: "이서연", time: "08:50", status: "출근중", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", remote: true },
-            { name: "박지호", time: "09:20", status: "미퇴근", color: "#ef4444", bg: "#fef2f2", border: "#fecaca", remote: false },
-            { name: "최수아", time: "--:--", status: "미출근", color: "#a0a0a0", bg: "#f8f8f8", border: "#e5e5e5", remote: false },
-          ].map(({ name, time, status, color, bg, border, remote }) => (
-            <div key={name} className="rounded-xl p-2.5 border border-[#f0f0f0] bg-[#f8f8f8]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 bg-[#f0f0ff] rounded-full flex items-center justify-center text-xs font-bold text-[#5b5ef4]">{name[0]}</div>
-                  <span className="text-[#0a0a0a] text-xs font-bold">{name}</span>
-                  {remote && <span className="bg-[#e0f2fe] text-[#0369a1] text-xs px-1 rounded">🏠 재택</span>}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[#a0a0a0] text-xs">{time}</span>
-                  <div className="px-1.5 py-0.5 rounded-lg text-xs font-bold border" style={{ color, backgroundColor: bg, borderColor: border }}>{status}</div>
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* 대기 중 */}
+      <div className="text-[#a0a0a0] text-xs font-semibold px-0.5 mb-2 uppercase tracking-wider">대기 중 (2)</div>
+
+      {/* 취소 신청 항목 — 오렌지 테두리 */}
+      <div className="bg-white border border-[#fed7aa] rounded-2xl p-3 mb-2 shadow-sm">
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="text-[#0a0a0a] text-xs font-bold">이서연 · 연차 3일</div>
+            <div className="text-[#6b6b6b] text-xs">05/05 ~ 05/07</div>
+            <div className="text-[#c2410c] text-[10px] mt-0.5 font-medium">취소 신청이 들어왔어요</div>
+          </div>
+          <span className="text-[10px] font-bold text-[#c2410c] bg-[#fff7ed] border border-[#fed7aa] px-1.5 py-0.5 rounded-full shrink-0">취소신청</span>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex-1 bg-[#ef4444] text-white text-xs font-bold py-1.5 rounded-lg text-center">취소 승인</div>
+          <div className="flex-1 bg-white border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold py-1.5 rounded-lg text-center">취소 반려</div>
         </div>
       </div>
 
-      {/* 출장 승인 */}
+      {/* 일반 대기 항목 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">출장 승인</div>
-          <div className="bg-[#fef9c3] border border-[#fde047] text-[#854d0e] text-xs font-bold px-2 py-0.5 rounded-full">대기 1</div>
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="text-[#0a0a0a] text-xs font-bold">김민준 · 연차 1일</div>
+            <div className="text-[#6b6b6b] text-xs">05/26 · 개인 사정</div>
+          </div>
+          <span className="text-[10px] font-bold text-[#854d0e] bg-[#fef9c3] border border-[#fde047] px-1.5 py-0.5 rounded-full shrink-0">대기</span>
         </div>
-        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="text-[#0a0a0a] text-xs font-bold">박지호 · 부산 출장</div>
-              <div className="text-[#6b6b6b] text-xs">05/20 ~ 05/21</div>
-            </div>
-            <div className="bg-[#fef9c3] border border-[#fde047] text-[#854d0e] text-xs font-bold px-2 py-0.5 rounded-lg">대기중</div>
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-1.5 rounded-lg text-center">승인</div>
-            <div className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-1.5 rounded-lg text-center">반려</div>
-          </div>
+        <div className="flex gap-2">
+          <div className="flex-1 bg-[#5b5ef4] text-white text-xs font-bold py-1.5 rounded-lg text-center">승인</div>
+          <div className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-1.5 rounded-lg text-center">반려</div>
         </div>
       </div>
 
-      {/* 연차 관리 */}
-      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">연차 승인</div>
-          <div className="bg-[#fef9c3] border border-[#fde047] text-[#854d0e] text-xs font-bold px-2 py-0.5 rounded-full">대기 1</div>
-        </div>
-        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="text-[#0a0a0a] text-xs font-bold">김민준 · 연차 1일</div>
-              <div className="text-[#6b6b6b] text-xs">05/26 · 개인 사정</div>
-            </div>
-            <div className="bg-[#fef9c3] border border-[#fde047] text-[#854d0e] text-xs font-bold px-2 py-0.5 rounded-lg">대기중</div>
+      {/* 처리 완료 */}
+      <div className="text-[#a0a0a0] text-xs font-semibold px-0.5 mb-2 uppercase tracking-wider">처리 완료</div>
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 mb-3 shadow-sm opacity-70">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[#0a0a0a] text-xs font-bold">박지호 · 연차 2일</div>
+            <div className="text-[#6b6b6b] text-xs">04/28 ~ 04/29</div>
           </div>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-[#16a34a] text-white text-xs font-bold py-1.5 rounded-lg text-center">승인</div>
-            <div className="flex-1 bg-white border border-[#fecaca] text-[#ef4444] text-xs font-bold py-1.5 rounded-lg text-center">반려</div>
-          </div>
+          <span className="text-[10px] font-bold text-[#16a34a] bg-[#f0fdf4] border border-[#bbf7d0] px-1.5 py-0.5 rounded-full">승인</span>
         </div>
       </div>
 
-      {/* 출근 위치 관리 */}
-      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-3 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">출근 위치 관리</div>
-          <span className="text-[#5b5ef4] text-xs">+ 위치 추가</span>
-        </div>
-        <div className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[#0a0a0a] text-xs font-bold">📍 본사</div>
-              <div className="text-[#6b6b6b] text-xs">강남구 테헤란로 427 · 반경 100m</div>
-            </div>
-            <span className="text-[#a0a0a0] text-xs">삭제</span>
+      {/* 오늘 근태 요약 */}
+      <div className="text-[#a0a0a0] text-xs font-semibold px-0.5 mb-2 uppercase tracking-wider">오늘 근태 (실시간)</div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {[["출근중","5","#16a34a","#f0fdf4"],["퇴근","2","#5b5ef4","#f5f5ff"],["미출근","1","#a0a0a0","#f8f8f8"],["미퇴근","0","#f59e0b","#fffbeb"]].map(([label,val,color,bg]) => (
+          <div key={label} className="rounded-xl p-2 text-center" style={{ backgroundColor: bg }}>
+            <div className="font-black text-sm" style={{ color }}>{val}</div>
+            <div className="text-[#6b6b6b] text-xs">{label}</div>
           </div>
-        </div>
+        ))}
       </div>
     </div>,
   ];

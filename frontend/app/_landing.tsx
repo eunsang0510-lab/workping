@@ -27,7 +27,7 @@ export default function Landing() {
         </h2>
         <p className="text-[#6b6b6b] text-sm leading-relaxed mb-8">
           출퇴근 버튼 하나로 근로시간을 정확히 기록하세요.<br />
-          연차관리까지, WorkPing이 다 준비해드립니다.
+          연차·출장·팀 관리까지, WorkPing이 다 해드립니다.
         </p>
         <Link href="/login">
           <button className="bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-4 px-10 rounded-xl text-sm transition-all shadow-[0_8px_32px_rgba(91,94,244,0.3)]">
@@ -110,7 +110,10 @@ export default function Landing() {
             { icon: "📊", title: "근무 리포트", desc: "주간·월간 자동 리포트 생성" },
             { icon: "📥", title: "엑셀 다운로드", desc: "급여 계산용 데이터 즉시 추출" },
             { icon: "🏖️", title: "연차 관리", desc: "연차 신청·승인·잔여일수 관리" },
-            { icon: "👑", title: "팀장 권한", desc: "팀장이 직접 연차 승인·반려 처리" },
+            { icon: "✈️", title: "출장 관리", desc: "출장 신청·취소·팀장 승인까지 한 곳에서" },
+            { icon: "📅", title: "달력 시각화", desc: "연차·출장을 달력에서 색상 띠로 한눈에" },
+            { icon: "👑", title: "팀장 권한", desc: "팀장이 직접 연차·출장 승인·반려 처리" },
+            { icon: "🔐", title: "권한 관리", desc: "직원별 화면 접근 권한 개별 설정" },
             { icon: "👥", title: "팀 관리", desc: "관리자 페이지로 팀원 현황 파악" },
             { icon: "📱", title: "모바일 앱", desc: "스마트폰에 설치해서 사용 가능" },
             { icon: "🔗", title: "API 연동", desc: "급여·ERP 등 사내 시스템과 연동 가능" },
@@ -136,7 +139,7 @@ export default function Landing() {
               name: "무료", price: "0원", period: "",
               highlight: true,
               badge: "모든 기능 무료",
-              features: ["직원 20명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)", "재택근무 관리 · 팀 관리"],
+              features: ["직원 20명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차·출장 관리 (신청·승인·달력 시각화)", "재택근무 관리 · 팀 관리 · 권한 관리"],
             },
             {
               name: "유료", price: "50,000원", period: "/ 월(회사별)",
