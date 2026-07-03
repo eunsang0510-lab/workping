@@ -127,7 +127,7 @@ export default function AppPreview() {
                 </div>
                 {/* 연차 바 */}
                 <div className={`w-full h-[3px] mt-px ${hasLeave?"bg-[#16a34a]":"opacity-0"} ${
-                  hasLeave?(leavePos==="start"?"ml-[5px] rounded-l-full":leavePos==="end"?"mr-[5px] rounded-r-full"):""}
+                  hasLeave?(leavePos==="start"?"ml-[5px] rounded-l-full":leavePos==="end"?"mr-[5px] rounded-r-full":""):""}
                 `} />
                 {/* 출장 바 */}
                 <div className={`w-full h-[3px] mt-px ${hasTrip?"bg-[#f59e0b]":"opacity-0"} ${
