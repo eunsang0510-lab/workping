@@ -676,9 +676,9 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
     return;
   }
   const isFree = !subscription || subscription.plan === "free";
-  if (isFree && company && company.member_count >= 100) {
+  if (isFree && company && company.member_count >= 30) {
     showConfirm(
-      "무료 플랜은 최대 100명까지 등록할 수 있어요.\n유료 결제 페이지로 이동할까요?",
+      "무료 플랜은 최대 30명까지 등록할 수 있어요.\n유료 결제 페이지로 이동할까요?",
       () => { setConfirm(null); router.push("/pricing"); }
     );
     return;
@@ -823,10 +823,10 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   const handleBulkRegister = async () => {
     if (!excelMembers.length || !company?.id) return;
     const isFree = !subscription || subscription.plan === "free";
-    if (isFree && company.member_count + excelMembers.length > 100) {
-      const remaining = Math.max(0, 100 - company.member_count);
+    if (isFree && company.member_count + excelMembers.length > 30) {
+      const remaining = Math.max(0, 30 - company.member_count);
       showConfirm(
-        `무료 플랜은 최대 100명까지 등록할 수 있어요.\n현재 ${company.member_count}명 등록됨, 추가 가능 인원: ${remaining}명.\n유료 결제 페이지로 이동할까요?`,
+        `무료 플랜은 최대 30명까지 등록할 수 있어요.\n현재 ${company.member_count}명 등록됨, 추가 가능 인원: ${remaining}명.\n유료 결제 페이지로 이동할까요?`,
         () => { setConfirm(null); router.push("/pricing"); }
       );
       return;
