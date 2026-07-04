@@ -23,7 +23,7 @@ const PLANS = [
     price: 0,
     period: "",
     priceLabel: "0원",
-    features: ["직원 30명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
+    features: ["직원 100명 이하", "기본 출퇴근 기록", "오늘 근태 현황"],
     highlight: true,
   },
   {
@@ -32,7 +32,7 @@ const PLANS = [
     price: 50000,
     period: "/ 월 (회사별)",
     priceLabel: "50,000원",
-    features: ["직원 31명 이상", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)"],
+    features: ["직원 101명 이상", "출근 구역 설정", "엑셀 다운로드", "주간·월간 리포트", "연차 관리 (신청·승인·팀장권한)"],
     highlight: false,
   },
   {
