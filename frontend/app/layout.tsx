@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "WorkPing - 중소기업 무료 GPS 근태관리",
-  description: "직원 30명 이하 소규모 회사를 위한 GPS 출퇴근 관리 앱. 연차·출장 신청, 근로시간 기록까지 무료로 시작하세요.",
+  description: "GPS 기반 출퇴근 기록, 연차관리, 팀 근태현황을 무료로 시작하세요.",
   keywords: "근태관리 앱, 출장 신청 시스템, 직원 출퇴근 관리, 중소기업 근태관리, GPS 출퇴근 앱, 근로시간관리, 무료근로시간관리, 근태관리앱, 포괄임금제폐지",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "WorkPing - 중소기업 무료 GPS 근태관리",
-    description: "직원 30명 이하 소규모 회사를 위한 GPS 출퇴근 관리 앱. 연차·출장 신청, 근로시간 기록까지 무료로 시작하세요.",
+    description: "GPS 기반 출퇴근 기록, 연차관리, 팀 근태현황을 무료로 시작하세요.",
     url: "https://workping-kappa.vercel.app",
     siteName: "WorkPing",
     locale: "ko_KR",
