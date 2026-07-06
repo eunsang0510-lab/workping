@@ -8,7 +8,7 @@ from models.attendance import Attendance
 from models.subscription import Subscription
 from datetime import datetime
 
-FREE_MEMBER_LIMIT = 30
+FREE_MEMBER_LIMIT = 100
 import requests
 import os
 import math

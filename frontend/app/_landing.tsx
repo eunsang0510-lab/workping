@@ -143,17 +143,12 @@ export default function Landing() {
               name: "무료", price: "0원", period: "",
               highlight: true,
               badge: "모든 기능 무료",
-              features: ["직원 30명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차·출장 관리 (신청·승인·달력 시각화)", "재택근무 관리 · 팀 관리 · 권한 관리"],
+              features: ["직원 100명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차·출장 관리 (신청·승인·달력 시각화)", "재택근무 관리 · 팀 관리 · 권한 관리"],
             },
             {
-              name: "유료", price: "50,000원", period: "/ 월", periodBold: "회사별",
+              name: "100인 이상", price: "협의", period: "",
               highlight: false, badge: undefined,
-              features: ["직원 31명 이상", "무료 기능 전체 포함", "사내 시스템 API 연동 지원", "급여·ERP 등 사내 시스템 연동", "우선 고객 지원"],
-            },
-            {
-              name: "비즈니스", price: "협의", period: "/ 월",
-              highlight: false,
-              features: ["직원 무제한", "유료 기능 전체", "전담 고객 지원"],
+              features: ["직원 100명 초과", "무료 기능 전체 포함", "전담 고객 지원", "급여·ERP 등 시스템 연동"],
             },
           ].map((plan, i) => (
             <div key={i} className={`rounded-2xl p-5 border-2 ${
@@ -169,12 +164,7 @@ export default function Landing() {
               </div>
               <div className="flex items-end gap-1 mb-4">
                 <span className={`text-3xl font-black tracking-tight ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>{plan.price}</span>
-                <span className={`text-sm mb-1 ${plan.highlight ? "text-white/70" : "text-[#6b6b6b]"}`}>
-                  {plan.period}
-                  {(plan as { periodBold?: string }).periodBold && (
-                    <strong className={`font-black ml-0.5 ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>({(plan as { periodBold?: string }).periodBold})</strong>
-                  )}
-                </span>
+                <span className={`text-sm mb-1 ${plan.highlight ? "text-white/70" : "text-[#6b6b6b]"}`}>{plan.period}</span>
               </div>
               <div className="space-y-2">
                 {plan.features.map((f, j) => (
