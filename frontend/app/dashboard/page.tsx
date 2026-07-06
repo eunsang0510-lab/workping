@@ -105,6 +105,8 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [weeklyMinutes, setWeeklyMinutes] = useState<number | null>(null);
+  const [overtime52h, setOvertime52h] = useState(false);
   const router = useRouter();
 
   const trimCity = (addr: string) =>
@@ -164,6 +166,7 @@ export default function Dashboard() {
         fetchUnreadNotices(user.uid);
         fetchNotifications(user.uid);
         registerPushNotification(user.uid);
+        fetchWeeklyOvertime(user.uid);
       } else {
         router.push("/login");
       }
@@ -345,6 +348,16 @@ const checkTodayLeave = async (userId: string) => {
       (l: any) => l.status === "approved" && !l.is_half && l.start_date <= today && today <= l.end_date
     );
     setIsOnLeave(onLeave);
+  } catch {}
+};
+
+const fetchWeeklyOvertime = async (userId: string) => {
+  try {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_URL}/api/attendance/weekly/${userId}`, { headers });
+    const data = await res.json();
+    setWeeklyMinutes(data.total_minutes ?? null);
+    setOvertime52h(data.overtime_52h ?? false);
   } catch {}
 };
 
@@ -928,6 +941,28 @@ const markAllRead = async () => {
           </div>
         </div>
       </div>
+
+      {/* 주간 근무시간 */}
+      {weeklyMinutes !== null && (
+        <div className={`rounded-2xl p-4 mb-4 flex items-center justify-between ${
+          overtime52h
+            ? "bg-[#fef2f2] border border-[#fecaca]"
+            : "bg-white border border-[#e5e5e5]"
+        } shadow-[0_2px_8px_rgba(0,0,0,0.04)]`}>
+          <div>
+            <div className="text-[#a0a0a0] text-xs mb-0.5">이번 주 근무시간</div>
+            <div className={`text-lg font-black ${overtime52h ? "text-[#ef4444]" : "text-[#0a0a0a]"}`}>
+              {Math.floor(weeklyMinutes / 60)}시간 {weeklyMinutes % 60}분
+            </div>
+            {overtime52h && (
+              <div className="text-[#ef4444] text-xs mt-0.5 font-medium">⚠️ 주 52시간을 초과했어요</div>
+            )}
+          </div>
+          <div className={`text-2xl font-black ${overtime52h ? "text-[#ef4444]" : "text-[#a0a0a0]"}`}>
+            {overtime52h ? "⚠️" : `${Math.round(weeklyMinutes / 60 / 52 * 100)}%`}
+          </div>
+        </div>
+      )}
 
       {/* 연차 안내 */}
       {isOnLeave && (

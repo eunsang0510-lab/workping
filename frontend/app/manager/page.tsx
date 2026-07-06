@@ -736,14 +736,19 @@ export default function ManagerPage() {
                 </button>
               </div>
               {companyReport.members.map(m => (
-                <div key={m.user_id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+                <div key={m.user_id} className={`rounded-2xl p-4 shadow-sm border ${(m as any).overtime_52h ? "bg-[#fef2f2] border-[#fecaca]" : "bg-white border-[#e5e5e5]"}`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[#0a0a0a] text-sm font-bold">{m.user_name || m.user_email}</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-[#0a0a0a] text-sm font-bold">{m.user_name || m.user_email}</div>
+                        {(m as any).overtime_52h && (
+                          <span className="text-[10px] font-bold text-[#ef4444] bg-[#fee2e2] border border-[#fecaca] px-1.5 py-0.5 rounded-full">52h 초과</span>
+                        )}
+                      </div>
                       <div className="text-[#a0a0a0] text-xs mt-0.5">{m.user_email}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[#5b5ef4] font-bold text-sm">{m.total_minutes > 0 ? m.total_work_hours : "-"}</div>
+                      <div className={`font-bold text-sm ${(m as any).overtime_52h ? "text-[#ef4444]" : "text-[#5b5ef4]"}`}>{m.total_minutes > 0 ? m.total_work_hours : "-"}</div>
                       <div className="text-[#a0a0a0] text-xs">{m.work_days > 0 ? `${m.work_days}일 출근` : "출근 없음"}</div>
                     </div>
                   </div>

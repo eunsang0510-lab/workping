@@ -203,11 +203,15 @@ def get_weekly_report(
 
     total_minutes = sum(d["work_minutes"] for d in daily.values())
 
+    overtime_52h = total_minutes > 52 * 60
+
     return {
         "user_id": user_id,
         "period": f"{week_start} ~ {week_end}",
         "week_start": str(week_start),
         "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
+        "total_minutes": total_minutes,
+        "overtime_52h": overtime_52h,
         "daily": daily,
     }
 
@@ -372,6 +376,7 @@ def get_company_report(
             "work_days": work_days,
             "total_work_hours": f"{total_minutes // 60}시간 {total_minutes % 60}분",
             "total_minutes": total_minutes,
+            "overtime_52h": type == "weekly" and total_minutes > 52 * 60,
             "daily": daily,
         })
 
@@ -479,7 +484,7 @@ def export_attendance_excel(
     header_fill = PatternFill(start_color="6366F1", end_color="6366F1", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
 
-    headers = ["이름", "이메일", "날짜", "출근시간", "퇴근시간", "근무시간(분)", "출근위치", "퇴근위치"]
+    headers = ["이름", "이메일", "날짜", "출근시간", "퇴근시간", "근무시간(분)", "출근위치", "퇴근위치", "주차", "주간근무시간(분)", "52시간초과"]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
@@ -487,7 +492,15 @@ def export_attendance_excel(
         cell.alignment = Alignment(horizontal="center")
         ws.column_dimensions[cell.column_letter].width = 18
 
+    import math
+
+    def get_week_key(d):
+        monday = d - timedelta(days=d.weekday())
+        return monday.isoformat()
+
     row = 2
+    red_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+
     for member in members:
         records = records_by_user.get(member.user_id, [])
 
@@ -501,6 +514,19 @@ def export_attendance_excel(
             if r.type == "checkout":
                 daily[date_str]["checkout"] = r
 
+        # 주차별 합산
+        weekly_minutes: dict = {}
+        for date_str, data in daily.items():
+            d = datetime.strptime(date_str, "%Y-%m-%d").date()
+            wk = get_week_key(d)
+            checkin = data["checkin"]
+            checkout = data["checkout"]
+            if checkin and checkout:
+                mins = int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60)
+            else:
+                mins = 0
+            weekly_minutes[wk] = weekly_minutes.get(wk, 0) + mins
+
         for date_str, data in sorted(daily.items()):
             checkin = data["checkin"]
             checkout = data["checkout"]
@@ -508,6 +534,11 @@ def export_attendance_excel(
             if checkin and checkout:
                 diff = checkout.recorded_at - checkin.recorded_at
                 work_minutes = int(diff.total_seconds() / 60)
+
+            d = datetime.strptime(date_str, "%Y-%m-%d").date()
+            wk = get_week_key(d)
+            week_total = weekly_minutes.get(wk, 0)
+            is_overtime = week_total > 52 * 60
 
             ws.cell(row=row, column=1, value=member.user_name or "-")
             ws.cell(row=row, column=2, value=member.user_email)
@@ -517,6 +548,12 @@ def export_attendance_excel(
             ws.cell(row=row, column=6, value=work_minutes if work_minutes > 0 else "-")
             ws.cell(row=row, column=7, value=checkin.address if checkin else "-")
             ws.cell(row=row, column=8, value=checkout.address if checkout else "-")
+            ws.cell(row=row, column=9, value=f"{wk} 주")
+            ws.cell(row=row, column=10, value=week_total if week_total > 0 else "-")
+            overtime_cell = ws.cell(row=row, column=11, value="초과" if is_overtime else "-")
+            if is_overtime:
+                for col in range(1, 12):
+                    ws.cell(row=row, column=col).fill = red_fill
             row += 1
 
     stream = io.BytesIO()
