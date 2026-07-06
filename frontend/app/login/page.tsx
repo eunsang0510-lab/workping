@@ -336,7 +336,7 @@ export default function Login() {
                     onClick={() => { setMode("register"); resetRegForm(); }}
                     className="w-full bg-[#f8f8f8] border border-dashed border-[#c7c8fa] hover:border-[#5b5ef4] hover:bg-[#f0f0ff] text-[#5b5ef4] font-bold py-3 rounded-xl transition-all text-sm"
                   >
-                    🏢 회사 등록 신청
+                    🏢 회사 등록
                   </button>
                   <p className="text-[#a0a0a0] text-xs text-center mt-2">
                     처음 사용하시나요? 회사를 등록하고 사용해보세요
