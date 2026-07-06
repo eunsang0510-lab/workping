@@ -168,12 +168,16 @@ def get_weekly_report(
 
     week_end = week_start + timedelta(days=6)
 
+    # KST 기준 주간 범위를 UTC로 변환하여 필터
+    utc_start = datetime(week_start.year, week_start.month, week_start.day, 0, 0, 0) - timedelta(hours=9)
+    utc_end = datetime(week_end.year, week_end.month, week_end.day, 23, 59, 59) - timedelta(hours=9)
+
     records = (
         db.query(Attendance)
         .filter(
             Attendance.user_id == user_id,
-            Attendance.recorded_at >= week_start,
-            Attendance.recorded_at < week_end + timedelta(days=1),
+            Attendance.recorded_at >= utc_start,
+            Attendance.recorded_at <= utc_end,
         )
         .order_by(Attendance.recorded_at)
         .all()
