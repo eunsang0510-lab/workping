@@ -185,7 +185,9 @@ def get_weekly_report(
 
     daily = {}
     for r in records:
-        date_str = r.recorded_at.date().isoformat()
+        # KST 기준으로 날짜 버킷팅 (UTC 저장이므로 +9h 변환)
+        kst_time = r.recorded_at.replace(tzinfo=timezone.utc).astimezone(KST)
+        date_str = kst_time.date().isoformat()
         if date_str not in daily:
             daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0}
         if r.type == "checkin" and not daily[date_str]["checkin"]:

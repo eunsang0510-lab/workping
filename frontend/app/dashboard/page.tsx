@@ -121,6 +121,13 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  // 출근 중일 때 주간 근무시간 1분마다 갱신
+  useEffect(() => {
+    if (!isCheckedIn || !user) return;
+    const timer = setInterval(() => fetchWeeklyOvertime(user.uid), 60 * 1000);
+    return () => clearInterval(timer);
+  }, [isCheckedIn, user]);
+
   useEffect(() => {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -554,6 +561,7 @@ const markAllRead = async () => {
       if (checkInTime) setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
       showToast("퇴근 완료!", "success");
+      if (user) fetchWeeklyOvertime(user.uid);
     } catch (error: any) {
       const msg = error.message || "GPS 위치를 가져올 수 없어요.";
       showToast(msg, "error");
