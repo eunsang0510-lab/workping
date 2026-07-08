@@ -66,6 +66,7 @@ def run_migrations():
         "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS reject_reason VARCHAR",
         # company_members: 팀장 여부 컬럼
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS phone VARCHAR",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

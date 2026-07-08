@@ -66,6 +66,7 @@ class RegisterMemberRequest(BaseModel):
     email: str
     name: str
     birth_date: str
+    phone: str = ""
     is_admin: bool = False
 
 
@@ -73,6 +74,7 @@ class BulkMemberItem(BaseModel):
     name: str
     email: str
     birth_date: str
+    phone: str = ""
     company_code: str = ""
 
 
@@ -111,6 +113,7 @@ class ResetPasswordRequest(BaseModel):
 class UpdateMemberRequest(BaseModel):
     user_name: str = ""
     user_email: str = ""
+    phone: str = ""
     is_admin: bool = False
     company_id: str = ""
 
@@ -300,6 +303,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
         user_email=req.email,
         user_name=req.name,
         birth_date=req.birth_date,
+        phone=req.phone.strip() if req.phone else None,
         is_admin=is_admin_to_set,
         force_password_change=True,
     )
@@ -351,6 +355,7 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
             email=member_data.email,
             name=member_data.name,
             birth_date=member_data.birth_date,
+            phone=member_data.phone,
         )
         result = register_member(member_req, db, current_user)
         results.append(result)
@@ -453,6 +458,7 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db), curre
             "user_id": member.user_id,
             "user_name": member.user_name or member.user_email,
             "user_email": member.user_email,
+            "phone": member.phone or "",
             "is_admin": bool(member.is_admin),
             "checkin": checkin.recorded_at.isoformat() if checkin else None,
             "checkin_address": checkin.address if checkin else None,
@@ -813,6 +819,8 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
         member.user_name = req.user_name
     if req.user_email:
         member.user_email = req.user_email
+    if req.phone is not None:
+        member.phone = req.phone.strip() or None
     # company_id 변경은 슈퍼어드민만 허용 (타사로 직원 이동 위조 방지)
     if req.company_id and req.company_id != member.company_id:
         if not is_superadmin:

@@ -23,6 +23,7 @@ class CompanyMember(Base):
     user_email     = Column(String, nullable=False)
     user_name      = Column(String, nullable=True)
     birth_date     = Column(String, nullable=True)
+    phone          = Column(String, nullable=True)
     is_admin              = Column(Boolean, default=False)
     is_manager            = Column(Boolean, default=False)
     force_password_change = Column(Boolean, default=False)

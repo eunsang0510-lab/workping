@@ -16,6 +16,7 @@ interface Member {
   user_id: string;
   user_name: string;
   user_email: string;
+  phone: string;
   is_admin: boolean;
   checkin: string | null;
   checkin_address: string | null;
@@ -48,6 +49,7 @@ interface EditMember {
   id: string;
   user_name: string;
   user_email: string;
+  phone: string;
   is_admin: boolean;
   company_id: string;
 }
@@ -126,6 +128,7 @@ export default function Admin() {
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberBirth, setMemberBirth] = useState("");
+  const [memberPhone, setMemberPhone] = useState("");
   const [memberIsAdmin, setMemberIsAdmin] = useState(false);
   const [excelMembers, setExcelMembers] = useState<any[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -691,12 +694,12 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth, is_admin: memberIsAdmin })
+      body: JSON.stringify({ company_id: company?.id, email: memberEmail, name: memberName, birth_date: memberBirth, phone: memberPhone, is_admin: memberIsAdmin })
     });
       const data = await res.json();
       if (data.success) {
         showToast(`등록 완료! 초기 비밀번호: ${data.initial_password}`, "success");
-        setMemberName(""); setMemberEmail(""); setMemberBirth(""); setMemberIsAdmin(false);
+        setMemberName(""); setMemberEmail(""); setMemberBirth(""); setMemberPhone(""); setMemberIsAdmin(false);
         if (company?.id) fetchAttendance(company.id);
       } else {
         showToast(data.message || data.detail || "등록 실패", "error");
@@ -776,7 +779,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
       const res = await fetch(`${API_URL}/api/company/members/${editMember.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_name: editMember.user_name, user_email: editMember.user_email, is_admin: editMember.is_admin, company_id: editMember.company_id }),
+        body: JSON.stringify({ user_name: editMember.user_name, user_email: editMember.user_email, phone: editMember.phone, is_admin: editMember.is_admin, company_id: editMember.company_id }),
       });
       const data = await res.json();
       if (data.success) {
@@ -795,8 +798,8 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
 
   const handleDownloadTemplate = () => {
     const template = isSystemAdmin
-      ? [{ 회사코드: "abc12345", 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" }]
-      : [{ 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225" }];
+      ? [{ 회사코드: "abc12345", 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225", 휴대전화: "010-1234-5678" }]
+      : [{ 이름: "홍길동", 이메일: "hong@company.com", 생년월일: "19901225", 휴대전화: "010-1234-5678" }];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "직원목록");
@@ -834,7 +837,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
     setBulkLoading(true);
     try {
       const members = excelMembers.map((m: any) => ({
-        company_code: m.회사코드 || "", email: m.이메일, name: m.이름, birth_date: String(m.생년월일)
+        company_code: m.회사코드 || "", email: m.이메일, name: m.이름, birth_date: String(m.생년월일), phone: m.휴대전화 ? String(m.휴대전화) : ""
       }));
       const res = await fetch(`${API_URL}/api/company/members/bulk-register`, {
         method: "POST",
@@ -1507,7 +1510,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                       </div>
                       {/* 3줄: 액션 버튼 */}
                       <div className="flex items-center gap-3 flex-wrap pl-4 pt-1 border-t border-[#e5e5e5]">
-                        <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
+                        <button onClick={() => setEditMember({ id: member.user_id, user_name: member.user_name, user_email: member.user_email, phone: member.phone || "", is_admin: member.is_admin ?? false, company_id: company!.id })} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">정보수정</button>
                         <button onClick={() => { setHomeLocationMember({ user_id: member.user_id, user_name: member.user_name || member.user_email }); setHomeAddress(member.home_address || ""); }} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">재택주소 설정</button>
                         {member.home_address && <button onClick={() => handleDeleteHomeLocation(member.user_id, member.user_name || member.user_email)} className="text-[#a0a0a0] hover:text-[#ef4444] text-xs transition-colors">재택삭제</button>}
                         <button onClick={() => handleResetPassword(member.user_email)} className="text-[#a0a0a0] hover:text-[#5b5ef4] text-xs transition-colors">PW초기화</button>
@@ -1809,6 +1812,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 { placeholder: "이름", value: memberName, onChange: setMemberName, type: "text" },
                 { placeholder: "회사 이메일", value: memberEmail, onChange: setMemberEmail, type: "email" },
                 { placeholder: "생년월일 (예: 19901225)", value: memberBirth, onChange: setMemberBirth, type: "text" },
+                { placeholder: "휴대전화 (예: 010-1234-5678)", value: memberPhone, onChange: setMemberPhone, type: "tel" },
               ].map((field, i) => (
                 <input key={i} type={field.type} placeholder={field.placeholder} value={field.value}
                   onChange={(e) => field.onChange(e.target.value)}
@@ -1837,7 +1841,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
               className="border border-dashed border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-6 text-center cursor-pointer transition-all mb-3 bg-[#f8f8f8]">
               <div className="text-2xl mb-2">📂</div>
               <div className="text-[#0a0a0a] text-sm font-medium">엑셀 파일 업로드</div>
-              <div className="text-[#a0a0a0] text-xs mt-1">{isSystemAdmin ? "회사코드, 이름, 이메일, 생년월일 컬럼 필요" : "이름, 이메일, 생년월일 컬럼 필요"}</div>
+              <div className="text-[#a0a0a0] text-xs mt-1">{isSystemAdmin ? "회사코드, 이름, 이메일, 생년월일, 휴대전화 컬럼 필요" : "이름, 이메일, 생년월일, 휴대전화 컬럼 필요 (휴대전화 선택)"}</div>
             </div>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelUpload} className="hidden" />
             {excelMembers.length > 0 && (
@@ -2027,6 +2031,12 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 <div className="text-[#a0a0a0] text-xs mb-1">이메일</div>
                 <input type="email" value={editMember.user_email || ""} onChange={(e) => setEditMember({ ...editMember, user_email: e.target.value })}
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm"
+                />
+              </div>
+              <div>
+                <div className="text-[#a0a0a0] text-xs mb-1">휴대전화</div>
+                <input type="tel" placeholder="010-1234-5678" value={editMember.phone || ""} onChange={(e) => setEditMember({ ...editMember, phone: e.target.value })}
+                  className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm placeholder-[#a0a0a0]"
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
