@@ -273,13 +273,10 @@ export default function LeavePage() {
           </div>
         </div>
       ) : (
-        <div className="bg-[#5b5ef4] rounded-2xl p-5 mb-4 shadow-[0_4px_16px_rgba(91,94,244,0.3)]">
-          <div className="text-white/70 text-xs mb-1">연차 현황</div>
-          <div className="flex items-end gap-2 mb-4">
-            <span className="text-white text-5xl font-black">∞</span>
-            <span className="text-white/70 text-lg mb-1">제한 없음</span>
-          </div>
-          <div className="text-white/70 text-xs">연차 일수 제한 없이 자유롭게 신청할 수 있어요</div>
+        <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 text-center shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="text-3xl mb-2">📋</div>
+          <div className="text-[#0a0a0a] font-bold text-sm mb-1">연차 정보가 없어요</div>
+          <div className="text-[#a0a0a0] text-xs">관리자에게 연차 부여를 요청하세요</div>
         </div>
       )}
 
