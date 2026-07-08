@@ -954,6 +954,9 @@ const markAllRead = async () => {
             <div className={`text-lg font-black ${overtime52h ? "text-[#ef4444]" : "text-[#0a0a0a]"}`}>
               {Math.floor(weeklyMinutes / 60)}시간 {weeklyMinutes % 60}분
             </div>
+            <div className="text-[#a0a0a0] text-xs mt-0.5">
+              {overtime52h ? "" : `52시간까지 ${Math.floor((52 * 60 - weeklyMinutes) / 60)}시간 ${(52 * 60 - weeklyMinutes) % 60}분 남음`}
+            </div>
             {overtime52h && (
               <div className="text-[#ef4444] text-xs mt-0.5 font-medium">⚠️ 주 52시간을 초과했어요</div>
             )}

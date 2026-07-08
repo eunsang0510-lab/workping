@@ -121,7 +121,7 @@ def get_company_attendance(
         work_minutes = 0
         if checkin and checkout:
             diff = checkout.recorded_at - checkin.recorded_at
-            work_minutes = int(diff.total_seconds() / 60)
+            work_minutes = max(0, int(diff.total_seconds() / 60))
 
         if checkin and not checkout and not is_missing_checkout:
             status = "출근중"
@@ -195,13 +195,24 @@ def get_weekly_report(
             daily[date_str]["checkout"] = r.recorded_at.isoformat()
             daily[date_str]["checkout_address"] = r.address
 
+    now_kst = datetime.now(KST)
+    today_str = now_kst.date().isoformat()
+
     for date_str, data in daily.items():
         if data["checkin"] and data["checkout"]:
             checkin = datetime.fromisoformat(data["checkin"])
             checkout = datetime.fromisoformat(data["checkout"])
             diff = checkout - checkin
-            data["work_minutes"] = int(diff.total_seconds() / 60)
+            data["work_minutes"] = max(0, int(diff.total_seconds() / 60))
             data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
+        elif data["checkin"] and not data["checkout"] and date_str == today_str:
+            # 오늘 퇴근 전: 현재 시각 기준으로 합산
+            checkin = datetime.fromisoformat(data["checkin"])
+            if checkin.tzinfo is None:
+                checkin = checkin.replace(tzinfo=timezone.utc)
+            diff = now_kst - checkin.astimezone(KST)
+            data["work_minutes"] = max(0, int(diff.total_seconds() / 60))
+            data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분 (진행중)"
         else:
             data["work_hours"] = "-"
 
@@ -267,7 +278,7 @@ def get_monthly_report(
             checkin = datetime.fromisoformat(data["checkin"])
             checkout = datetime.fromisoformat(data["checkout"])
             diff = checkout - checkin
-            data["work_minutes"] = int(diff.total_seconds() / 60)
+            data["work_minutes"] = max(0, int(diff.total_seconds() / 60))
             data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
         else:
             data["work_hours"] = "-"
@@ -368,7 +379,7 @@ def get_company_report(
         for d in daily.values():
             if d["checkin"] and d["checkout"]:
                 diff = datetime.fromisoformat(d["checkout"]) - datetime.fromisoformat(d["checkin"])
-                mins = int(diff.total_seconds() / 60)
+                mins = max(0, int(diff.total_seconds() / 60))
                 d["work_minutes"] = mins
                 total_minutes += mins
                 work_days += 1
@@ -526,7 +537,7 @@ def export_attendance_excel(
             checkin = data["checkin"]
             checkout = data["checkout"]
             if checkin and checkout:
-                mins = int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60)
+                mins = max(0, int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60))
             else:
                 mins = 0
             weekly_minutes[wk] = weekly_minutes.get(wk, 0) + mins
@@ -537,7 +548,7 @@ def export_attendance_excel(
             work_minutes = 0
             if checkin and checkout:
                 diff = checkout.recorded_at - checkin.recorded_at
-                work_minutes = int(diff.total_seconds() / 60)
+                work_minutes = max(0, int(diff.total_seconds() / 60))
 
             d = datetime.strptime(date_str, "%Y-%m-%d").date()
             wk = get_week_key(d)
