@@ -45,6 +45,7 @@ def create_team(
     team = Team(
         company_id=req.company_id,
         name=req.name,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(team)
     db.commit()
@@ -175,7 +176,11 @@ def add_team_member(
     if existing:
         return {"success": False, "message": "이미 팀에 속해있어요"}
 
-    team_member = TeamMember(team_id=req.team_id, user_id=req.user_id)
+    team_member = TeamMember(
+        team_id=req.team_id,
+        user_id=req.user_id,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
+    )
     db.add(team_member)
     db.commit()
     return {"success": True}

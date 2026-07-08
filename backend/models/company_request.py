@@ -10,8 +10,11 @@ class CompanyRegistrationRequest(Base):
     id                  = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     company_name        = Column(String, nullable=False)
     representative_name = Column(String, nullable=False)
-    business_number     = Column(String, nullable=False)  # 사업자등록번호 → 초기비밀번호
+    business_number     = Column(String, nullable=False)
     phone               = Column(String, nullable=True)
-    email               = Column(String, nullable=False)  # 관리자 계정 이메일
+    email               = Column(String, nullable=False)
     status              = Column(String, default="pending")  # pending / approved / rejected
     created_at          = Column(DateTime, default=datetime.now)
+    created_by          = Column(String, nullable=True)
+    updated_at          = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by          = Column(String, nullable=True)

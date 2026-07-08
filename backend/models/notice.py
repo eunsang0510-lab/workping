@@ -12,10 +12,11 @@ class Notice(Base):
     content = Column(Text, nullable=False)
     notice_type = Column(String, default="system")  # "system" or "company"
     company_id = Column(String, nullable=True)       # 회사 공지면 company_id, 시스템이면 None
-    created_by = Column(String, nullable=False)      # 작성자 uid
-    is_active = Column(Boolean, default=True)
+    created_by = Column(String, nullable=False)
+    is_active  = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(String, nullable=True)
 
 class NoticeRead(Base):
     __tablename__ = "notice_reads"

@@ -13,6 +13,9 @@ class CustomPermission(Base):
     description     = Column(String, nullable=True)
     allowed_screens = Column(JSON, default=list)
     created_at      = Column(DateTime, default=datetime.now)
+    created_by      = Column(String, nullable=True)
+    updated_at      = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by      = Column(String, nullable=True)
 
 
 class UserPermission(Base):
@@ -24,3 +27,5 @@ class UserPermission(Base):
     permission_id = Column(String, nullable=False, index=True)
     granted_by    = Column(String, nullable=False)
     granted_at    = Column(DateTime, default=datetime.now)
+    updated_at    = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by    = Column(String, nullable=True)

@@ -99,6 +99,7 @@ def apply_trip(
         start_date=req.start_date,
         end_date=req.end_date,
         status="pending",
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(trip)
     db.commit()
@@ -230,6 +231,7 @@ def approve_trip(
     trip.approved_by = uid
     trip.approved_at = datetime.now()
     trip.reject_reason = req.reject_reason.strip() if req.status == "rejected" else None
+    trip.updated_by = uid
     db.commit()
 
     status_text = "승인" if req.status == "approved" else "반려"

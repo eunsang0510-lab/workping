@@ -306,6 +306,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
         phone=req.phone.strip() if req.phone else None,
         is_admin=is_admin_to_set,
         force_password_change=True,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(member)
     db.commit()
@@ -827,6 +828,7 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
             raise HTTPException(status_code=403, detail="회사 이동은 슈퍼어드민만 가능해요")
         member.company_id = req.company_id
     member.is_admin = req.is_admin
+    member.updated_by = current_user.get("uid") if isinstance(current_user, dict) else None
 
     db.commit()
     return {"success": True, "message": "수정 완료"}

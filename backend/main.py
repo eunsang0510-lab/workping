@@ -67,6 +67,63 @@ def run_migrations():
         # company_members: 팀장 여부 컬럼
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS phone VARCHAR",
+        # ── 감사 컬럼 (입력자/입력시간/수정자/수정시간) ──────────────────────
+        # companies
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # company_members
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # company_locations
+        "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE company_locations ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # leaves
+        "ALTER TABLE leaves ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE leaves ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE leaves ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # leave_balances
+        "ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE leave_balances ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # business_trips
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE business_trips ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # teams
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # team_members
+        "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # custom_permissions
+        "ALTER TABLE custom_permissions ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE custom_permissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE custom_permissions ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # user_permissions
+        "ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE user_permissions ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # notices
+        "ALTER TABLE notices ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # subscriptions
+        "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # payments
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # users
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # company_registration_requests
+        "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS created_by VARCHAR",
+        "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

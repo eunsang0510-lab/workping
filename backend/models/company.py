@@ -10,9 +10,12 @@ class Company(Base):
     name       = Column(String, nullable=False)
     admin_id   = Column(String, nullable=False, index=True)
     plan       = Column(String, default="team")
-    leave_enabled           = Column(Boolean, default=False)  # 연차 기능 ON/OFF
-    leave_approval_required = Column(Boolean, default=True)   # 연차 승인 필요 여부
+    leave_enabled           = Column(Boolean, default=False)
+    leave_approval_required = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.now)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by = Column(String, nullable=True)
 
 class CompanyMember(Base):
     __tablename__ = "company_members"
@@ -31,6 +34,9 @@ class CompanyMember(Base):
     home_latitude  = Column(Float, nullable=True)
     home_longitude = Column(Float, nullable=True)
     created_at     = Column(DateTime, default=datetime.now)
+    created_by     = Column(String, nullable=True)
+    updated_at     = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by     = Column(String, nullable=True)
 
 class CompanyLocation(Base):
     __tablename__ = "company_locations"
@@ -44,3 +50,6 @@ class CompanyLocation(Base):
     is_active  = Column(Boolean, default=True)
     address    = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by = Column(String, nullable=True)

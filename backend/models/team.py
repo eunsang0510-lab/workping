@@ -9,8 +9,11 @@ class Team(Base):
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id = Column(String, nullable=False)
     name       = Column(String, nullable=False)
-    manager_id = Column(String, nullable=True)  # 팀장 user_id
+    manager_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by = Column(String, nullable=True)
 
 class TeamMember(Base):
     __tablename__ = "team_members"
@@ -19,3 +22,6 @@ class TeamMember(Base):
     team_id    = Column(String, nullable=False)
     user_id    = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
+    created_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by = Column(String, nullable=True)

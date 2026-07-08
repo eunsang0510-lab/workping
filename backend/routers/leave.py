@@ -123,6 +123,7 @@ def apply_leave(
         is_half=req.is_half,
         reason=req.reason,
         status=initial_status,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(leave)
 
@@ -379,6 +380,7 @@ def approve_leave(
     leave.status = req.status
     leave.approved_by = current_user["uid"]
     leave.approved_at = datetime.now()
+    leave.updated_by = current_user["uid"]
 
     if req.status == "approved" and prev_status != "approved":
         if balance:
