@@ -125,12 +125,13 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db), cur
     if not is_superadmin and current_user["uid"] != req.admin_id:
         raise HTTPException(status_code=403, detail="본인 계정으로만 회사를 생성할 수 있어요")
 
-    company = Company(name=req.name, admin_id=req.admin_id)
+    company = Company(name=req.name, admin_id=req.admin_id, created_by=current_user.get("uid") if isinstance(current_user, dict) else None)
     db.add(company)
     db.flush()
 
     member = CompanyMember(
-        company_id=company.id, user_id=req.admin_id, user_email="", is_admin=True
+        company_id=company.id, user_id=req.admin_id, user_email="", is_admin=True,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(member)
     db.commit()
@@ -223,6 +224,7 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db), current_use
         user_id=req.user_id,
         user_email=req.user_email,
         user_name=req.user_name,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(member)
     db.commit()
@@ -548,6 +550,7 @@ def add_location(req: LocationCreateRequest, db: Session = Depends(get_db), curr
         longitude=req.longitude,
         radius=req.radius,
         address=req.address,
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(location)
     db.commit()
@@ -676,6 +679,7 @@ def set_home_location(user_id: str, req: HomeLocationRequest, db: Session = Depe
     member.home_address = req.home_address
     member.home_latitude = req.home_latitude
     member.home_longitude = req.home_longitude
+    member.updated_by = current_user["uid"]
     db.commit()
     return {"success": True, "message": "재택 주소 저장 완료"}
 
@@ -693,6 +697,7 @@ def delete_home_location(user_id: str, db: Session = Depends(get_db), current_us
     member.home_address = None
     member.home_latitude = None
     member.home_longitude = None
+    member.updated_by = current_user["uid"]
     db.commit()
     return {"success": True, "message": "재택 주소 삭제 완료"}
 
@@ -743,6 +748,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
             user = firebase_auth.get_user_by_email(req.email)
             firebase_auth.update_user(user.uid, password=new_password)
             member.user_id = user.uid
+            member.updated_by = current_user.get("uid") if isinstance(current_user, dict) else None
             db.commit()
         print(f"Firebase 비밀번호 변경 성공: {req.email}")
     except Exception as e:
@@ -795,6 +801,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
 
     # force_password_change 플래그 설정
     member.force_password_change = True
+    member.updated_by = current_user.get("uid") if isinstance(current_user, dict) else None
     db.commit()
 
     return {"success": True, "message": f"임시 비밀번호가 {req.email}로 발송됐어요"}
@@ -866,6 +873,7 @@ def mark_password_changed(
     member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
     if member:
         member.force_password_change = False
+        member.updated_by = current_user["uid"]
         db.commit()
     return {"success": True}
 

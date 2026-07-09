@@ -38,10 +38,12 @@ def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
             id=req.uid,
             email=req.email,
             name=req.name,
+            created_by=req.uid,
         )
         db.add(user)
     else:
         user.name = req.name or user.name
+        user.updated_by = req.uid
 
     db.commit()
 
@@ -116,6 +118,7 @@ def reset_password_self(request: Request, req: ResetPasswordSelfRequest, db: Ses
             user = firebase_auth.get_user_by_email(req.email)
             firebase_auth.update_user(user.uid, password=new_password)
             member.user_id = user.uid
+            member.updated_by = user.uid
             db.commit()
     except Exception as e:
         print(f"[AUTH] 비밀번호 변경 실패: {e}")
@@ -162,6 +165,7 @@ def reset_password_self(request: Request, req: ResetPasswordSelfRequest, db: Ses
         print(f"이메일 발송 실패: {str(e)}")
 
     member.force_password_change = True
+    member.updated_by = member.user_id
     db.commit()
 
     return {"success": True}

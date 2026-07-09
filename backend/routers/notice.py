@@ -186,5 +186,6 @@ def delete_notice(
         raise HTTPException(status_code=403, detail="공지를 삭제할 권한이 없어요")
 
     notice.is_active = False
+    notice.updated_by = current_user["uid"]
     db.commit()
     return {"success": True}

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_db
 from models.company import Company, CompanyMember
+from models.page_view import PageView
 from routers.deps import get_current_user, get_superadmin
 from pydantic import BaseModel
 from typing import Optional
@@ -107,12 +108,13 @@ def get_companies(db: Session = Depends(get_db), _: dict = Depends(get_superadmi
 
 # 회사 생성
 @router.post("/company")
-def create_company(body: CompanyCreate, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+def create_company(body: CompanyCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_superadmin)):
     company = Company(
         id=str(uuid.uuid4()),
         name=body.name,
         admin_id="superadmin",
         plan=body.plan,
+        created_by=current_user.get("uid"),
     )
     db.add(company)
     db.commit()
@@ -132,13 +134,26 @@ def delete_company(company_id: str, db: Session = Depends(get_db), _: dict = Dep
     return {"message": "삭제 완료"}
 
 
+def _last_access_map(db: Session) -> dict:
+    """user_id별 마지막 화면 접속일시"""
+    rows = (
+        db.query(PageView.user_id, func.max(PageView.created_at))
+        .filter(PageView.user_id.isnot(None))
+        .group_by(PageView.user_id)
+        .all()
+    )
+    return dict(rows)
+
+
 # 전체 직원 목록
 @router.get("/members")
 def get_members(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     members = db.query(CompanyMember).order_by(CompanyMember.created_at.desc()).all()
+    last_access = _last_access_map(db)
     result = []
     for m in members:
         company = db.query(Company).filter(Company.id == m.company_id).first()
+        last_seen = last_access.get(m.user_id)
         result.append(
             {
                 "id": m.id,
@@ -149,6 +164,7 @@ def get_members(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)
                 "user_name": m.user_name,
                 "is_admin": m.is_admin,
                 "created_at": m.created_at,
+                "last_access_at": last_seen.isoformat() if last_seen else None,
             }
         )
     return result
@@ -186,6 +202,7 @@ def create_member(body: MemberCreate, db: Session = Depends(get_db), current_use
         ).first()
         if member:
             member.is_admin = True
+            member.updated_by = current_user.get("uid")
             db.commit()
 
     return {"success": True, "message": result.get("message"), "email": body.user_email}
@@ -212,6 +229,8 @@ def get_individual_users(db: Session = Depends(get_db), _: dict = Depends(get_su
         User.id.notin_(subquery)
     ).order_by(User.created_at.desc()).all()
 
+    last_access = _last_access_map(db)
+
     return {
         "users": [
             {
@@ -219,6 +238,7 @@ def get_individual_users(db: Session = Depends(get_db), _: dict = Depends(get_su
                 "email": u.email,
                 "name": u.name,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_access_at": last_access[u.id].isoformat() if last_access.get(u.id) else None,
             }
             for u in users
         ]

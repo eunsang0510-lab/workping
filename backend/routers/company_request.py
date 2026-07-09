@@ -133,6 +133,7 @@ def apply_registration(req: RegistrationRequestCreate, db: Session = Depends(get
         name=req.company_name.strip(),
         admin_id=uid,
         plan="team",
+        created_by=uid,
     )
     db.add(company)
     db.flush()
@@ -147,13 +148,14 @@ def apply_registration(req: RegistrationRequestCreate, db: Session = Depends(get
         is_admin=True,
         birth_date="",
         force_password_change=True,
+        created_by=uid,
     )
     db.add(member)
 
     # 유저 레코드 생성
     user_record = db.query(User).filter(User.email == req.email.strip()).first()
     if not user_record:
-        db.add(User(id=uid, email=req.email.strip(), name=req.representative_name.strip()))
+        db.add(User(id=uid, email=req.email.strip(), name=req.representative_name.strip(), created_by=uid))
 
     # 신청 이력 저장 (approved 상태로)
     reg = CompanyRegistrationRequest(
@@ -163,6 +165,7 @@ def apply_registration(req: RegistrationRequestCreate, db: Session = Depends(get
         phone=req.phone.strip(),
         email=req.email.strip(),
         status="approved",
+        created_by=uid,
     )
     db.add(reg)
     db.commit()

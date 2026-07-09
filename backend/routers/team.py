@@ -116,7 +116,9 @@ def update_team(
         ).first()
         if target:
             target.is_manager = True
+            target.updated_by = current_user["uid"]
 
+    team.updated_by = current_user["uid"]
     db.commit()
     return {"success": True}
 

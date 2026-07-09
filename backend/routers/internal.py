@@ -98,6 +98,7 @@ def internal_apply_leave(
         is_half=req.is_half,
         reason=req.reason,
         status="pending",
+        created_by=req.user_id,
     )
     db.add(leave)
     db.commit()

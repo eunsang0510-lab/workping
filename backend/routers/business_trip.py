@@ -200,6 +200,7 @@ def approve_trip(
     if prev_status == "cancel_requested":
         trip.approved_by = uid
         trip.approved_at = datetime.now()
+        trip.updated_by = uid
         if req.status == "approved":
             trip.status = "cancelled"
             db.commit()
@@ -263,11 +264,13 @@ def cancel_trip(
 
     if trip.status == "pending":
         trip.status = "cancelled"
+        trip.updated_by = current_user["uid"]
         db.commit()
         return {"success": True, "action": "cancelled"}
 
     if trip.status == "approved":
         trip.status = "cancel_requested"
+        trip.updated_by = current_user["uid"]
         db.commit()
         try:
             manager_ids = _get_manager_ids_for_trip(db, trip.company_id, trip.user_id)

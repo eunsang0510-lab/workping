@@ -30,6 +30,7 @@ interface Member {
   user_name: string;
   is_admin: boolean;
   created_at: string;
+  last_access_at: string | null;
 }
 
 interface IndividualUser {
@@ -37,6 +38,7 @@ interface IndividualUser {
   email: string;
   name: string;
   created_at: string;
+  last_access_at: string | null;
 }
 
 interface Stats {
@@ -517,8 +519,16 @@ export default function SuperAdmin() {
           </Link>
           <h1 className="text-[#0a0a0a] text-lg font-black">시스템 관리자</h1>
         </div>
-        <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
-          <span className="text-[#4a4de0] text-xs font-bold">SUPERADMIN</span>
+        <div className="flex items-center gap-2">
+          <Link href="/superadmin/access-logs" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
+            접속 로그
+          </Link>
+          <Link href="/superadmin/page-stats" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
+            Hit 요약
+          </Link>
+          <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
+            <span className="text-[#4a4de0] text-xs font-bold">SUPERADMIN</span>
+          </div>
         </div>
       </div>
 
@@ -695,7 +705,12 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                   <div className="text-[#6b6b6b] text-xs mb-1">{m.user_email}</div>
-                  <div className="text-[#5b5ef4] text-xs">{m.company_name}</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#5b5ef4] text-xs">{m.company_name}</span>
+                    <span className="text-[#a0a0a0] text-xs">
+                      마지막 접속 {m.last_access_at ? formatDate(m.last_access_at) : "기록 없음"}
+                    </span>
+                  </div>
                 </div>
               ))
             )}
@@ -719,7 +734,12 @@ export default function SuperAdmin() {
                   </div>
                 </div>
                 <div className="text-[#6b6b6b] text-xs mb-1">{u.email}</div>
-                <div className="text-[#a0a0a0] text-xs">가입일 {formatDate(u.created_at)}</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#a0a0a0] text-xs">가입일 {formatDate(u.created_at)}</span>
+                  <span className="text-[#a0a0a0] text-xs">
+                    마지막 접속 {u.last_access_at ? formatDate(u.last_access_at) : "기록 없음"}
+                  </span>
+                </div>
               </div>
             ))
           )}

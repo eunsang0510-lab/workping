@@ -93,6 +93,7 @@ def create_permission(
         name=req.name,
         description=req.description,
         allowed_screens=req.allowed_screens,
+        created_by=current_user["uid"],
     )
     db.add(perm)
     db.commit()
@@ -114,6 +115,7 @@ def update_permission(
     perm.name = req.name
     perm.description = req.description
     perm.allowed_screens = req.allowed_screens
+    perm.updated_by = current_user["uid"]
     db.commit()
     return {"success": True}
 

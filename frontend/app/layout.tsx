@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
 import KeepAlive from "./_keep-alive";
+import PageViewTracker from "./_page-view-tracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -75,6 +76,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <KeepAlive />
+        <PageViewTracker />
         {children}
       </body>
     </html>

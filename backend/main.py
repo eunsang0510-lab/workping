@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -18,6 +18,7 @@ from models import company_request as company_request_model
 from models import push_subscription as push_subscription_model
 from models import notification as notification_model
 from models import permission as permission_model
+from models import page_view as page_view_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -124,6 +125,11 @@ def run_migrations():
         "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS created_by VARCHAR",
         "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
         "ALTER TABLE company_registration_requests ADD COLUMN IF NOT EXISTS updated_by VARCHAR",
+        # 화면 접속 로그
+        "CREATE TABLE IF NOT EXISTS page_views (id VARCHAR PRIMARY KEY, path VARCHAR NOT NULL, user_id VARCHAR, user_name VARCHAR, user_email VARCHAR, created_at TIMESTAMP DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS ix_page_views_path ON page_views (path)",
+        "CREATE INDEX IF NOT EXISTS ix_page_views_user_id ON page_views (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_page_views_created_at ON page_views (created_at)",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
@@ -292,6 +298,7 @@ app.include_router(push.router, prefix="/api/push", tags=["푸시알림"])
 app.include_router(notification.router, prefix="/api/notifications", tags=["알림"])
 app.include_router(permission.router, prefix="/api/permissions", tags=["권한관리"])
 app.include_router(internal.router, prefix="/internal", tags=["내부서비스"])
+app.include_router(page_view.router, prefix="/api/page-view", tags=["접속로그"])
 
 
 @app.get("/")

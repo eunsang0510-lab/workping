@@ -130,6 +130,7 @@ def apply_leave(
     # 승인 불필요 → 즉시 차감
     if not approval_required:
         balance.used_days = balance.used_days + (0.5 if req.is_half else days)
+        balance.updated_by = current_user.get("uid") if isinstance(current_user, dict) else None
 
     db.commit()
     db.refresh(leave)
@@ -288,11 +289,13 @@ def cancel_leave(
 
     if leave.status == "pending":
         leave.status = "cancelled"
+        leave.updated_by = current_user["uid"]
         db.commit()
         return {"success": True, "action": "cancelled"}
 
     if leave.status == "approved":
         leave.status = "cancel_requested"
+        leave.updated_by = current_user["uid"]
         db.commit()
         try:
             manager_ids = _get_manager_ids(db, leave.company_id, leave.user_id)
@@ -348,10 +351,12 @@ def approve_leave(
     if prev_status == "cancel_requested":
         leave.approved_by = current_user["uid"]
         leave.approved_at = datetime.now()
+        leave.updated_by = current_user["uid"]
         if req.status == "approved":
             leave.status = "cancelled"
             if balance:
                 balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
+                balance.updated_by = current_user["uid"]
             db.commit()
             try:
                 send_push_to_users(db, [leave.user_id],
@@ -385,10 +390,12 @@ def approve_leave(
     if req.status == "approved" and prev_status != "approved":
         if balance:
             balance.used_days = balance.used_days + (0.5 if leave.is_half else leave.days)
+            balance.updated_by = current_user["uid"]
 
     if req.status == "rejected" and prev_status == "approved":
         if balance:
             balance.used_days = max(0, balance.used_days - (0.5 if leave.is_half else leave.days))
+            balance.updated_by = current_user["uid"]
 
     db.commit()
 
@@ -433,6 +440,7 @@ def set_leave_balance(
 
     if balance:
         balance.total_days = req.total_days
+        balance.updated_by = current_user["uid"]
     else:
         balance = LeaveBalance(
             company_id=req.company_id,
@@ -440,6 +448,7 @@ def set_leave_balance(
             total_days=req.total_days,
             used_days=0,
             year=year,
+            created_by=current_user["uid"],
         )
         db.add(balance)
 
@@ -530,6 +539,7 @@ def toggle_leave(
         raise HTTPException(status_code=403, detail="관리자만 설정할 수 있어요")
 
     company.leave_enabled = req.leave_enabled
+    company.updated_by = current_user["uid"]
     db.commit()
     return {"success": True, "leave_enabled": req.leave_enabled}
 
@@ -557,6 +567,7 @@ def toggle_leave_approval(
         raise HTTPException(status_code=403, detail="관리자만 설정할 수 있어요")
 
     company.leave_approval_required = req.leave_approval_required
+    company.updated_by = current_user["uid"]
     db.commit()
     return {"success": True, "leave_approval_required": req.leave_approval_required}
 
@@ -585,5 +596,6 @@ def set_manager(
         raise HTTPException(status_code=403, detail="관리자만 팀장을 지정할 수 있어요")
 
     target.is_manager = is_manager
+    target.updated_by = current_user["uid"]
     db.commit()
     return {"success": True, "is_manager": is_manager}

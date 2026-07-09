@@ -120,6 +120,7 @@ def prepare_payment(
         plan=req.plan,
         amount=amount,
         status="pending",
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(payment)
     db.commit()
@@ -158,6 +159,7 @@ def confirm_payment(
     if payment:
         payment.payment_key = req.payment_key
         payment.status = "done"
+        payment.updated_by = current_user.get("uid") if isinstance(current_user, dict) else None
         req.plan = payment.plan
 
     sub = Subscription(
@@ -166,6 +168,7 @@ def confirm_payment(
         status="active",
         started_at=datetime.now(),
         expires_at=datetime.now() + timedelta(days=30),
+        created_by=current_user.get("uid") if isinstance(current_user, dict) else None,
     )
     db.add(sub)
     db.commit()
