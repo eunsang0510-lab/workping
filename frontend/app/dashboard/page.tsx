@@ -774,6 +774,16 @@ const markAllRead = async () => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* 매뉴얼 */}
+          <Link href="/manual">
+            <button
+              className="w-9 h-9 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-sm hover:border-[#5b5ef4] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+              title="사용자 매뉴얼"
+            >
+              📖
+            </button>
+          </Link>
+
           {/* 알림 벨 */}
           <div className="relative">
             <button
@@ -1160,15 +1170,6 @@ const markAllRead = async () => {
             <div>
               <div className="text-[#0a0a0a] text-sm font-bold">공지사항</div>
               <div className="text-[#6b6b6b] text-xs">전체 공지 보기</div>
-            </div>
-          </div>
-        </Link>
-        <Link href="/manual">
-          <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <span className="text-lg">📖</span>
-            <div>
-              <div className="text-[#0a0a0a] text-sm font-bold">사용자 매뉴얼</div>
-              <div className="text-[#6b6b6b] text-xs">이용 가이드</div>
             </div>
           </div>
         </Link>
