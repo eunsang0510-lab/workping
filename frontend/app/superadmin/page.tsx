@@ -8,7 +8,7 @@ import Link from "next/link";
 import Toast from "@/components/Toast";
 import Confirm from "@/components/Confirm";
 
-import { API_URL } from "@/lib/api";
+import { API_URL, yearOptions } from "@/lib/api";
 const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 
 interface Company {
@@ -862,7 +862,7 @@ export default function SuperAdmin() {
                   onChange={(e) => setExcelModal({ ...excelModal, year: Number(e.target.value) })}
                   className="w-full bg-white border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-4 py-3 outline-none focus:border-[#5b5ef4] transition-all text-sm"
                 >
-                  {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                  {yearOptions(new Date().getFullYear()).map((y) => (
                     <option key={y} value={y}>{y}년</option>
                   ))}
                 </select>

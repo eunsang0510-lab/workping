@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
 
-import { API_URL } from "@/lib/api";
+import { API_URL, yearOptions } from "@/lib/api";
 
 const getAuthHeader = async () => {
   const token = await auth.currentUser?.getIdToken();
@@ -269,7 +269,7 @@ export default function LeavePage() {
 
       {/* 연도 선택 */}
       <div className="flex gap-2 mb-3">
-        {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() + 1 - i).map((y) => (
+        {yearOptions(new Date().getFullYear() + 1).map((y) => (
           <button
             key={y}
             onClick={() => setSelectedYear(y)}
