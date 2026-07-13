@@ -81,7 +81,8 @@ def apply_leave(
     if not company or not company.leave_enabled:
         raise HTTPException(status_code=400, detail="연차 기능이 비활성화되어 있어요")
 
-    year = datetime.now().year
+    # 신청일 기준이 아닌 실제 연차 사용 연도(시작일 기준) 잔여를 확인/차감
+    year = int(req.start_date[:4])
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.company_id == req.company_id,
         LeaveBalance.user_id == req.user_id,
@@ -89,7 +90,7 @@ def apply_leave(
     ).first()
 
     if not balance:
-        raise HTTPException(status_code=400, detail="연차 정보가 없어요. 관리자에게 문의하세요")
+        raise HTTPException(status_code=400, detail=f"{year}년 연차 정보가 없어요. 관리자에게 문의하세요")
 
     days = calc_days(req.start_date, req.end_date, req.is_half)
     remaining = balance.total_days - balance.used_days
@@ -155,15 +156,17 @@ def apply_leave(
 @router.get("/my/{user_id}")
 def get_my_leaves(
     user_id: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
-    leaves = db.query(Leave).filter(
-        Leave.user_id == user_id
-    ).order_by(Leave.created_at.desc()).all()
+    query = db.query(Leave).filter(Leave.user_id == user_id)
+    if year:
+        query = query.filter(Leave.start_date.like(f"{year}-%"))
+    leaves = query.order_by(Leave.created_at.desc()).all()
 
     return {
         "leaves": [
@@ -187,24 +190,25 @@ def get_my_leaves(
 @router.get("/balance/{user_id}")
 def get_my_balance(
     user_id: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     if current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
 
-    year = datetime.now().year
+    target_year = year or datetime.now().year
     member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
     if not member:
-        return {"balance": None}
+        return {"balance": None, "year": target_year}
 
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.user_id == user_id,
-        LeaveBalance.year == year,
+        LeaveBalance.year == target_year,
     ).first()
 
     if not balance:
-        return {"balance": None}
+        return {"balance": None, "year": target_year}
 
     return {
         "balance": {
@@ -220,6 +224,7 @@ def get_my_balance(
 @router.get("/company/{company_id}")
 def get_company_leaves(
     company_id: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -245,14 +250,17 @@ def get_company_leaves(
             TeamMember.team_id.in_(managed_team_ids)
         ).all()
         managed_user_ids = [uid for (uid,) in team_member_rows]
-        leaves = db.query(Leave).filter(
+        query = db.query(Leave).filter(
             Leave.company_id == company_id,
             Leave.user_id.in_(managed_user_ids)
-        ).order_by(Leave.created_at.desc()).all()
+        )
     else:
-        leaves = db.query(Leave).filter(
-            Leave.company_id == company_id
-        ).order_by(Leave.created_at.desc()).all()
+        query = db.query(Leave).filter(Leave.company_id == company_id)
+
+    if year:
+        query = query.filter(Leave.start_date.like(f"{year}-%"))
+
+    leaves = query.order_by(Leave.created_at.desc()).all()
 
     return {
         "leaves": [
@@ -338,7 +346,8 @@ def approve_leave(
     if req.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="status는 approved 또는 rejected만 가능해요")
 
-    year = datetime.now().year
+    # 승인 처리 시점이 아닌 실제 연차 사용 연도(시작일 기준) 잔여를 차감/복원
+    year = int(leave.start_date[:4])
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.user_id == leave.user_id,
         LeaveBalance.company_id == leave.company_id,
@@ -460,6 +469,7 @@ def set_leave_balance(
 @router.get("/balance/company/{company_id}")
 def get_company_balances(
     company_id: str,
+    year: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -473,7 +483,7 @@ def get_company_balances(
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
-    year = datetime.now().year
+    year = year or datetime.now().year
     # 팀장이면 본인 팀원만 조회
     is_manager_only = member and member.is_manager and not member.is_admin
 

@@ -57,6 +57,7 @@ export default function LeavePage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const router = useRouter();
 
   const showToast = useCallback((message: string, type: "success" | "error" | "info" = "info") => {
@@ -82,7 +83,7 @@ export default function LeavePage() {
       const data = await res.json();
       if (data.company_id) {
         setCompanyId(data.company_id);
-        fetchBalance(userId);
+        fetchBalance(userId, selectedYear);
         fetchLeaves(userId);
       }
     } catch (error) {
@@ -92,9 +93,9 @@ export default function LeavePage() {
     }
   };
 
-  const fetchBalance = async (userId: string) => {
+  const fetchBalance = async (userId: string, year: number) => {
     try {
-      const res = await fetch(`${API_URL}/api/leave/balance/${userId}`, {
+      const res = await fetch(`${API_URL}/api/leave/balance/${userId}?year=${year}`, {
         headers: await getAuthHeader(),
       });
       const data = await res.json();
@@ -103,6 +104,12 @@ export default function LeavePage() {
       console.error("연차 잔여 로딩 실패:", error);
     }
   };
+
+  useEffect(() => {
+    if (!user || !companyId) return;
+    fetchBalance(user.uid, selectedYear);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
 
   const fetchLeaves = async (userId: string) => {
     try {
@@ -168,11 +175,16 @@ export default function LeavePage() {
       if (data.success) {
         showToast("연차 신청 완료!", "success");
         setShowForm(false);
+        const appliedYear = Number(startDate.slice(0, 4));
         setStartDate("");
         setEndDate("");
         setIsHalf(false);
         setReason("");
-        fetchBalance(user!.uid);
+        if (appliedYear !== selectedYear) {
+          setSelectedYear(appliedYear);
+        } else {
+          fetchBalance(user!.uid, appliedYear);
+        }
         fetchLeaves(user!.uid);
       } else {
         showToast(data.detail || "신청 실패", "error");
@@ -198,7 +210,7 @@ export default function LeavePage() {
         } else {
           showToast("연차 신청이 취소됐어요", "success");
         }
-        fetchBalance(user!.uid);
+        fetchBalance(user!.uid, selectedYear);
         fetchLeaves(user!.uid);
       } else {
         showToast(data.detail || "취소 실패", "error");
@@ -225,6 +237,10 @@ export default function LeavePage() {
     });
   };
 
+  const visibleLeaves = leaves.filter(
+    (l) => l.status !== "cancelled" && l.start_date.startsWith(String(selectedYear))
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -247,6 +263,23 @@ export default function LeavePage() {
           </button>
         </Link>
         <h1 className="text-[#0a0a0a] text-xl font-black tracking-tight">연차관리</h1>
+      </div>
+
+      {/* 연도 선택 */}
+      <div className="flex gap-2 mb-3">
+        {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() + 1 - i).map((y) => (
+          <button
+            key={y}
+            onClick={() => setSelectedYear(y)}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              selectedYear === y
+                ? "bg-[#5b5ef4] text-white"
+                : "bg-white border border-[#e5e5e5] text-[#6b6b6b]"
+            }`}
+          >
+            {y}년
+          </button>
+        ))}
       </div>
 
       {/* 연차 잔여 카드 */}
@@ -275,7 +308,7 @@ export default function LeavePage() {
       ) : (
         <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 text-center shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           <div className="text-3xl mb-2">📋</div>
-          <div className="text-[#0a0a0a] font-bold text-sm mb-1">연차 정보가 없어요</div>
+          <div className="text-[#0a0a0a] font-bold text-sm mb-1">{selectedYear}년 연차 정보가 없어요</div>
           <div className="text-[#a0a0a0] text-xs">관리자에게 연차 부여를 요청하세요</div>
         </div>
       )}
@@ -354,12 +387,12 @@ export default function LeavePage() {
 
       {/* 신청 내역 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-        <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">신청 내역</div>
-        {leaves.filter(l => l.status !== "cancelled").length === 0 ? (
+        <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">{selectedYear}년 신청 내역</div>
+        {visibleLeaves.length === 0 ? (
           <div className="text-[#a0a0a0] text-sm text-center py-8">신청 내역이 없어요</div>
         ) : (
           <div className="space-y-3">
-            {leaves.filter(l => l.status !== "cancelled").map((leave) => {
+            {visibleLeaves.map((leave) => {
               const s = statusLabel(leave.status);
               return (
                 <div key={leave.id} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-4">

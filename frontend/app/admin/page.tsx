@@ -158,6 +158,7 @@ export default function Admin() {
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
+  const [balanceYear, setBalanceYear] = useState(() => new Date().getFullYear());
   const [isManager, setIsManager] = useState(false);
   const [businessTrips, setBusinessTrips] = useState<TripItem[]>([]);
   const [tripRejectModal, setTripRejectModal] = useState<{ id: string; userName: string } | null>(null);
@@ -497,13 +498,29 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     setLeaveRequests(leavesData.leaves || []);
 
     // 연차 잔여 현황
-    const balanceRes = await fetch(`${API_URL}/api/leave/balance/company/${companyId}`, { headers });
-    const balanceData = await balanceRes.json();
-    setLeaveBalances(balanceData.balances || []);
+    fetchLeaveBalances(companyId, balanceYear);
   } catch (error) {
     console.error("연차 데이터 로딩 실패:", error);
   }
 };
+
+const fetchLeaveBalances = async (companyId: string, year: number) => {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+    const balanceRes = await fetch(`${API_URL}/api/leave/balance/company/${companyId}?year=${year}`, { headers });
+    const balanceData = await balanceRes.json();
+    setLeaveBalances(balanceData.balances || []);
+  } catch (error) {
+    console.error("연차 현황 로딩 실패:", error);
+  }
+};
+
+useEffect(() => {
+  if (!company?.id || !leaveEnabled) return;
+  fetchLeaveBalances(company.id, balanceYear);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [balanceYear]);
 
   const handleApproveLeave = async (leaveId: string, status: "approved" | "rejected") => {
   try {
@@ -535,12 +552,12 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
     const res = await fetch(`${API_URL}/api/leave/balance/set`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ company_id: company?.id, user_id: userId, total_days: days }),
+      body: JSON.stringify({ company_id: company?.id, user_id: userId, total_days: days, year: balanceYear }),
     });
     const data = await res.json();
     if (data.success) {
-      showToast("연차 부여 완료!", "success");
-      fetchLeaveData(company!.id, user!.uid);
+      showToast(`${balanceYear}년 연차 부여 완료!`, "success");
+      fetchLeaveBalances(company!.id, balanceYear);
     }
   } catch {
     showToast("연차 부여 실패", "error");
@@ -568,9 +585,7 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
         const leavesRes = await fetch(`${API_URL}/api/leave/company/${company.id}`, { headers });
         const leavesData = await leavesRes.json();
         setLeaveRequests(leavesData.leaves || []);
-        const balanceRes = await fetch(`${API_URL}/api/leave/balance/company/${company.id}`, { headers });
-        const balanceData = await balanceRes.json();
-        setLeaveBalances(balanceData.balances || []);
+        fetchLeaveBalances(company.id, balanceYear);
       }
     }
   } catch {
@@ -1305,6 +1320,15 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 {/* 연차 현황 탭 */}
                 {leaveTab === "balances" && (
                   <div className="space-y-3">
+                    <select
+                      value={balanceYear}
+                      onChange={(e) => setBalanceYear(Number(e.target.value))}
+                      className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-sm mb-1"
+                    >
+                      {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() + 1 - i).map((y) => (
+                        <option key={y} value={y}>{y}년</option>
+                      ))}
+                    </select>
                     {leaveBalances.length === 0 ? (
                       <div className="text-[#a0a0a0] text-sm text-center py-6">직원이 없어요</div>
                     ) : (
