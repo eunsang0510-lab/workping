@@ -866,7 +866,7 @@ const markAllRead = async () => {
                     </button>
                   )}
                   <button
-                    onClick={async () => { await signOut(auth); router.push("/login"); }}
+                    onClick={async () => { await signOut(auth); router.push("/"); }}
                     className="w-full text-left px-2 py-2 text-[#ef4444] text-sm hover:bg-[#f8f8f8] rounded-xl transition-all"
                   >
                     🚪 로그아웃
