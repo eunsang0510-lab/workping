@@ -83,6 +83,12 @@ def apply_leave(
 
     # 신청일 기준이 아닌 실제 연차 사용 연도(시작일 기준) 잔여를 확인/차감
     year = int(req.start_date[:4])
+    current_year = datetime.now().year
+    if year != current_year:
+        if year > current_year:
+            raise HTTPException(status_code=400, detail=f"{year}년 연차는 {year}년이 되면 신청할 수 있어요")
+        raise HTTPException(status_code=400, detail=f"지난 연도({year}년)의 연차는 신청할 수 없어요")
+
     balance = db.query(LeaveBalance).filter(
         LeaveBalance.company_id == req.company_id,
         LeaveBalance.user_id == req.user_id,

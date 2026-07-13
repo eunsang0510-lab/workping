@@ -240,6 +240,8 @@ export default function LeavePage() {
   const visibleLeaves = leaves.filter(
     (l) => l.status !== "cancelled" && l.start_date.startsWith(String(selectedYear))
   );
+  const currentYear = new Date().getFullYear();
+  const isCurrentYear = selectedYear === currentYear;
 
   if (loading) {
     return (
@@ -313,16 +315,24 @@ export default function LeavePage() {
         </div>
       )}
 
-      {/* 연차 신청 버튼 */}
-      <button
-        onClick={() => setShowForm(!showForm)}
-        className="w-full bg-white border border-dashed border-[#5b5ef4] hover:bg-[#f0f0ff] text-[#5b5ef4] font-bold py-3 rounded-xl transition-all text-sm mb-4"
-      >
-        {showForm ? "✕ 취소" : "+ 연차 신청"}
-      </button>
+      {/* 연차 신청 버튼 (해당 연도일 때만 신청 가능) */}
+      {isCurrentYear ? (
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="w-full bg-white border border-dashed border-[#5b5ef4] hover:bg-[#f0f0ff] text-[#5b5ef4] font-bold py-3 rounded-xl transition-all text-sm mb-4"
+        >
+          {showForm ? "✕ 취소" : "+ 연차 신청"}
+        </button>
+      ) : (
+        <div className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#a0a0a0] text-xs text-center py-3 rounded-xl mb-4">
+          {selectedYear > currentYear
+            ? `${selectedYear}년이 되면 신청할 수 있어요`
+            : `지난 연도의 연차는 신청할 수 없어요`}
+        </div>
+      )}
 
       {/* 신청 폼 */}
-      {showForm && (
+      {isCurrentYear && showForm && (
         <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-4">연차 신청</div>
           <div className="space-y-3">
