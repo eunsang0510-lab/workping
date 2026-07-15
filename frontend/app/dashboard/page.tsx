@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -120,6 +120,8 @@ export default function Dashboard() {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const lastDateRef = useRef<string | null>(null);
 
   // 출근 중일 때 주간 근무시간 1분마다 갱신
   useEffect(() => {
@@ -279,20 +281,32 @@ export default function Dashboard() {
         headers: await getAuthHeader(),
       });
       const data = await res.json();
+
+      // 오늘 기록 기준으로 상태를 항상 초기화 — 자정이 지나 새 하루가 시작되면
+      // 전날 퇴근을 안 했더라도(어제 기록은 어제 것으로 남고) 오늘은 미출근 상태로 보여야 해요.
       if (data.checkin) {
         setCheckInTime(data.checkin);
         setCurrentLocation(data.checkin_address || "-");
-        setIsCheckedIn(true);
         setIsRemote(data.is_remote || false);
-      }
-      if (data.checkout) {
+        setIsCheckedIn(!data.checkout);
+      } else {
+        setCheckInTime(null);
+        setCurrentLocation("-");
+        setIsRemote(false);
         setIsCheckedIn(false);
+      }
+
+      if (data.checkin && data.checkout) {
         setCheckOutTime(data.checkout);
         setCheckOutLocation(data.checkout_address || "-");
         const minutes = Math.floor(
           (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
         );
         setWorkHours(formatWorkTime(minutes));
+      } else {
+        setCheckOutTime(null);
+        setCheckOutLocation("-");
+        setWorkHours("0h 0m");
       }
     } catch (error) {
       console.error("오늘 기록 로딩 실패:", error);
@@ -367,6 +381,25 @@ const fetchWeeklyOvertime = async (userId: string) => {
     setOvertime52h(data.overtime_52h ?? false);
   } catch {}
 };
+
+// 자정이 지나 날짜가 바뀌면 오늘 출퇴근/연차 상태를 새로 불러옴
+// (앱을 계속 켜둔 채로 자정을 넘기면, 전날 퇴근을 안 했어도 오늘은 미출근 상태로 리셋되어야 함)
+useEffect(() => {
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  if (lastDateRef.current === null) {
+    lastDateRef.current = todayStr;
+    return;
+  }
+  if (lastDateRef.current !== todayStr) {
+    lastDateRef.current = todayStr;
+    if (user) {
+      fetchTodayAttendance(user.uid);
+      fetchWeeklyOvertime(user.uid);
+      checkTodayLeave(user.uid);
+    }
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [now, user]);
 
 const fetchNotifications = async (userId: string) => {
   try {

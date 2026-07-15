@@ -16,6 +16,11 @@ router = APIRouter()
 KST = timezone(timedelta(hours=9))
 
 
+def _kst_date_str(recorded_at: datetime) -> str:
+    """UTC로 저장된 시각을 KST 기준 날짜 문자열로 변환 (자정 근처 기록의 날짜 오분류 방지)"""
+    return (recorded_at + timedelta(hours=9)).date().isoformat()
+
+
 def get_work_day_range():
     # DB는 UTC 저장 → 조회도 UTC 기준으로
     now_utc = datetime.utcnow()
@@ -267,7 +272,7 @@ def get_monthly_report(
 
     daily = {}
     for r in records:
-        date_str = r.recorded_at.date().isoformat()
+        date_str = _kst_date_str(r.recorded_at)
         if date_str not in daily:
             daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0}
         if r.type == "checkin" and not daily[date_str]["checkin"]:
@@ -368,7 +373,7 @@ def get_company_report(
         recs = records_by_user.get(member.user_id, [])
         daily: dict = {}
         for r in recs:
-            date_str = r.recorded_at.date().isoformat()
+            date_str = _kst_date_str(r.recorded_at)
             if date_str not in daily:
                 daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0}
             if r.type == "checkin" and not daily[date_str]["checkin"]:
@@ -523,7 +528,7 @@ def export_attendance_excel(
 
         daily = {}
         for r in records:
-            date_str = r.recorded_at.date().isoformat()
+            date_str = _kst_date_str(r.recorded_at)
             if date_str not in daily:
                 daily[date_str] = {"checkin": None, "checkout": None}
             if r.type == "checkin" and not daily[date_str]["checkin"]:
