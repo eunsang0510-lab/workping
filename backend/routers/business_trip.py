@@ -9,22 +9,7 @@ from routers.deps import get_current_user
 from datetime import datetime
 from typing import Optional
 from utils.push import send_push_to_users
-
-
-def _get_manager_ids_for_trip(db: Session, company_id: str, user_id: str) -> list[str]:
-    teams = db.query(Team).filter(Team.company_id == company_id).all()
-    result = []
-    for team in teams:
-        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        if any(m.user_id == user_id for m in members) and team.manager_id:
-            result.append(team.manager_id)
-    if not result:
-        admins = db.query(CompanyMember).filter(
-            CompanyMember.company_id == company_id,
-            CompanyMember.is_admin == True,
-        ).all()
-        result = [a.user_id for a in admins]
-    return result
+from utils.team import get_manager_ids as _get_manager_ids_for_trip
 
 router = APIRouter()
 

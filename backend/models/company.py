@@ -42,7 +42,7 @@ class CompanyLocation(Base):
     __tablename__ = "company_locations"
 
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id = Column(String, nullable=False)
+    company_id = Column(String, nullable=False, index=True)
     name       = Column(String, nullable=False)
     latitude   = Column(Float, nullable=False)
     longitude  = Column(Float, nullable=False)

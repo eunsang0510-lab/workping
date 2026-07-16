@@ -150,15 +150,19 @@ def _last_access_map(db: Session) -> dict:
 def get_members(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
     members = db.query(CompanyMember).order_by(CompanyMember.created_at.desc()).all()
     last_access = _last_access_map(db)
+
+    company_ids = {m.company_id for m in members if m.company_id}
+    companies = db.query(Company).filter(Company.id.in_(company_ids)).all() if company_ids else []
+    company_name_by_id = {c.id: c.name for c in companies}
+
     result = []
     for m in members:
-        company = db.query(Company).filter(Company.id == m.company_id).first()
         last_seen = last_access.get(m.user_id)
         result.append(
             {
                 "id": m.id,
                 "company_id": m.company_id,
-                "company_name": company.name if company else "알 수 없음",
+                "company_name": company_name_by_id.get(m.company_id, "알 수 없음"),
                 "user_id": m.user_id,
                 "user_email": m.user_email,
                 "user_name": m.user_name,

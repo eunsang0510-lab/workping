@@ -8,7 +8,7 @@ class Location(Base):
     __tablename__ = "locations"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, nullable=False)
+    user_id = Column(String, nullable=False, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     place_name = Column(String, nullable=True)

@@ -64,20 +64,32 @@ def get_teams(
         Team.company_id == company_id
     ).order_by(Team.created_at).all()
 
+    team_ids = [t.id for t in teams]
+    all_members = (
+        db.query(TeamMember).filter(TeamMember.team_id.in_(team_ids)).all()
+        if team_ids else []
+    )
+    members_by_team: dict = {}
+    for m in all_members:
+        members_by_team.setdefault(m.team_id, []).append(m.user_id)
+
+    manager_ids = {t.manager_id for t in teams if t.manager_id}
+    managers = (
+        db.query(CompanyMember).filter(CompanyMember.user_id.in_(manager_ids)).all()
+        if manager_ids else []
+    )
+    manager_name_by_user = {m.user_id: m.user_name for m in managers}
+
     result = []
     for t in teams:
-        members = db.query(TeamMember).filter(TeamMember.team_id == t.id).all()
-        manager = db.query(CompanyMember).filter(
-            CompanyMember.user_id == t.manager_id
-        ).first() if t.manager_id else None
-
+        member_ids = members_by_team.get(t.id, [])
         result.append({
             "id": t.id,
             "name": t.name,
             "manager_id": t.manager_id,
-            "manager_name": manager.user_name if manager else None,
-            "member_count": len(members),
-            "members": [m.user_id for m in members],
+            "manager_name": manager_name_by_user.get(t.manager_id) if t.manager_id else None,
+            "member_count": len(member_ids),
+            "members": member_ids,
         })
 
     return {"teams": result}

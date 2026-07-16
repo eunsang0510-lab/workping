@@ -7,9 +7,9 @@ from datetime import datetime
 
 from database.connection import get_db
 from models.leave import Leave, LeaveBalance
-from models.company import Company, CompanyMember
-from models.team import Team, TeamMember
+from models.company import Company
 from utils.push import send_push_to_users
+from utils.team import get_manager_ids as _get_manager_ids
 
 router = APIRouter()
 
@@ -43,22 +43,6 @@ def _calc_days(start_date: str, end_date: str, is_half: bool) -> float:
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
     return float((end - start).days + 1)
-
-
-def _get_manager_ids(db: Session, company_id: str, user_id: str) -> list[str]:
-    teams = db.query(Team).filter(Team.company_id == company_id).all()
-    result = []
-    for team in teams:
-        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        if any(m.user_id == user_id for m in members) and team.manager_id:
-            result.append(team.manager_id)
-    if not result:
-        admins = db.query(CompanyMember).filter(
-            CompanyMember.company_id == company_id,
-            CompanyMember.is_admin == True,
-        ).all()
-        result = [a.user_id for a in admins]
-    return result
 
 
 @router.post("/leave/apply")

@@ -7,9 +7,9 @@ class Team(Base):
     __tablename__ = "teams"
 
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id = Column(String, nullable=False)
+    company_id = Column(String, nullable=False, index=True)
     name       = Column(String, nullable=False)
-    manager_id = Column(String, nullable=True)
+    manager_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.now)
     created_by = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)
@@ -19,8 +19,8 @@ class TeamMember(Base):
     __tablename__ = "team_members"
 
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    team_id    = Column(String, nullable=False)
-    user_id    = Column(String, nullable=False)
+    team_id    = Column(String, nullable=False, index=True)
+    user_id    = Column(String, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now)
     created_by = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)

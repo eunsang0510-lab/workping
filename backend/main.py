@@ -130,6 +130,25 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_page_views_path ON page_views (path)",
         "CREATE INDEX IF NOT EXISTS ix_page_views_user_id ON page_views (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_page_views_created_at ON page_views (created_at)",
+        # 조회 성능 개선 — 그동안 인덱스가 없던 테이블 보강
+        "CREATE INDEX IF NOT EXISTS ix_company_locations_company_id ON company_locations (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leaves_company_id ON leaves (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leaves_user_id ON leaves (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leaves_status ON leaves (status)",
+        "CREATE INDEX IF NOT EXISTS ix_leaves_start_date ON leaves (start_date)",
+        "CREATE INDEX IF NOT EXISTS ix_leave_balances_company_id ON leave_balances (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leave_balances_user_id ON leave_balances (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leave_balances_year ON leave_balances (year)",
+        "CREATE INDEX IF NOT EXISTS ix_teams_company_id ON teams (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_teams_manager_id ON teams (manager_id)",
+        "CREATE INDEX IF NOT EXISTS ix_team_members_team_id ON team_members (team_id)",
+        "CREATE INDEX IF NOT EXISTS ix_team_members_user_id ON team_members (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_notices_company_id ON notices (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_notice_reads_notice_id ON notice_reads (notice_id)",
+        "CREATE INDEX IF NOT EXISTS ix_notice_reads_user_id ON notice_reads (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_subscriptions_company_id ON subscriptions (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_payments_company_id ON payments (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_locations_user_id ON locations (user_id)",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

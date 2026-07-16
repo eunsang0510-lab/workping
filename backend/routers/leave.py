@@ -9,23 +9,7 @@ from datetime import datetime
 from typing import Optional
 from models.team import Team, TeamMember
 from utils.push import send_push_to_users
-
-
-def _get_manager_ids(db: Session, company_id: str, user_id: str) -> list[str]:
-    """신청자 팀의 팀장 uid 목록. 팀 없으면 회사 admin."""
-    teams = db.query(Team).filter(Team.company_id == company_id).all()
-    result = []
-    for team in teams:
-        members = db.query(TeamMember).filter(TeamMember.team_id == team.id).all()
-        if any(m.user_id == user_id for m in members) and team.manager_id:
-            result.append(team.manager_id)
-    if not result:
-        admins = db.query(CompanyMember).filter(
-            CompanyMember.company_id == company_id,
-            CompanyMember.is_admin == True,
-        ).all()
-        result = [a.user_id for a in admins]
-    return result
+from utils.team import get_manager_ids as _get_manager_ids
 
 router = APIRouter()
 
@@ -511,13 +495,17 @@ def get_company_balances(
             CompanyMember.company_id == company_id
         ).all()
 
+    member_user_ids = [m.user_id for m in members]
+    balances = db.query(LeaveBalance).filter(
+        LeaveBalance.user_id.in_(member_user_ids),
+        LeaveBalance.company_id == company_id,
+        LeaveBalance.year == year,
+    ).all() if member_user_ids else []
+    balance_by_user = {b.user_id: b for b in balances}
+
     result = []
     for m in members:
-        balance = db.query(LeaveBalance).filter(
-            LeaveBalance.user_id == m.user_id,
-            LeaveBalance.company_id == company_id,
-            LeaveBalance.year == year,
-        ).first()
+        balance = balance_by_user.get(m.user_id)
         result.append({
             "user_id": m.user_id,
             "user_name": m.user_name or m.user_email,
