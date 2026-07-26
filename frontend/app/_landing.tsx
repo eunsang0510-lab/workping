@@ -44,6 +44,16 @@ export default function Landing() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.3.17.64.24.98.2l.1-.02L13 15.12l-2.98-2.98-6.84 11.62zm16.26-10.4L16.7 11.7 13.41 15l3.29 3.29 2.77-1.58a1.75 1.75 0 0 0 0-3.35zM2.54.28A1.75 1.75 0 0 0 2 1.6v20.8c0 .48.19.92.54 1.32L2.64 23.9 13.12 13.4v-.24L2.64.12l-.1.16zm10.28 11.84L4.26.36l.1-.02c.34-.04.68.03.98.2L16.57 7.2l-3.75 4.92z"/></svg>
             Google Play에서 설치
           </a>
+          <p className="text-[#a0a0a0] text-xs mt-1">
+            iOS는 준비중이에요. iOS에서는 브라우저로 접속해 이용해 주세요.
+            <br />
+            <a
+              href="https://workping-kappa.vercel.app"
+              className="text-[#5b5ef4] hover:underline break-all"
+            >
+              https://workping-kappa.vercel.app
+            </a>
+          </p>
         </div>
         <p className="text-[#a0a0a0] text-xs mt-3">
           🔒 이름 · 이메일만 있으면 돼요. 개인정보 걱정 없이 시작하세요.
