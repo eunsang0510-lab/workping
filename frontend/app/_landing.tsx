@@ -141,62 +141,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* 요금제 */}
-      <section className="px-6 py-14">
-        <div className="text-center mb-8">
-          <div className="text-[#a0a0a0] text-xs uppercase tracking-widest mb-2">Pricing</div>
-          <h3 className="text-2xl font-black tracking-tight">합리적인 요금제</h3>
-        </div>
-        <div className="space-y-4">
-          {[
-            {
-              name: "무료", price: "0원", period: "",
-              highlight: true,
-              badge: "모든 기능 무료",
-              features: ["직원 100명 이하", "GPS 출퇴근 · 출근 구역 설정", "엑셀 다운로드 · 주간·월간 리포트", "연차·출장 관리 (신청·승인·달력 시각화)", "재택근무 관리 · 팀 관리 · 권한 관리"],
-            },
-            {
-              name: "100인 이상", price: "협의", period: "",
-              highlight: false, badge: undefined,
-              features: ["직원 100명 초과", "무료 기능 전체 포함", "전담 고객 지원", "급여·ERP 등 시스템 연동"],
-            },
-          ].map((plan, i) => (
-            <div key={i} className={`rounded-2xl p-5 border-2 ${
-              plan.highlight
-                ? "bg-[#5b5ef4] border-[#5b5ef4] shadow-[0_8px_32px_rgba(91,94,244,0.3)]"
-                : "bg-white border-[#e5e5e5] shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-            }`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className={`font-black text-base ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>{plan.name}</div>
-                {plan.badge && (
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${plan.highlight ? "bg-white/20 text-white" : "bg-[#f0f0ff] text-[#5b5ef4]"}`}>{plan.badge}</span>
-                )}
-              </div>
-              <div className="flex items-end gap-1 mb-4">
-                <span className={`text-3xl font-black tracking-tight ${plan.highlight ? "text-white" : "text-[#0a0a0a]"}`}>{plan.price}</span>
-                <span className={`text-sm mb-1 ${plan.highlight ? "text-white/70" : "text-[#6b6b6b]"}`}>{plan.period}</span>
-              </div>
-              <div className="space-y-2">
-                {plan.features.map((f, j) => (
-                  <div key={j} className="flex items-center gap-2">
-                    <span className={`text-xs ${plan.highlight ? "text-white/80" : "text-[#16a34a]"}`}>✓</span>
-                    <span className={`text-sm ${plan.highlight ? "text-white/90" : "text-[#6b6b6b]"}`}>{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <Link href="/login">
-          <button className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-4 rounded-xl text-sm mt-6 transition-all shadow-[0_8px_32px_rgba(91,94,244,0.3)]">
-            지금 무료로 시작하기 →
-          </button>
-        </Link>
-        <p className="text-[#a0a0a0] text-xs mt-3 text-center">
-          🔒 이름 · 이메일만 있으면 돼요. 개인정보 걱정 없이 시작하세요.
-        </p>
-      </section>
-
       {/* 푸터 */}
       <footer className="px-6 py-8 border-t border-[#e5e5e5] text-center">
         <h1 className="text-lg font-black mb-2">
