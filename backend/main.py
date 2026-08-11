@@ -149,6 +149,31 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_subscriptions_company_id ON subscriptions (company_id)",
         "CREATE INDEX IF NOT EXISTS ix_payments_company_id ON payments (company_id)",
         "CREATE INDEX IF NOT EXISTS ix_locations_user_id ON locations (user_id)",
+        # Supabase 보안 권고: public 스키마 테이블이 PostgREST로 노출되는데 RLS 미설정
+        # (백엔드는 postgres 소유자 role로 직접 연결해 앱 레벨에서 인가를 처리하므로 RLS를 켜도 영향 없음.
+        #  정책을 별도로 만들지 않아 anon/authenticated의 PostgREST 접근만 기본 차단됨)
+        "ALTER TABLE users ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE companies ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE payments ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE company_members ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE company_locations ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE teams ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE team_members ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE attendances ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE locations ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE notices ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE notice_reads ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE leave_balances ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE leaves ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE business_trips ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE company_registration_requests ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE custom_permissions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE user_permissions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE page_views ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE notifications ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
