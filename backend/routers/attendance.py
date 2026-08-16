@@ -7,29 +7,40 @@ from database.connection import get_db
 from models.attendance import Attendance
 from models.location import Location
 from models.company import CompanyMember
+from models.reclock import ReclockRequest
 from routers.deps import get_current_user
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
+from utils.workday import get_work_day_range, kst_date_str as _kst_date_str, today_kst_str
 
 router = APIRouter()
 
 KST = timezone(timedelta(hours=9))
 
 
-def _kst_date_str(recorded_at: datetime) -> str:
-    """UTC로 저장된 시각을 KST 기준 날짜 문자열로 변환 (자정 근처 기록의 날짜 오분류 방지)"""
-    return (recorded_at + timedelta(hours=9)).date().isoformat()
+def _approved_reclock_minutes_map(db: Session, user_id: str, date_strs: list[str]) -> dict:
+    """승인된 재출근 세션의 근무 분(分)을 work_date별로 합산."""
+    if not date_strs:
+        return {}
+    rows = (
+        db.query(ReclockRequest)
+        .filter(
+            ReclockRequest.user_id == user_id,
+            ReclockRequest.status == "approved",
+            ReclockRequest.work_date.in_(date_strs),
+            ReclockRequest.checkout_at.isnot(None),
+        )
+        .all()
+    )
+    result: dict = {}
+    for r in rows:
+        mins = max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
+        result[r.work_date] = result.get(r.work_date, 0) + mins
+    return result
 
 
-def get_work_day_range():
-    # DB는 UTC 저장 → 조회도 UTC 기준으로
-    now_utc = datetime.utcnow()
-    now_kst = now_utc + timedelta(hours=9)
-    # KST 오늘 자정을 UTC로 변환
-    kst_start = datetime(now_kst.year, now_kst.month, now_kst.day, 0, 0, 0)
-    utc_start = kst_start - timedelta(hours=9)
-    utc_end = utc_start + timedelta(hours=24)
-    return utc_start, utc_end
+def _approved_reclock_minutes(db: Session, user_id: str, date_str: str) -> int:
+    return _approved_reclock_minutes_map(db, user_id, [date_str]).get(date_str, 0)
 
 @router.get("/summary/{user_id}")
 def get_attendance_summary(
@@ -59,6 +70,8 @@ def get_attendance_summary(
     if checkin and checkout:
         diff = checkout.recorded_at - checkin.recorded_at
         work_minutes = int(diff.total_seconds() / 60)
+
+    work_minutes += _approved_reclock_minutes(db, user_id, today_kst_str())
 
     return {
         "date": start.date().isoformat(),
@@ -111,6 +124,21 @@ def get_company_attendance(
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
+    today_str = today_kst_str()
+    reclock_today = (
+        db.query(ReclockRequest)
+        .filter(
+            ReclockRequest.user_id.in_(user_ids),
+            ReclockRequest.work_date == today_str,
+            ReclockRequest.status.in_(["in_progress", "pending", "approved"]),
+        )
+        .order_by(ReclockRequest.created_at.desc())
+        .all()
+    )
+    reclock_by_user: dict = {}
+    for r in reclock_today:
+        reclock_by_user.setdefault(r.user_id, []).append(r)
+
     result = []
     for member in members:
         records = records_by_user.get(member.user_id, [])
@@ -127,6 +155,12 @@ def get_company_attendance(
         if checkin and checkout:
             diff = checkout.recorded_at - checkin.recorded_at
             work_minutes = max(0, int(diff.total_seconds() / 60))
+
+        member_reclock = reclock_by_user.get(member.user_id, [])
+        for r in member_reclock:
+            if r.status == "approved" and r.checkout_at:
+                work_minutes += max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
+        reclock_status = next((r.status for r in member_reclock if r.status in ("in_progress", "pending")), None)
 
         if checkin and not checkout and not is_missing_checkout:
             status = "출근중"
@@ -146,31 +180,18 @@ def get_company_attendance(
             "work_hours": f"{work_minutes // 60}h {work_minutes % 60}m" if work_minutes else "-",
             "status": status,
             "is_missing_checkout": is_missing_checkout,
+            "reclock_status": reclock_status,
         })
 
     return {"attendance": result}
 
 
-@router.get("/weekly/{user_id}")
-def get_weekly_report(
-    user_id: str,
-    start_date: Optional[str] = Query(default=None),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    if current_user["uid"] != user_id:
-        raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
-
+def compute_weekly_report(db: Session, user_id: str, week_start=None) -> dict:
+    """주간 근무 리포트(승인된 재출근 포함)를 계산. week_start가 없으면 이번 주.
+    /weekly 엔드포인트와 52시간 경고 스케줄러가 함께 사용."""
     today = datetime.now(KST).date()
-
-    if start_date:
-        try:
-            week_start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        except ValueError:
-            week_start = today - timedelta(days=today.weekday())
-    else:
+    if week_start is None:
         week_start = today - timedelta(days=today.weekday())
-
     week_end = week_start + timedelta(days=6)
 
     # KST 기준 주간 범위를 UTC로 변환하여 필터
@@ -223,6 +244,14 @@ def get_weekly_report(
         else:
             data["work_hours"] = "-"
 
+    reclock_map = _approved_reclock_minutes_map(db, user_id, list(daily.keys()))
+    for date_str, extra_minutes in reclock_map.items():
+        if extra_minutes <= 0:
+            continue
+        bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "work_minutes": 0})
+        bucket["work_minutes"] += extra_minutes
+        bucket["work_hours"] = f"{bucket['work_minutes'] // 60}시간 {bucket['work_minutes'] % 60}분"
+
     total_minutes = sum(d["work_minutes"] for d in daily.values())
 
     overtime_52h = total_minutes > 52 * 60
@@ -236,6 +265,26 @@ def get_weekly_report(
         "overtime_52h": overtime_52h,
         "daily": daily,
     }
+
+
+@router.get("/weekly/{user_id}")
+def get_weekly_report(
+    user_id: str,
+    start_date: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 기록만 조회할 수 있어요")
+
+    week_start = None
+    if start_date:
+        try:
+            week_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except ValueError:
+            week_start = None
+
+    return compute_weekly_report(db, user_id, week_start)
 
 
 @router.get("/monthly/{user_id}")
@@ -289,6 +338,14 @@ def get_monthly_report(
             data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
         else:
             data["work_hours"] = "-"
+
+    reclock_map = _approved_reclock_minutes_map(db, user_id, list(daily.keys()))
+    for date_str, extra_minutes in reclock_map.items():
+        if extra_minutes <= 0:
+            continue
+        bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "work_minutes": 0})
+        bucket["work_minutes"] += extra_minutes
+        bucket["work_hours"] = f"{bucket['work_minutes'] // 60}시간 {bucket['work_minutes'] % 60}분"
 
     total_minutes = sum(d["work_minutes"] for d in daily.values())
     work_days = len([d for d in daily.values() if d["work_minutes"] > 0])
@@ -368,6 +425,23 @@ def get_company_report(
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
+    all_reclock = (
+        db.query(ReclockRequest)
+        .filter(
+            ReclockRequest.user_id.in_(user_ids),
+            ReclockRequest.status == "approved",
+            ReclockRequest.work_date >= str(period_start),
+            ReclockRequest.work_date <= str(period_end),
+            ReclockRequest.checkout_at.isnot(None),
+        )
+        .all()
+    )
+    reclock_by_user: dict = {}
+    for r in all_reclock:
+        mins = max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
+        per_date = reclock_by_user.setdefault(r.user_id, {})
+        per_date[r.work_date] = per_date.get(r.work_date, 0) + mins
+
     result = []
     for member in members:
         recs = records_by_user.get(member.user_id, [])
@@ -390,6 +464,11 @@ def get_company_report(
                 d["work_minutes"] = mins
                 total_minutes += mins
                 work_days += 1
+
+        for date_str, extra_minutes in reclock_by_user.get(member.user_id, {}).items():
+            bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "work_minutes": 0})
+            bucket["work_minutes"] += extra_minutes
+            total_minutes += extra_minutes
 
         result.append({
             "user_id": member.user_id,
@@ -499,6 +578,23 @@ def export_attendance_excel(
     for r in all_records:
         records_by_user.setdefault(r.user_id, []).append(r)
 
+    all_reclock = (
+        db.query(ReclockRequest)
+        .filter(
+            ReclockRequest.user_id.in_(user_ids),
+            ReclockRequest.status == "approved",
+            ReclockRequest.work_date >= start_date.isoformat(),
+            ReclockRequest.work_date <= end_date.isoformat(),
+            ReclockRequest.checkout_at.isnot(None),
+        )
+        .all()
+    )
+    reclock_by_user: dict = {}
+    for r in all_reclock:
+        mins = max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
+        per_date = reclock_by_user.setdefault(r.user_id, {})
+        per_date[r.work_date] = per_date.get(r.work_date, 0) + mins
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "근무기록"
@@ -525,6 +621,7 @@ def export_attendance_excel(
 
     for member in members:
         records = records_by_user.get(member.user_id, [])
+        member_reclock = reclock_by_user.get(member.user_id, {})
 
         daily = {}
         for r in records:
@@ -535,8 +632,10 @@ def export_attendance_excel(
                 daily[date_str]["checkin"] = r
             if r.type == "checkout":
                 daily[date_str]["checkout"] = r
+        for date_str in member_reclock:
+            daily.setdefault(date_str, {"checkin": None, "checkout": None})
 
-        # 주차별 합산
+        # 주차별 합산 (승인된 재출근 시간 포함)
         weekly_minutes: dict = {}
         for date_str, data in daily.items():
             d = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -547,6 +646,7 @@ def export_attendance_excel(
                 mins = max(0, int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60))
             else:
                 mins = 0
+            mins += member_reclock.get(date_str, 0)
             weekly_minutes[wk] = weekly_minutes.get(wk, 0) + mins
 
         for date_str, data in sorted(daily.items()):
@@ -556,6 +656,7 @@ def export_attendance_excel(
             if checkin and checkout:
                 diff = checkout.recorded_at - checkin.recorded_at
                 work_minutes = max(0, int(diff.total_seconds() / 60))
+            work_minutes += member_reclock.get(date_str, 0)
 
             d = datetime.strptime(date_str, "%Y-%m-%d").date()
             wk = get_week_key(d)

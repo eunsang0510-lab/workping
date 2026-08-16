@@ -7,7 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { API_URL } from "@/lib/api";
 import Link from "next/link";
 
-type Tab = "leave" | "trip" | "attendance" | "status";
+type Tab = "leave" | "trip" | "reclock" | "attendance" | "status";
 
 interface LeaveItem {
   id: string;
@@ -31,6 +31,20 @@ interface TripItem {
   purpose: string;
   start_date: string;
   end_date: string;
+  status: string;
+  reject_reason: string | null;
+  created_at: string;
+}
+
+interface ReclockItem {
+  id: string;
+  user_id: string;
+  user_name: string;
+  work_date: string;
+  checkin_at: string;
+  checkin_address: string | null;
+  checkout_at: string | null;
+  checkout_address: string | null;
   status: string;
   reject_reason: string | null;
   created_at: string;
@@ -124,9 +138,10 @@ export default function ManagerPage() {
 
   const [leaves, setLeaves] = useState<LeaveItem[]>([]);
   const [trips, setTrips] = useState<TripItem[]>([]);
+  const [reclocks, setReclocks] = useState<ReclockItem[]>([]);
   const [attendance, setAttendance] = useState<AttendanceMember[]>([]);
 
-  const [rejectModal, setRejectModal] = useState<{ id: string; type: "leave" | "trip" } | null>(null);
+  const [rejectModal, setRejectModal] = useState<{ id: string; type: "leave" | "trip" | "reclock" } | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -165,6 +180,17 @@ export default function ManagerPage() {
       setTrips(data.trips || []);
     } catch {
       showToast("출장 목록 로딩 실패", "error");
+    }
+  }, []);
+
+  const fetchReclocks = useCallback(async (cid: string) => {
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/reclock/company/${cid}`, { headers });
+      const data = await res.json();
+      setReclocks(data.requests || []);
+    } catch {
+      showToast("재출근 목록 로딩 실패", "error");
     }
   }, []);
 
@@ -213,6 +239,7 @@ export default function ManagerPage() {
         setCompanyId(data.company_id);
         fetchLeaves(data.company_id);
         fetchTrips(data.company_id);
+        fetchReclocks(data.company_id);
         fetchAttendance(data.company_id);
       } catch {
         router.push("/dashboard");
@@ -221,7 +248,7 @@ export default function ManagerPage() {
       }
     });
     return () => unsub();
-  }, [router, fetchLeaves, fetchTrips, fetchAttendance]);
+  }, [router, fetchLeaves, fetchTrips, fetchReclocks, fetchAttendance]);
 
   const handleTabChange = (newTab: Tab) => {
     setTab(newTab);
@@ -325,12 +352,38 @@ export default function ManagerPage() {
     }
   };
 
+  const approveReclock = async (reclockId: string, status: "approved" | "rejected", reason = "") => {
+    if (!companyId || processingId === reclockId) return;
+    setProcessingId(reclockId);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/reclock/approve/${reclockId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status, reject_reason: reason }),
+      });
+      if (res.ok) {
+        showToast(status === "approved" ? "재출근 승인 완료" : "재출근 반려 완료", "success");
+        fetchReclocks(companyId);
+      } else {
+        const d = await res.json();
+        showToast(d.detail || "처리 실패", "error");
+      }
+    } catch {
+      showToast("처리 중 오류", "error");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleReject = async () => {
     if (!rejectModal) return;
     if (rejectModal.type === "leave") {
       await approveLeave(rejectModal.id, "rejected");
-    } else {
+    } else if (rejectModal.type === "trip") {
       await approveTrip(rejectModal.id, "rejected", rejectReason);
+    } else {
+      await approveReclock(rejectModal.id, "rejected", rejectReason);
     }
     setRejectModal(null);
     setRejectReason("");
@@ -341,7 +394,15 @@ export default function ManagerPage() {
     if (status === "rejected") return <span className="text-xs font-bold text-[#ef4444] bg-[#fef2f2] border border-[#fecaca] px-2 py-0.5 rounded-full">반려</span>;
     if (status === "cancel_requested") return <span className="text-xs font-bold text-[#c2410c] bg-[#fff7ed] border border-[#fed7aa] px-2 py-0.5 rounded-full">취소신청</span>;
     if (status === "cancelled") return <span className="text-xs font-bold text-[#9ca3af] bg-[#f3f4f6] border border-[#e5e7eb] px-2 py-0.5 rounded-full">취소됨</span>;
+    if (status === "in_progress") return <span className="text-xs font-bold text-[#5b5ef4] bg-[#eef2ff] border border-[#c7d2fe] px-2 py-0.5 rounded-full">진행중</span>;
     return <span className="text-xs font-bold text-[#f59e0b] bg-[#fffbeb] border border-[#fde68a] px-2 py-0.5 rounded-full">대기</span>;
+  };
+
+  const formatDateTime = (iso: string | null) => {
+    if (!iso) return "-";
+    return new Date(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z").toLocaleString("ko-KR", {
+      month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
   };
 
   // 기간 범위 계산
@@ -372,6 +433,12 @@ export default function ManagerPage() {
   const periodTrips = trips.filter(t => t.start_date <= pEnd && t.end_date >= pStart);
   const pendingTrips = periodTrips.filter(t => t.status === "pending" || t.status === "cancel_requested");
   const doneTrips = periodTrips.filter(t => t.status !== "pending" && t.status !== "cancel_requested" && t.status !== "cancelled");
+
+  // 재출근 탭
+  const totalPendingReclocks = reclocks.filter(r => r.status === "pending");
+  const pendingReclocks = reclocks.filter(r => r.status === "pending");
+  const inProgressReclocks = reclocks.filter(r => r.status === "in_progress");
+  const doneReclocks = reclocks.filter(r => r.status === "approved" || r.status === "rejected");
 
   // 현황 탭: 승인된 휴가·출장 기간 필터
   const approvedHistory: { date: string; end_date: string; name: string; label: string; detail: string }[] = [
@@ -490,7 +557,7 @@ export default function ManagerPage() {
         <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-5">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-[0_20px_60px_rgba(0,0,0,0.2)]">
             <div className="font-black text-[#0a0a0a] mb-3">반려 사유</div>
-            {rejectModal.type === "trip" && (
+            {(rejectModal.type === "trip" || rejectModal.type === "reclock") && (
               <textarea
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
@@ -524,10 +591,11 @@ export default function ManagerPage() {
       </div>
 
       {/* 탭 — 배지는 전체 미처리 건수 */}
-      <div className="grid grid-cols-4 bg-white border border-[#e5e5e5] rounded-2xl p-1 mb-5 shadow-sm gap-0.5">
+      <div className="grid grid-cols-5 bg-white border border-[#e5e5e5] rounded-2xl p-1 mb-5 shadow-sm gap-0.5">
         {([
           { key: "leave", label: "연차", badge: totalPendingLeaves.length },
           { key: "trip", label: "출장", badge: totalPendingTrips.length },
+          { key: "reclock", label: "재출근", badge: totalPendingReclocks.length },
           { key: "attendance", label: "근태", badge: 0 },
           { key: "status", label: "현황", badge: 0 },
         ] as { key: Tab; label: string; badge: number }[]).map(t => (
@@ -663,6 +731,85 @@ export default function ManagerPage() {
                       {t.reject_reason && <div className="text-[#ef4444] text-xs mt-1">반려 사유: {t.reject_reason}</div>}
                     </div>
                     {statusBadge(t.status)}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── 재출근 승인 탭 ── */}
+      {tab === "reclock" && (
+        <div className="space-y-3">
+          {pendingReclocks.length === 0 && inProgressReclocks.length === 0 && doneReclocks.length === 0 && (
+            <div className="text-center py-12 text-[#a0a0a0] text-sm">재출근 신청 내역이 없어요</div>
+          )}
+          {pendingReclocks.length > 0 && (
+            <>
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1">대기 중 ({pendingReclocks.length})</div>
+              {pendingReclocks.map(r => {
+                const minutes = r.checkout_at
+                  ? Math.max(0, Math.floor((new Date(r.checkout_at).getTime() - new Date(r.checkin_at).getTime()) / 60000))
+                  : 0;
+                return (
+                  <div key={r.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <div className="text-[#0a0a0a] text-sm font-bold">{r.user_name || "이름 없음"}</div>
+                        <div className="text-[#6b6b6b] text-xs mt-0.5">
+                          🔁 {formatDateTime(r.checkin_at)} ~ {formatDateTime(r.checkout_at)} · {Math.floor(minutes / 60)}시간 {minutes % 60}분
+                        </div>
+                        {(r.checkin_address || r.checkout_address) && (
+                          <div className="text-[#a0a0a0] text-xs mt-0.5">
+                            📍 {r.checkin_address || "위치 미확인"}{r.checkout_address ? ` → ${r.checkout_address}` : ""}
+                          </div>
+                        )}
+                      </div>
+                      {statusBadge(r.status)}
+                    </div>
+                    <div className={`flex gap-2 ${processingId === r.id ? "opacity-50 pointer-events-none" : ""}`}>
+                      <button onClick={() => approveReclock(r.id, "approved")} disabled={processingId === r.id} className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-sm font-bold py-2 rounded-xl transition-all disabled:cursor-not-allowed">
+                        {processingId === r.id ? "처리중..." : "승인"}
+                      </button>
+                      <button onClick={() => setRejectModal({ id: r.id, type: "reclock" })} disabled={processingId === r.id} className="flex-1 border border-[#e5e5e5] text-[#ef4444] text-sm font-bold py-2 rounded-xl hover:bg-[#fef2f2] transition-all disabled:cursor-not-allowed">반려</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+          {inProgressReclocks.length > 0 && (
+            <>
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1 mt-4">재근무 진행중</div>
+              {inProgressReclocks.map(r => (
+                <div key={r.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[#0a0a0a] text-sm font-bold">{r.user_name || "이름 없음"}</div>
+                      <div className="text-[#6b6b6b] text-xs mt-0.5">🔁 {formatDateTime(r.checkin_at)}부터 근무 중</div>
+                      {r.checkin_address && <div className="text-[#a0a0a0] text-xs mt-0.5">📍 {r.checkin_address}</div>}
+                    </div>
+                    {statusBadge(r.status)}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          {doneReclocks.length > 0 && (
+            <>
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider px-1 mt-4">처리 완료</div>
+              {doneReclocks.map(r => (
+                <div key={r.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm opacity-70">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-[#0a0a0a] text-sm font-bold">{r.user_name || "이름 없음"}</div>
+                      <div className="text-[#6b6b6b] text-xs mt-0.5">
+                        🔁 {formatDateTime(r.checkin_at)} ~ {formatDateTime(r.checkout_at)}
+                      </div>
+                      {r.reject_reason && <div className="text-[#ef4444] text-xs mt-1">반려 사유: {r.reject_reason}</div>}
+                    </div>
+                    {statusBadge(r.status)}
                   </div>
                 </div>
               ))}

@@ -107,6 +107,10 @@ export default function Dashboard() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [weeklyMinutes, setWeeklyMinutes] = useState<number | null>(null);
   const [overtime52h, setOvertime52h] = useState(false);
+  const [reclockConfirming, setReclockConfirming] = useState(false);
+  const [reclockArmed, setReclockArmed] = useState(false);
+  const [activeReclock, setActiveReclock] = useState<{ id: string; status: string } | null>(null);
+  const [reclockLoading, setReclockLoading] = useState(false);
   const router = useRouter();
 
   const trimCity = (addr: string) =>
@@ -170,6 +174,7 @@ export default function Dashboard() {
       if (user) {
         setUser(user);
         fetchTodayAttendance(user.uid);
+        fetchTodayReclock(user.uid);
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
         fetchUnreadNotices(user.uid);
@@ -313,6 +318,25 @@ export default function Dashboard() {
     }
   };
 
+  const fetchTodayReclock = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/reclock/today/${userId}`, {
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      const inProgress = (data.sessions || []).find((s: any) => s.status === "in_progress");
+      if (inProgress) {
+        setActiveReclock({ id: inProgress.id, status: inProgress.status });
+        setReclockArmed(true);
+      } else {
+        setActiveReclock(null);
+        setReclockArmed(false);
+      }
+    } catch (error) {
+      console.error("재출근 상태 로딩 실패:", error);
+    }
+  };
+
   const fetchAdminStatus = async (userId: string) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -394,6 +418,7 @@ useEffect(() => {
     lastDateRef.current = todayStr;
     if (user) {
       fetchTodayAttendance(user.uid);
+      fetchTodayReclock(user.uid);
       fetchWeeklyOvertime(user.uid);
       checkTodayLeave(user.uid);
     }
@@ -603,6 +628,75 @@ const markAllRead = async () => {
       }
     } finally {
       setGpsLoading(false);
+    }
+  };
+
+  // 재출근/재퇴근 — 위치는 GPS로 기록하되(카페·차 안 등 어디서든) 지오펜스 검증은 하지 않음
+  const captureReclockLocation = async () => {
+    try {
+      const position = await getCurrentPosition();
+      const { latitude, longitude } = position.coords;
+      const address = await getAddressFromCoords(latitude, longitude).catch(() => "");
+      return { latitude, longitude, address };
+    } catch {
+      return { latitude: null as number | null, longitude: null as number | null, address: "" };
+    }
+  };
+
+  const handleReclockConfirm = () => {
+    setReclockConfirming(false);
+    setReclockArmed(true);
+  };
+
+  const handleReclockStart = async () => {
+    if (reclockLoading) return;
+    setReclockLoading(true);
+    try {
+      const { latitude, longitude, address } = await captureReclockLocation();
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/reclock/start`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ user_id: user?.uid, latitude, longitude, address }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.detail || "재출근 기록에 실패했어요.", "error");
+        return;
+      }
+      setActiveReclock({ id: data.id, status: data.status });
+      setReclockArmed(true);
+      showToast("재출근 처리됐어요!", "success");
+    } catch (error: any) {
+      showToast(error.message || "재출근 처리 중 오류가 발생했어요.", "error");
+    } finally {
+      setReclockLoading(false);
+    }
+  };
+
+  const handleReclockFinish = async () => {
+    if (reclockLoading || !activeReclock) return;
+    setReclockLoading(true);
+    try {
+      const { latitude, longitude, address } = await captureReclockLocation();
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/reclock/finish`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ user_id: user?.uid, reclock_id: activeReclock.id, latitude, longitude, address }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.detail || "재퇴근 처리에 실패했어요.", "error");
+        return;
+      }
+      setActiveReclock(null);
+      setReclockArmed(false);
+      showToast("재근무 승인 요청을 보냈어요. 팀장 승인을 기다려주세요.", "success");
+    } catch (error: any) {
+      showToast(error.message || "재퇴근 처리 중 오류가 발생했어요.", "error");
+    } finally {
+      setReclockLoading(false);
     }
   };
 
@@ -1110,21 +1204,87 @@ const markAllRead = async () => {
         </div>
       )}
 
+      {/* 재출근 확인 팝업 */}
+      {reclockConfirming && (
+        <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center p-5">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-[0_20px_60px_rgba(0,0,0,0.2)]">
+            <div className="font-black text-[#0a0a0a] mb-2">재출근하시겠습니까?</div>
+            <p className="text-[#6b6b6b] text-sm mb-4">재퇴근 후에는 팀장 승인이 완료돼야 근무시간에 반영돼요.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReclockConfirming(false)}
+                className="flex-1 border border-[#e5e5e5] text-[#6b6b6b] font-bold py-2.5 rounded-xl text-sm"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleReclockConfirm}
+                className="flex-1 bg-[#5b5ef4] hover:bg-[#4a4de0] text-white font-bold py-2.5 rounded-xl text-sm"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 출퇴근 버튼 */}
       <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="relative">
+          <button
+            onClick={activeReclock ? undefined : reclockArmed ? handleReclockStart : handleCheckIn}
+            disabled={
+              activeReclock
+                ? true
+                : reclockArmed
+                ? reclockLoading
+                : isCheckedIn || !!checkOutTime || gpsLoading || planExpired || isOnLeave
+            }
+            className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(91,94,244,0.3)]"
+          >
+            {activeReclock
+              ? "🔁 재출근중"
+              : reclockArmed
+              ? reclockLoading
+                ? "⏳ 확인중..."
+                : "🔁 재출근"
+              : gpsLoading
+              ? "⏳ 확인중..."
+              : planExpired
+              ? "🔒 결제 필요"
+              : isOnLeave
+              ? "🏖️ 연차"
+              : "📍 출근하기"}
+          </button>
+          {!!checkOutTime && !reclockArmed && !activeReclock && !planExpired && !isOnLeave && (
+            <button
+              onClick={() => setReclockConfirming(true)}
+              className="absolute -top-2 -right-2 bg-[#16a34a] hover:bg-[#15803d] text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+            >
+              재출근
+            </button>
+          )}
+        </div>
         <button
-          onClick={handleCheckIn}
-          disabled={isCheckedIn || !!checkOutTime || gpsLoading || planExpired || isOnLeave}
-          className="bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(91,94,244,0.3)]"
-        >
-          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : isOnLeave ? "🏖️ 연차" : "📍 출근하기"}
-        </button>
-        <button
-          onClick={handleCheckOut}
-          disabled={!isCheckedIn || gpsLoading || planExpired || isOnLeave}
+          onClick={activeReclock ? handleReclockFinish : handleCheckOut}
+          disabled={
+            activeReclock
+              ? reclockLoading
+              : !isCheckedIn || gpsLoading || planExpired || isOnLeave
+          }
           className="bg-white border border-[#e5e5e5] hover:bg-[#f8f8f8] disabled:opacity-40 disabled:cursor-not-allowed text-[#6b6b6b] font-bold py-4 rounded-xl transition-all text-sm shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
         >
-          {gpsLoading ? "⏳ 확인중..." : planExpired ? "🔒 결제 필요" : isOnLeave ? "🏖️ 연차" : "🏠 퇴근하기"}
+          {activeReclock
+            ? reclockLoading
+              ? "⏳ 확인중..."
+              : "🔁 재퇴근"
+            : gpsLoading
+            ? "⏳ 확인중..."
+            : planExpired
+            ? "🔒 결제 필요"
+            : isOnLeave
+            ? "🏖️ 연차"
+            : "🏠 퇴근하기"}
         </button>
       </div>
 

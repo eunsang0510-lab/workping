@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -19,6 +19,7 @@ from models import push_subscription as push_subscription_model
 from models import notification as notification_model
 from models import permission as permission_model
 from models import page_view as page_view_model
+from models import reclock as reclock_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -280,9 +281,96 @@ def _send_checkout_reminders():
         db.close()
 
 
+_warned_managers_this_week: dict = {}  # user_id -> week_start(ISO) — 주 1회만 팀장/관리자에게 경고
+
+
+def _send_52h_warning():
+    """30분마다 — 주 52시간까지 3시간 이내로 남은(또는 이미 초과한) 근무 중인 직원에게 반복 알림,
+    해당 조직 팀장 + 회사 관리자에게는 주 1회 경고."""
+    from utils.push import send_push_to_users
+    from utils.team import get_managers_and_admins
+    from models.attendance import Attendance
+    from models.company import CompanyMember
+    from models.reclock import ReclockRequest
+    from routers.attendance import compute_weekly_report
+    from sqlalchemy import cast, Date
+    from datetime import date
+
+    KST = timezone(timedelta(hours=9))
+    today_kst = date.today()
+    now_utc = datetime.utcnow()
+
+    db = SessionLocal()
+    try:
+        # 오늘 출근했지만 아직 퇴근 안 한 사용자 (정상 근무 중)
+        checked_in = {
+            r.user_id: r.recorded_at for r in db.query(Attendance).filter(
+                Attendance.type == "checkin",
+                cast(Attendance.recorded_at, Date) == today_kst,
+            ).all()
+        }
+        checked_out_ids = {
+            r.user_id for r in db.query(Attendance.user_id).filter(
+                Attendance.type == "checkout",
+                cast(Attendance.recorded_at, Date) == today_kst,
+            ).all()
+        }
+        still_working = {uid: t for uid, t in checked_in.items() if uid not in checked_out_ids}
+
+        # 재출근 중(in_progress)인 사용자
+        active_reclocks = db.query(ReclockRequest).filter(ReclockRequest.status == "in_progress").all()
+
+        target_user_ids = set(still_working.keys()) | {r.user_id for r in active_reclocks}
+        if not target_user_ids:
+            return
+
+        week_start = today_kst - timedelta(days=today_kst.weekday())
+        week_key = week_start.isoformat()
+
+        for user_id in target_user_ids:
+            report = compute_weekly_report(db, user_id, week_start)
+            projected_minutes = report["total_minutes"]
+
+            # 진행 중인 세션의 현재까지 경과 시간을 더해 임박 여부를 미리 체크
+            if user_id in still_working:
+                elapsed = int((now_utc - still_working[user_id]).total_seconds() / 60)
+                projected_minutes += max(0, elapsed)
+            for r in active_reclocks:
+                if r.user_id == user_id:
+                    elapsed = int((now_utc - r.checkin_at).total_seconds() / 60)
+                    projected_minutes += max(0, elapsed)
+
+            remaining = 52 * 60 - projected_minutes
+            if remaining > 180:
+                continue  # 3시간 이내로 임박하지 않음
+
+            member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
+
+            if remaining <= 0:
+                body = "⚠️ 주 52시간을 초과했어요. 근무를 마무리해주세요."
+            else:
+                body = f"⚠️ 주 52시간까지 {remaining // 60}시간 {remaining % 60}분 남았어요."
+            send_push_to_users(db, [user_id], title="⏰ 주간 근무시간 안내", body=body, url="/dashboard")
+
+            if member and _warned_managers_this_week.get(user_id) != week_key:
+                targets = get_managers_and_admins(db, member.company_id, user_id)
+                targets = [t for t in targets if t != user_id]
+                if targets:
+                    send_push_to_users(
+                        db, targets,
+                        title="🚨 주 52시간 초과 위험",
+                        body=f"{member.user_name or user_id}님이 주 52시간을 초과할 가능성이 있어요.",
+                        url="/manager",
+                    )
+                _warned_managers_this_week[user_id] = week_key
+    finally:
+        db.close()
+
+
 scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
 scheduler.add_job(_send_checkin_reminders, CronTrigger(hour=9, minute=0))
 scheduler.add_job(_send_checkout_reminders, CronTrigger(hour=18, minute=30))
+scheduler.add_job(_send_52h_warning, CronTrigger(minute="*/30"))
 
 
 @asynccontextmanager
@@ -343,6 +431,7 @@ app.include_router(notification.router, prefix="/api/notifications", tags=["알�
 app.include_router(permission.router, prefix="/api/permissions", tags=["권한관리"])
 app.include_router(internal.router, prefix="/internal", tags=["내부서비스"])
 app.include_router(page_view.router, prefix="/api/page-view", tags=["접속로그"])
+app.include_router(reclock.router, prefix="/api/reclock", tags=["재출근"])
 
 
 @app.get("/")
