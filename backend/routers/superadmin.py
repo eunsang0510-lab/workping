@@ -278,6 +278,8 @@ def reset_user_attendance(user_id: str, db: Session = Depends(get_db), _: dict =
     from routers.attendance import get_work_day_range
     from models.attendance import Attendance
     from models.location import Location
+    from models.reclock import ReclockRequest
+    from utils.workday import today_kst_str
 
     start, end = get_work_day_range()
 
@@ -291,6 +293,11 @@ def reset_user_attendance(user_id: str, db: Session = Depends(get_db), _: dict =
         Location.user_id == user_id,
         Location.recorded_at >= start,
         Location.recorded_at < end,
+    ).delete()
+
+    db.query(ReclockRequest).filter(
+        ReclockRequest.user_id == user_id,
+        ReclockRequest.work_date == today_kst_str(),
     ).delete()
 
     db.commit()

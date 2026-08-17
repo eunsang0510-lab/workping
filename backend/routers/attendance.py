@@ -512,6 +512,11 @@ def reset_attendance(
         Location.recorded_at < end,
     ).delete()
 
+    db.query(ReclockRequest).filter(
+        ReclockRequest.user_id == user_id,
+        ReclockRequest.work_date == today_kst_str(),
+    ).delete()
+
     db.commit()
     return {"message": "오늘 기록 초기화 완료"}
 
