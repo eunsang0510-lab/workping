@@ -458,6 +458,25 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [now, user]);
 
+// 관리자가 다른 곳에서 근태를 초기화했을 수 있으므로, 탭을 다시 보게 되면 최신 상태로 다시 불러옴
+// (백그라운드에 있던 탭은 초기화 이후에도 예전 출근/재출근 상태를 그대로 들고 있을 수 있음)
+useEffect(() => {
+  if (!user) return;
+  const refresh = () => {
+    if (document.visibilityState !== "visible") return;
+    fetchTodayAttendance(user.uid);
+    fetchTodayReclock(user.uid);
+    fetchOutingStatus(user.uid);
+  };
+  document.addEventListener("visibilitychange", refresh);
+  window.addEventListener("focus", refresh);
+  return () => {
+    document.removeEventListener("visibilitychange", refresh);
+    window.removeEventListener("focus", refresh);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user]);
+
 const fetchNotifications = async (userId: string) => {
   try {
     const headers = await getAuthHeader();
