@@ -410,19 +410,27 @@ export default function SuperAdmin() {
   };
 
   const handleResetAttendance = async (userId: string, userName: string) => {
-    showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
-      setConfirm(null);
-      try {
-       const token = await auth.currentUser?.getIdToken();
-        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { 
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-        showToast("초기화 완료!", "success");
-      } catch {
-        showToast("초기화 실패", "error");
+    showConfirm(
+      `${userName}님의 오늘 근태 기록을 초기화하시겠습니까?\n오늘의 출근·퇴근·재출근/재퇴근 기록이 모두 삭제되며, 되돌릴 수 없어요.`,
+      async () => {
+        setConfirm(null);
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const res = await fetch(`${API_URL}/api/attendance/reset/${userId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (res.ok) {
+            showToast("초기화 완료!", "success");
+          } else {
+            const data = await res.json().catch(() => ({}));
+            showToast(`초기화 실패: ${data.detail || "알 수 없는 오류"}`, "error");
+          }
+        } catch {
+          showToast("초기화 실패", "error");
+        }
       }
-    });
+    );
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {

@@ -20,6 +20,8 @@ from models import notification as notification_model
 from models import permission as permission_model
 from models import page_view as page_view_model
 from models import reclock as reclock_model
+from models import attendance_reset_log as attendance_reset_log_model
+from models import member_deletion_log as member_deletion_log_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -150,6 +152,9 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_subscriptions_company_id ON subscriptions (company_id)",
         "CREATE INDEX IF NOT EXISTS ix_payments_company_id ON payments (company_id)",
         "CREATE INDEX IF NOT EXISTS ix_locations_user_id ON locations (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reset_logs_company_id ON attendance_reset_logs (company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_reset_logs_performed_by ON attendance_reset_logs (performed_by)",
+        "CREATE INDEX IF NOT EXISTS ix_member_del_logs_performed_by ON member_deletion_logs (performed_by)",
         # Supabase 보안 권고: public 스키마 테이블이 PostgREST로 노출되는데 RLS 미설정
         # (백엔드는 postgres 소유자 role로 직접 연결해 앱 레벨에서 인가를 처리하므로 RLS를 켜도 영향 없음.
         #  정책을 별도로 만들지 않아 anon/authenticated의 PostgREST 접근만 기본 차단됨)
@@ -175,6 +180,9 @@ def run_migrations():
         "ALTER TABLE notifications ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE reclock_requests ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE attendance_reset_logs ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE member_deletion_logs ENABLE ROW LEVEL SECURITY",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

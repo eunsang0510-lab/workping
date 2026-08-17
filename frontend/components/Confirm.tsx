@@ -10,7 +10,7 @@ export default function Confirm({ message, onConfirm, onCancel }: ConfirmProps) 
   return (
     <div className="fixed inset-0 bg-black/40 z-[200] flex items-center justify-center p-5">
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 w-full max-w-sm shadow-[0_20px_60px_rgba(0,0,0,0.15)]">
-        <div className="text-[#0a0a0a] text-sm font-medium mb-5 leading-relaxed">{message}</div>
+        <div className="text-[#0a0a0a] text-sm font-medium mb-5 leading-relaxed whitespace-pre-line">{message}</div>
         <div className="flex gap-3">
           <button
             onClick={onCancel}

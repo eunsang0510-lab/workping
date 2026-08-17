@@ -59,6 +59,33 @@ interface ToastState {
   type: "success" | "error" | "info";
 }
 
+interface ResetLog {
+  id: string;
+  target_user_id: string;
+  target_user_name: string | null;
+  performed_by: string;
+  performed_by_name: string | null;
+  performed_by_role: string;
+  reset_date: string;
+  attendance_count: number;
+  location_count: number;
+  reclock_count: number;
+  created_at: string;
+}
+
+interface DeletionLog {
+  id: string;
+  deleted_user_id: string;
+  deleted_user_name: string | null;
+  deleted_user_email: string | null;
+  was_admin: boolean;
+  was_manager: boolean;
+  performed_by: string;
+  performed_by_name: string | null;
+  performed_by_role: string;
+  created_at: string;
+}
+
 interface ConfirmState {
   message: string;
   onConfirm: () => void;
@@ -123,6 +150,9 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<Company | null>(null);
   const [attendance, setAttendance] = useState<Member[]>([]);
+  const [resetLogs, setResetLogs] = useState<ResetLog[]>([]);
+  const [deletionLogs, setDeletionLogs] = useState<DeletionLog[]>([]);
+  const [showAdminLogs, setShowAdminLogs] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [memberName, setMemberName] = useState("");
@@ -265,6 +295,8 @@ const loadCompanyData = (companyData: Company) => {
   fetchTeams(companyData.id);
   fetchSubscription(companyData.id);
   fetchBusinessTrips(companyData.id);
+  fetchResetLogs(companyData.id);
+  fetchDeletionLogs(companyData.id);
 };
 
   const fetchAttendance = async (companyId: string) => {
@@ -277,6 +309,32 @@ const loadCompanyData = (companyData: Company) => {
       setAttendance(data.attendance || []);
     } catch (error) {
       console.error("근태 현황 로딩 실패:", error);
+    }
+  };
+
+  const fetchResetLogs = async (companyId: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/attendance/reset-logs/${companyId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setResetLogs(data.logs || []);
+    } catch (error) {
+      console.error("초기화 이력 로딩 실패:", error);
+    }
+  };
+
+  const fetchDeletionLogs = async (companyId: string) => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/company/member-deletion-logs/${companyId}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDeletionLogs(data.logs || []);
+    } catch (error) {
+      console.error("삭제 이력 로딩 실패:", error);
     }
   };
 
@@ -725,20 +783,29 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   };
 
   const handleResetAttendance = async (userId: string, userName: string) => {
-    showConfirm(`${userName}의 오늘 기록을 초기화할까요?`, async () => {
-      setConfirm(null);
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        await fetch(`${API_URL}/api/attendance/reset/${userId}`, { 
-          method: "DELETE",
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-        showToast("초기화 완료!", "success");
-        fetchAttendance(company!.id);
-      } catch {
-        showToast("초기화 실패", "error");
+    showConfirm(
+      `${userName}님의 오늘 근태 기록을 초기화하시겠습니까?\n오늘의 출근·퇴근·재출근/재퇴근 기록이 모두 삭제되며, 되돌릴 수 없어요.`,
+      async () => {
+        setConfirm(null);
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const res = await fetch(`${API_URL}/api/attendance/reset/${userId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (res.ok) {
+            showToast("초기화 완료!", "success");
+            fetchAttendance(company!.id);
+            fetchResetLogs(company!.id);
+          } else {
+            const data = await res.json().catch(() => ({}));
+            showToast(`초기화 실패: ${data.detail || "알 수 없는 오류"}`, "error");
+          }
+        } catch {
+          showToast("초기화 실패", "error");
+        }
       }
-    });
+    );
   };
 
   const handleResetPassword = async (email: string) => {
@@ -767,25 +834,29 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
   };
 
   const handleDeleteMember = async (userId: string, userName: string) => {
-  showConfirm(`${userName}을 삭제할까요?`, async () => {
-    setConfirm(null);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const res = await fetch(`${API_URL}/api/company/members/by-user/${userId}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      if (res.ok) {
-        showToast("삭제 완료!", "success");
-        fetchAttendance(company!.id);
-      } else {
-        showToast("삭제 실패", "error");
+    showConfirm(
+      `${userName}님을 회사에서 삭제하시겠습니까?\n소속 정보와 계정 권한이 제거되며, 되돌릴 수 없어요.\n(그동안의 출퇴근 기록 자체는 보존돼요)`,
+      async () => {
+        setConfirm(null);
+        try {
+          const token = await auth.currentUser?.getIdToken();
+          const res = await fetch(`${API_URL}/api/company/members/by-user/${userId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (res.ok) {
+            showToast("삭제 완료!", "success");
+            fetchAttendance(company!.id);
+            fetchDeletionLogs(company!.id);
+          } else {
+            showToast("삭제 실패", "error");
+          }
+        } catch {
+          showToast("삭제 실패", "error");
+        }
       }
-    } catch {
-      showToast("삭제 실패", "error");
-    }
-  });
-};
+    );
+  };
 
   const handleUpdateMember = async () => {
     if (!editMember) return;
@@ -1547,7 +1618,57 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
               </div>
             )}
           </div>
-          
+
+          {/* 관리자 활동 로그 (근무시간 초기화 / 직원 삭제 이력) */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <button onClick={() => setShowAdminLogs(!showAdminLogs)} className="w-full flex items-center justify-between">
+              <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider">관리자 활동 로그</div>
+              <span className="text-[#a0a0a0] text-xs">{showAdminLogs ? "접기 ▲" : "펼치기 ▼"}</span>
+            </button>
+            {showAdminLogs && (
+              <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+                {(() => {
+                  const merged = [
+                    ...resetLogs.map((l) => ({ ...l, _type: "reset" as const })),
+                    ...deletionLogs.map((l) => ({ ...l, _type: "delete" as const })),
+                  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+                  if (merged.length === 0) {
+                    return <div className="text-[#a0a0a0] text-sm text-center py-6">활동 이력이 없어요</div>;
+                  }
+
+                  const roleLabel = (role: string) =>
+                    role === "superadmin" ? " (슈퍼관리자)" : role === "self" ? " (본인)" : " (관리자)";
+
+                  return merged.map((log) => (
+                    <div key={`${log._type}-${log.id}`} className="bg-[#f8f8f8] border border-[#e5e5e5] rounded-xl p-3 text-xs">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className={`px-2 py-0.5 rounded-full font-bold ${log._type === "reset" ? "bg-[#fff7ed] text-[#ea580c]" : "bg-[#fef2f2] text-[#ef4444]"}`}>
+                          {log._type === "reset" ? "근무시간 초기화" : "직원 삭제"}
+                        </span>
+                        <span className="text-[#a0a0a0]">{new Date(log.created_at).toLocaleString("ko-KR")}</span>
+                      </div>
+                      {log._type === "reset" ? (
+                        <div className="text-[#6b6b6b] leading-relaxed">
+                          <span className="text-[#0a0a0a] font-medium">{log.performed_by_name || log.performed_by}</span>
+                          {roleLabel(log.performed_by_role)}님이{" "}
+                          <span className="text-[#0a0a0a] font-medium">{log.target_user_name || log.target_user_id}</span>
+                          님의 {log.reset_date} 기록을 초기화 (출퇴근 {log.attendance_count}건 · 위치 {log.location_count}건 · 재출근 {log.reclock_count}건 삭제)
+                        </div>
+                      ) : (
+                        <div className="text-[#6b6b6b] leading-relaxed">
+                          <span className="text-[#0a0a0a] font-medium">{log.performed_by_name || log.performed_by}</span>
+                          {roleLabel(log.performed_by_role)}님이{" "}
+                          <span className="text-[#0a0a0a] font-medium">{log.deleted_user_name || log.deleted_user_email || log.deleted_user_id}</span>
+                          님을 회사에서 삭제{log.was_admin ? " (관리자 권한 보유자)" : log.was_manager ? " (팀장 권한 보유자)" : ""}
+                        </div>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
 
           {/* 출근 위치 관리 */}
           <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">

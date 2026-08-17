@@ -274,31 +274,47 @@ def delete_user(user_id: str, db: Session = Depends(get_db), _: dict = Depends(g
 
 # 개인 유저 근태 초기화
 @router.delete("/user/attendance/{user_id}")
-def reset_user_attendance(user_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+def reset_user_attendance(user_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_superadmin)):
     from routers.attendance import get_work_day_range
     from models.attendance import Attendance
     from models.location import Location
     from models.reclock import ReclockRequest
+    from models.attendance_reset_log import AttendanceResetLog
     from utils.workday import today_kst_str
+
+    target_member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
 
     start, end = get_work_day_range()
 
-    db.query(Attendance).filter(
+    attendance_count = db.query(Attendance).filter(
         Attendance.user_id == user_id,
         Attendance.recorded_at >= start,
         Attendance.recorded_at < end,
     ).delete()
 
-    db.query(Location).filter(
+    location_count = db.query(Location).filter(
         Location.user_id == user_id,
         Location.recorded_at >= start,
         Location.recorded_at < end,
     ).delete()
 
-    db.query(ReclockRequest).filter(
+    reclock_count = db.query(ReclockRequest).filter(
         ReclockRequest.user_id == user_id,
         ReclockRequest.work_date == today_kst_str(),
     ).delete()
+
+    db.add(AttendanceResetLog(
+        company_id=target_member.company_id if target_member else None,
+        target_user_id=user_id,
+        target_user_name=target_member.user_name if target_member else None,
+        performed_by=current_user["uid"],
+        performed_by_name=current_user.get("name") or current_user.get("email"),
+        performed_by_role="superadmin",
+        reset_date=today_kst_str(),
+        attendance_count=attendance_count,
+        location_count=location_count,
+        reclock_count=reclock_count,
+    ))
 
     db.commit()
     return {"message": "초기화 완료"}

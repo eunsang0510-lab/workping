@@ -884,6 +884,8 @@ def delete_member_by_user_id(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    from models.member_deletion_log import MemberDeletionLog
+
     # 관리자 또는 superadmin 확인
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id
@@ -901,8 +903,66 @@ def delete_member_by_user_id(
     if not requester and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있어요")
 
+    performer_name = (requester.user_name if requester else None) or current_user.get("name") or current_user.get("email")
+
+    db.add(MemberDeletionLog(
+        company_id=member.company_id,
+        deleted_user_id=member.user_id,
+        deleted_user_name=member.user_name,
+        deleted_user_email=member.user_email,
+        deleted_phone=member.phone,
+        was_admin=member.is_admin,
+        was_manager=member.is_manager,
+        performed_by=current_user["uid"],
+        performed_by_name=performer_name,
+        performed_by_role="superadmin" if (is_superadmin and not requester) else "admin",
+    ))
+
     db.delete(member)
     db.commit()
     return {"success": True, "message": "삭제 완료"}
+
+
+@router.get("/member-deletion-logs/{company_id}")
+def get_member_deletion_logs(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    from models.member_deletion_log import MemberDeletionLog
+
+    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 조회할 수 있어요")
+
+    rows = (
+        db.query(MemberDeletionLog)
+        .filter(MemberDeletionLog.company_id == company_id)
+        .order_by(MemberDeletionLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "logs": [
+            {
+                "id": r.id,
+                "deleted_user_id": r.deleted_user_id,
+                "deleted_user_name": r.deleted_user_name,
+                "deleted_user_email": r.deleted_user_email,
+                "was_admin": r.was_admin,
+                "was_manager": r.was_manager,
+                "performed_by": r.performed_by,
+                "performed_by_name": r.performed_by_name,
+                "performed_by_role": r.performed_by_role,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    }
 
 

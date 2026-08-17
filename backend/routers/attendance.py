@@ -495,30 +495,106 @@ def reset_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    if current_user["uid"] != user_id:
-        raise HTTPException(status_code=403, detail="본인의 기록만 초기화할 수 있어요")
+    from models.attendance_reset_log import AttendanceResetLog
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+
+    target_member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
+
+    is_self = current_user["uid"] == user_id
+    if not is_self and not is_superadmin:
+        requester = db.query(CompanyMember).filter(
+            CompanyMember.user_id == current_user["uid"],
+            CompanyMember.company_id == target_member.company_id if target_member else None,
+        ).first()
+        if not requester or not requester.is_admin:
+            raise HTTPException(status_code=403, detail="본인 또는 소속 회사 관리자만 초기화할 수 있어요")
+
+    role = "self" if is_self else ("superadmin" if is_superadmin else "admin")
+
+    performer_member = db.query(CompanyMember).filter(CompanyMember.user_id == current_user["uid"]).first()
+    performer_name = (performer_member.user_name if performer_member else None) or current_user.get("name") or current_user.get("email")
 
     start, end = get_work_day_range()
 
-    db.query(Attendance).filter(
+    attendance_count = db.query(Attendance).filter(
         Attendance.user_id == user_id,
         Attendance.recorded_at >= start,
         Attendance.recorded_at < end,
     ).delete()
 
-    db.query(Location).filter(
+    location_count = db.query(Location).filter(
         Location.user_id == user_id,
         Location.recorded_at >= start,
         Location.recorded_at < end,
     ).delete()
 
-    db.query(ReclockRequest).filter(
+    reclock_count = db.query(ReclockRequest).filter(
         ReclockRequest.user_id == user_id,
         ReclockRequest.work_date == today_kst_str(),
     ).delete()
 
+    db.add(AttendanceResetLog(
+        company_id=target_member.company_id if target_member else None,
+        target_user_id=user_id,
+        target_user_name=target_member.user_name if target_member else None,
+        performed_by=current_user["uid"],
+        performed_by_name=performer_name,
+        performed_by_role=role,
+        reset_date=today_kst_str(),
+        attendance_count=attendance_count,
+        location_count=location_count,
+        reclock_count=reclock_count,
+    ))
+
     db.commit()
     return {"message": "오늘 기록 초기화 완료"}
+
+
+@router.get("/reset-logs/{company_id}")
+def get_reset_logs(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    from models.attendance_reset_log import AttendanceResetLog
+
+    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
+    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    requester = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not requester and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 조회할 수 있어요")
+
+    rows = (
+        db.query(AttendanceResetLog)
+        .filter(AttendanceResetLog.company_id == company_id)
+        .order_by(AttendanceResetLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "logs": [
+            {
+                "id": r.id,
+                "target_user_id": r.target_user_id,
+                "target_user_name": r.target_user_name,
+                "performed_by": r.performed_by,
+                "performed_by_name": r.performed_by_name,
+                "performed_by_role": r.performed_by_role,
+                "reset_date": r.reset_date,
+                "attendance_count": r.attendance_count,
+                "location_count": r.location_count,
+                "reclock_count": r.reclock_count,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+    }
 
 
 from fastapi.responses import StreamingResponse
