@@ -1300,7 +1300,7 @@ const markAllRead = async () => {
               ? "🏖️ 연차"
               : "📍 출근하기"}
           </button>
-          {!!checkOutTime && !reclockArmed && !activeReclock && !planExpired && !isOnLeave && (
+          {!!checkOutTime && !reclockArmed && !activeReclock && reclockSessions.length === 0 && !planExpired && !isOnLeave && (
             <button
               onClick={() => setReclockConfirming(true)}
               className="absolute -top-2 -right-2 bg-[#16a34a] hover:bg-[#15803d] text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-[0_2px_6px_rgba(0,0,0,0.2)]"

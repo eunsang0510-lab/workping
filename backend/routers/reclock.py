@@ -87,10 +87,9 @@ def start_reclock(
     existing = db.query(ReclockRequest).filter(
         ReclockRequest.user_id == req.user_id,
         ReclockRequest.work_date == today_kst_str(),
-        ReclockRequest.status.in_(["in_progress", "pending"]),
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="이미 진행 중인 재출근 세션이 있어요")
+        raise HTTPException(status_code=400, detail="재출근은 하루에 한 번만 가능해요")
 
     reclock = ReclockRequest(
         company_id=member.company_id,
