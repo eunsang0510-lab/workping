@@ -67,6 +67,16 @@ interface NotificationItem {
   created_at: string;
 }
 
+interface ReclockSession {
+  id: string;
+  status: "in_progress" | "pending" | "approved" | "rejected";
+  checkin_at: string | null;
+  checkin_address: string | null;
+  checkout_at: string | null;
+  checkout_address: string | null;
+  reject_reason?: string | null;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +119,8 @@ export default function Dashboard() {
   const [overtime52h, setOvertime52h] = useState(false);
   const [reclockConfirming, setReclockConfirming] = useState(false);
   const [reclockArmed, setReclockArmed] = useState(false);
-  const [activeReclock, setActiveReclock] = useState<{ id: string; status: string } | null>(null);
+  const [activeReclock, setActiveReclock] = useState<ReclockSession | null>(null);
+  const [reclockSessions, setReclockSessions] = useState<ReclockSession[]>([]);
   const [reclockLoading, setReclockLoading] = useState(false);
   const router = useRouter();
 
@@ -324,9 +335,11 @@ export default function Dashboard() {
         headers: await getAuthHeader(),
       });
       const data = await res.json();
-      const inProgress = (data.sessions || []).find((s: any) => s.status === "in_progress");
+      const sessions: ReclockSession[] = data.sessions || [];
+      setReclockSessions(sessions);
+      const inProgress = sessions.find((s) => s.status === "in_progress");
       if (inProgress) {
-        setActiveReclock({ id: inProgress.id, status: inProgress.status });
+        setActiveReclock(inProgress);
         setReclockArmed(true);
       } else {
         setActiveReclock(null);
@@ -664,7 +677,8 @@ const markAllRead = async () => {
         showToast(data.detail || "재출근 기록에 실패했어요.", "error");
         return;
       }
-      setActiveReclock({ id: data.id, status: data.status });
+      setActiveReclock(data);
+      setReclockSessions((prev) => [data, ...prev]);
       setReclockArmed(true);
       showToast("재출근 처리됐어요!", "success");
     } catch (error: any) {
@@ -691,6 +705,7 @@ const markAllRead = async () => {
         return;
       }
       setActiveReclock(null);
+      setReclockSessions((prev) => prev.map((s) => (s.id === data.id ? data : s)));
       setReclockArmed(false);
       showToast("재근무 승인 요청을 보냈어요. 팀장 승인을 기다려주세요.", "success");
     } catch (error: any) {
@@ -769,6 +784,7 @@ const markAllRead = async () => {
   }
 
   const workMinutes = isCheckedIn && checkInTime ? calcWorkMinutes(checkInTime) : 0;
+  const latestReclock = reclockSessions[0] || null;
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] p-5">
@@ -1060,9 +1076,21 @@ const markAllRead = async () => {
             <div className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
               isCheckedIn
                 ? "bg-[#f0fdf4] text-[#16a34a] border border-[#bbf7d0]"
+                : activeReclock
+                ? "bg-[#eef2ff] text-[#5b5ef4] border border-[#c7c8fa]"
+                : latestReclock?.status === "pending"
+                ? "bg-[#fffbeb] text-[#d97706] border border-[#fde68a]"
                 : "bg-[#f8f8f8] text-[#a0a0a0] border border-[#e5e5e5]"
             }`}>
-              {isCheckedIn ? "근무중" : checkOutTime ? "퇴근완료" : "미출근"}
+              {isCheckedIn
+                ? "근무중"
+                : activeReclock
+                ? "🔁 재출근"
+                : latestReclock?.status === "pending"
+                ? "승인대기중"
+                : checkOutTime
+                ? "퇴근완료"
+                : "미출근"}
             </div>
             {isRemote && checkInTime && (
               <div className="px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] text-xs font-medium">
@@ -1071,7 +1099,7 @@ const markAllRead = async () => {
             )}
           </div>
         </div>
-        <div className="flex gap-4 pt-4 border-t border-[#e5e5e5]">
+        <div className="flex flex-wrap gap-4 pt-4 border-t border-[#e5e5e5]">
           <div>
             <div className="text-[#a0a0a0] text-xs mb-1">출근</div>
             <div className={`text-sm font-bold ${checkInTime ? "text-[#16a34a]" : "text-[#a0a0a0]"}`}>
@@ -1084,6 +1112,22 @@ const markAllRead = async () => {
               {formatTime(checkOutTime)}
             </div>
           </div>
+          {latestReclock && (
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">재출근</div>
+              <div className="text-sm font-bold text-[#5b5ef4]">
+                {formatTime(latestReclock.checkin_at)}
+              </div>
+            </div>
+          )}
+          {latestReclock?.checkout_at && (
+            <div>
+              <div className="text-[#a0a0a0] text-xs mb-1">재퇴근</div>
+              <div className="text-sm font-bold text-[#ef4444]">
+                {formatTime(latestReclock.checkout_at)}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1313,6 +1357,50 @@ const markAllRead = async () => {
                 </div>
               </div>
             )}
+            {[...reclockSessions].reverse().map((session) => (
+              <div key={session.id} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-[#5b5ef4]"></div>
+                  <div>
+                    <div className="text-[#0a0a0a] text-sm font-medium">재출근</div>
+                    <div className="text-[#6b6b6b] text-xs">
+                      {formatTime(session.checkin_at)} · {session.checkin_address ? trimCity(session.checkin_address) : "위치 미확인"}
+                    </div>
+                  </div>
+                </div>
+                {session.checkout_at && (
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      session.status === "approved"
+                        ? "bg-[#16a34a]"
+                        : session.status === "rejected"
+                        ? "bg-[#ef4444]"
+                        : "bg-[#d97706]"
+                    }`}></div>
+                    <div>
+                      <div className="text-[#0a0a0a] text-sm font-medium">
+                        재퇴근{" "}
+                        <span className={`text-xs font-semibold ${
+                          session.status === "approved"
+                            ? "text-[#16a34a]"
+                            : session.status === "rejected"
+                            ? "text-[#ef4444]"
+                            : "text-[#d97706]"
+                        }`}>
+                          · {session.status === "approved" ? "승인완료" : session.status === "rejected" ? "반려됨" : "승인대기중"}
+                        </span>
+                      </div>
+                      <div className="text-[#6b6b6b] text-xs">
+                        {formatTime(session.checkout_at)} · {session.checkout_address ? trimCity(session.checkout_address) : "위치 미확인"}
+                      </div>
+                      {session.status === "rejected" && session.reject_reason && (
+                        <div className="text-[#ef4444] text-xs mt-0.5">사유: {session.reject_reason}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
