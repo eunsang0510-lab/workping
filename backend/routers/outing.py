@@ -149,3 +149,37 @@ def get_outing_status(
         "start_at": active.start_at.isoformat() if active else None,
         "total_outing_minutes": checkin.outing_minutes or 0,
     }
+
+
+# ── 오늘의 외출 기록 목록 (오늘의 기록 카드용) ──────────────────
+@router.get("/today/{user_id}")
+def get_today_outings(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["uid"] != user_id:
+        raise HTTPException(status_code=403, detail="본인의 외출 기록만 조회할 수 있어요")
+
+    checkin = _get_today_checkin(db, user_id)
+    if not checkin:
+        return {"outings": []}
+
+    outings = (
+        db.query(Outing)
+        .filter(Outing.attendance_id == checkin.id)
+        .order_by(Outing.start_at)
+        .all()
+    )
+
+    return {
+        "outings": [
+            {
+                "id": o.id,
+                "start_at": o.start_at.isoformat(),
+                "end_at": o.end_at.isoformat() if o.end_at else None,
+                "duration_minutes": o.duration_minutes,
+            }
+            for o in outings
+        ]
+    }

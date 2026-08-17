@@ -77,6 +77,13 @@ interface ReclockSession {
   reject_reason?: string | null;
 }
 
+interface OutingSession {
+  id: string;
+  start_at: string;
+  end_at: string | null;
+  duration_minutes: number | null;
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +133,7 @@ export default function Dashboard() {
   const [outingStartAt, setOutingStartAt] = useState<string | null>(null);
   const [outingLoading, setOutingLoading] = useState(false);
   const [outingTotalMinutes, setOutingTotalMinutes] = useState(0);
+  const [outingSessions, setOutingSessions] = useState<OutingSession[]>([]);
   const router = useRouter();
 
   const trimCity = (addr: string) =>
@@ -191,6 +199,7 @@ export default function Dashboard() {
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
         fetchOutingStatus(user.uid);
+        fetchTodayOutings(user.uid);
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
         fetchUnreadNotices(user.uid);
@@ -368,6 +377,18 @@ export default function Dashboard() {
     }
   };
 
+  const fetchTodayOutings = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/outing/today/${userId}`, {
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      setOutingSessions(data.outings || []);
+    } catch (error) {
+      console.error("외출 기록 로딩 실패:", error);
+    }
+  };
+
   const fetchAdminStatus = async (userId: string) => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -451,6 +472,7 @@ useEffect(() => {
       fetchTodayAttendance(user.uid);
       fetchTodayReclock(user.uid);
       fetchOutingStatus(user.uid);
+      fetchTodayOutings(user.uid);
       fetchWeeklyOvertime(user.uid);
       checkTodayLeave(user.uid);
     }
@@ -467,6 +489,7 @@ useEffect(() => {
     fetchTodayAttendance(user.uid);
     fetchTodayReclock(user.uid);
     fetchOutingStatus(user.uid);
+    fetchTodayOutings(user.uid);
   };
   document.addEventListener("visibilitychange", refresh);
   window.addEventListener("focus", refresh);
@@ -770,6 +793,7 @@ const markAllRead = async () => {
       }
       setIsOuting(true);
       setOutingStartAt(data.start_at);
+      if (user) fetchTodayOutings(user.uid);
       showToast("외출 처리됐어요.", "success");
     } catch (error: any) {
       showToast(error.message || "외출 처리 중 오류가 발생했어요.", "error");
@@ -796,6 +820,7 @@ const markAllRead = async () => {
       setIsOuting(false);
       setOutingStartAt(null);
       setOutingTotalMinutes(data.total_outing_minutes ?? 0);
+      if (user) fetchTodayOutings(user.uid);
       showToast(`복귀 완료! (외출 ${data.duration_minutes}분)`, "success");
     } catch (error: any) {
       showToast(error.message || "복귀 처리 중 오류가 발생했어요.", "error");
@@ -1186,6 +1211,28 @@ const markAllRead = async () => {
                 🏠 재택근무
               </div>
             )}
+            {isCheckedIn && (
+              <button
+                onClick={isOuting ? handleOutingReturn : handleOutingStart}
+                disabled={outingLoading}
+                className={`font-bold px-2.5 py-1 rounded-full transition-all text-xs disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+                  isOuting
+                    ? "bg-[#16a34a] hover:bg-[#15803d]"
+                    : "bg-[#f59e0b] hover:bg-[#d97706]"
+                }`}
+              >
+                {outingLoading
+                  ? "⏳ 확인중..."
+                  : isOuting
+                  ? "🏃 복귀하기"
+                  : "🚶 외출하기"}
+              </button>
+            )}
+            {isOuting && outingStartAt && (
+              <div className="text-[#a0a0a0] text-xs">
+                외출 시작 {formatTime(outingStartAt)}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-4 pt-4 border-t border-[#e5e5e5]">
@@ -1421,32 +1468,6 @@ const markAllRead = async () => {
         </button>
       </div>
 
-      {/* 외출/복귀 버튼 — 출근 후 ~ 퇴근 전에만 노출 */}
-      {isCheckedIn && (
-        <div className="flex items-center justify-end gap-2 mb-4">
-          {isOuting && outingStartAt && (
-            <div className="text-[#a0a0a0] text-xs">
-              외출 시작 {formatTime(outingStartAt)}
-            </div>
-          )}
-          <button
-            onClick={isOuting ? handleOutingReturn : handleOutingStart}
-            disabled={outingLoading}
-            className={`font-bold px-4 py-2 rounded-full transition-all text-xs shadow-[0_2px_8px_rgba(0,0,0,0.08)] disabled:opacity-50 disabled:cursor-not-allowed text-white ${
-              isOuting
-                ? "bg-[#16a34a] hover:bg-[#15803d]"
-                : "bg-[#f59e0b] hover:bg-[#d97706]"
-            }`}
-          >
-            {outingLoading
-              ? "⏳ 확인중..."
-              : isOuting
-              ? "🏃 복귀하기"
-              : "🚶 외출하기"}
-          </button>
-        </div>
-      )}
-
       {/* 오늘의 기록 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
         <div className="text-[#a0a0a0] text-xs font-semibold mb-3 uppercase tracking-wider">오늘의 기록</div>
@@ -1472,6 +1493,28 @@ const markAllRead = async () => {
                 </div>
               </div>
             )}
+            {[...outingSessions].reverse().map((outing) => (
+              <div key={outing.id} className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-[#f59e0b]"></div>
+                  <div>
+                    <div className="text-[#0a0a0a] text-sm font-medium">외출</div>
+                    <div className="text-[#6b6b6b] text-xs">{formatTime(outing.start_at)}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${outing.end_at ? "bg-[#16a34a]" : "bg-[#e5e5e5]"}`}></div>
+                  <div>
+                    <div className="text-[#0a0a0a] text-sm font-medium">복귀</div>
+                    <div className="text-[#6b6b6b] text-xs">
+                      {outing.end_at
+                        ? `${formatTime(outing.end_at)} · ${outing.duration_minutes ?? 0}분`
+                        : "외출중"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
             {[...reclockSessions].reverse().map((session) => (
               <div key={session.id} className="space-y-3">
                 <div className="flex items-center gap-3">
