@@ -1423,11 +1423,16 @@ const markAllRead = async () => {
 
       {/* 외출/복귀 버튼 — 출근 후 ~ 퇴근 전에만 노출 */}
       {isCheckedIn && (
-        <div className="mb-4">
+        <div className="flex items-center justify-end gap-2 mb-4">
+          {isOuting && outingStartAt && (
+            <div className="text-[#a0a0a0] text-xs">
+              외출 시작 {formatTime(outingStartAt)}
+            </div>
+          )}
           <button
             onClick={isOuting ? handleOutingReturn : handleOutingStart}
             disabled={outingLoading}
-            className={`w-full font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+            className={`font-bold px-4 py-2 rounded-full transition-all text-xs shadow-[0_2px_8px_rgba(0,0,0,0.08)] disabled:opacity-50 disabled:cursor-not-allowed text-white ${
               isOuting
                 ? "bg-[#16a34a] hover:bg-[#15803d]"
                 : "bg-[#f59e0b] hover:bg-[#d97706]"
@@ -1439,11 +1444,6 @@ const markAllRead = async () => {
               ? "🏃 복귀하기"
               : "🚶 외출하기"}
           </button>
-          {isOuting && outingStartAt && (
-            <div className="text-[#a0a0a0] text-xs text-center mt-2">
-              외출 시작 {formatTime(outingStartAt)}
-            </div>
-          )}
         </div>
       )}
 
