@@ -62,6 +62,8 @@ export default function Landing() {
         <div className="flex flex-wrap justify-center gap-2 mt-10">
           {[
             { icon: "📍", label: "GPS 출퇴근" },
+            { icon: "🔁", label: "재출근/재퇴근" },
+            { icon: "🚶", label: "외출/복귀" },
             { icon: "🏖️", label: "연차 관리" },
             { icon: "✈️", label: "출장 관리" },
             { icon: "📅", label: "달력 시각화" },
@@ -121,6 +123,8 @@ export default function Landing() {
             { icon: "📍", title: "GPS 출퇴근", desc: "위치 기반 정확한 출퇴근 기록" },
             { icon: "🏢", title: "출근 구역 설정", desc: "지정된 구역 내에서만 출퇴근 가능, 도로명 주소로 등록" },
             { icon: "🏠", title: "재택근무 관리", desc: "직원별 재택 주소 등록, 재택 출퇴근 자동 감지 및 표시" },
+            { icon: "🔁", title: "재출근/재퇴근", desc: "퇴근 후 추가 근무 시 재출근, 팀장 승인 후 근무시간 반영" },
+            { icon: "🚶", title: "외출/복귀", desc: "근무 중 외출·복귀 기록, 외출시간은 근무시간에서 자동 제외" },
             { icon: "📊", title: "근무 리포트", desc: "주간·월간 자동 리포트 생성" },
             { icon: "📥", title: "엑셀 다운로드", desc: "급여 계산용 데이터 즉시 추출" },
             { icon: "🏖️", title: "연차 관리", desc: "연차 신청·승인·잔여일수 관리" },
