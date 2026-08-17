@@ -122,6 +122,10 @@ export default function Dashboard() {
   const [activeReclock, setActiveReclock] = useState<ReclockSession | null>(null);
   const [reclockSessions, setReclockSessions] = useState<ReclockSession[]>([]);
   const [reclockLoading, setReclockLoading] = useState(false);
+  const [isOuting, setIsOuting] = useState(false);
+  const [outingStartAt, setOutingStartAt] = useState<string | null>(null);
+  const [outingLoading, setOutingLoading] = useState(false);
+  const [outingTotalMinutes, setOutingTotalMinutes] = useState(0);
   const router = useRouter();
 
   const trimCity = (addr: string) =>
@@ -186,6 +190,7 @@ export default function Dashboard() {
         setUser(user);
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
+        fetchOutingStatus(user.uid);
         fetchAdminStatus(user.uid);
         fetchPlanStatus(user.uid);
         fetchUnreadNotices(user.uid);
@@ -305,20 +310,19 @@ export default function Dashboard() {
         setCurrentLocation(data.checkin_address || "-");
         setIsRemote(data.is_remote || false);
         setIsCheckedIn(!data.checkout);
+        setOutingTotalMinutes(data.outing_minutes || 0);
       } else {
         setCheckInTime(null);
         setCurrentLocation("-");
         setIsRemote(false);
         setIsCheckedIn(false);
+        setOutingTotalMinutes(0);
       }
 
       if (data.checkin && data.checkout) {
         setCheckOutTime(data.checkout);
         setCheckOutLocation(data.checkout_address || "-");
-        const minutes = Math.floor(
-          (new Date(data.checkout).getTime() - new Date(data.checkin).getTime()) / 1000 / 60
-        );
-        setWorkHours(formatWorkTime(minutes));
+        setWorkHours(formatWorkTime(data.work_minutes ?? 0));
       } else {
         setCheckOutTime(null);
         setCheckOutLocation("-");
@@ -347,6 +351,20 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("재출근 상태 로딩 실패:", error);
+    }
+  };
+
+  const fetchOutingStatus = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/outing/status/${userId}`, {
+        headers: await getAuthHeader(),
+      });
+      const data = await res.json();
+      setIsOuting(data.is_outing || false);
+      setOutingStartAt(data.start_at || null);
+      setOutingTotalMinutes(data.total_outing_minutes || 0);
+    } catch (error) {
+      console.error("외출 상태 로딩 실패:", error);
     }
   };
 
@@ -432,6 +450,7 @@ useEffect(() => {
     if (user) {
       fetchTodayAttendance(user.uid);
       fetchTodayReclock(user.uid);
+      fetchOutingStatus(user.uid);
       fetchWeeklyOvertime(user.uid);
       checkTodayLeave(user.uid);
     }
@@ -629,7 +648,7 @@ const markAllRead = async () => {
       setIsCheckedIn(false);
       setCheckOutTime(nowISO);
       setCheckOutLocation(address);
-      if (checkInTime) setWorkHours(formatWorkTime(calcWorkMinutes(checkInTime)));
+      if (checkInTime) setWorkHours(formatWorkTime(Math.max(0, calcWorkMinutes(checkInTime) - outingTotalMinutes)));
       setRecords((prev) => [...prev, { latitude, longitude, timestamp: nowISO, place_name: address, type: "checkout" }]);
       showToast("퇴근 완료!", "success");
       if (user) fetchWeeklyOvertime(user.uid);
@@ -712,6 +731,57 @@ const markAllRead = async () => {
       showToast(error.message || "재퇴근 처리 중 오류가 발생했어요.", "error");
     } finally {
       setReclockLoading(false);
+    }
+  };
+
+  const handleOutingStart = async () => {
+    if (outingLoading) return;
+    setOutingLoading(true);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/outing/start`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ user_id: user?.uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.detail || "외출 처리에 실패했어요.", "error");
+        return;
+      }
+      setIsOuting(true);
+      setOutingStartAt(data.start_at);
+      showToast("외출 처리됐어요.", "success");
+    } catch (error: any) {
+      showToast(error.message || "외출 처리 중 오류가 발생했어요.", "error");
+    } finally {
+      setOutingLoading(false);
+    }
+  };
+
+  const handleOutingReturn = async () => {
+    if (outingLoading) return;
+    setOutingLoading(true);
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`${API_URL}/api/outing/return`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ user_id: user?.uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.detail || "복귀 처리에 실패했어요.", "error");
+        return;
+      }
+      setIsOuting(false);
+      setOutingStartAt(null);
+      setOutingTotalMinutes(data.total_outing_minutes ?? 0);
+      showToast(`복귀 완료! (외출 ${data.duration_minutes}분)`, "success");
+    } catch (error: any) {
+      showToast(error.message || "복귀 처리 중 오류가 발생했어요.", "error");
+    } finally {
+      setOutingLoading(false);
     }
   };
 
@@ -1331,6 +1401,32 @@ const markAllRead = async () => {
             : "🏠 퇴근하기"}
         </button>
       </div>
+
+      {/* 외출/복귀 버튼 — 출근 후 ~ 퇴근 전에만 노출 */}
+      {isCheckedIn && (
+        <div className="mb-4">
+          <button
+            onClick={isOuting ? handleOutingReturn : handleOutingStart}
+            disabled={outingLoading}
+            className={`w-full font-bold py-4 rounded-xl transition-all text-sm shadow-[0_4px_16px_rgba(0,0,0,0.08)] disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+              isOuting
+                ? "bg-[#16a34a] hover:bg-[#15803d]"
+                : "bg-[#f59e0b] hover:bg-[#d97706]"
+            }`}
+          >
+            {outingLoading
+              ? "⏳ 확인중..."
+              : isOuting
+              ? "🏃 복귀하기"
+              : "🚶 외출하기"}
+          </button>
+          {isOuting && outingStartAt && (
+            <div className="text-[#a0a0a0] text-xs text-center mt-2">
+              외출 시작 {formatTime(outingStartAt)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 오늘의 기록 */}
       <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">

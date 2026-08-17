@@ -25,6 +25,7 @@ interface Member {
   work_hours: string;
   status: "출근중" | "퇴근" | "미출근" | "미퇴근";
   is_missing_checkout: boolean;
+  is_outing: boolean;
   home_address: string;
 }
 
@@ -1591,6 +1592,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                           <span className="text-[#0a0a0a] text-sm font-bold break-all">{member.user_name || member.user_email}</span>
                           {member.is_missing_checkout && <span className="text-[#ef4444] text-xs flex-shrink-0">⚠️ 미퇴근</span>}
                           {member.is_remote && <span className="text-xs px-2 py-0.5 rounded-full bg-[#e0f2fe] text-[#0369a1] border border-[#bae6fd] font-medium flex-shrink-0">🏠 재택</span>}
+                          {member.is_outing && <span className="text-xs px-2 py-0.5 rounded-full bg-[#fffbeb] text-[#d97706] border border-[#fde68a] font-medium flex-shrink-0">🚶 외출 중</span>}
                         </div>
                         <span className={`text-xs px-2 py-1 rounded-lg border flex-shrink-0 ${config.bg} ${config.text} ${config.border}`}>
                           {member.is_remote && member.status === "출근중" ? "재택 출근중" : member.status}

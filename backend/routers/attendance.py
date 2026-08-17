@@ -66,10 +66,12 @@ def get_attendance_summary(
     checkin = next((r for r in records if r.type == "checkin"), None)
     checkout = next((r for r in records if r.type == "checkout"), None)
 
+    outing_minutes = (checkin.outing_minutes or 0) if checkin else 0
+
     work_minutes = 0
     if checkin and checkout:
         diff = checkout.recorded_at - checkin.recorded_at
-        work_minutes = int(diff.total_seconds() / 60)
+        work_minutes = max(0, int(diff.total_seconds() / 60) - outing_minutes)
 
     work_minutes += _approved_reclock_minutes(db, user_id, today_kst_str())
 
@@ -80,6 +82,8 @@ def get_attendance_summary(
         "checkin_address": checkin.address if checkin else None,
         "checkout_address": checkout.address if checkout else None,
         "is_remote": bool(checkin.is_remote) if checkin else False,
+        "is_outing": bool(checkin.is_outing) if checkin else False,
+        "outing_minutes": outing_minutes,
         "work_minutes": work_minutes,
         "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분",
     }
@@ -154,7 +158,7 @@ def get_company_attendance(
         work_minutes = 0
         if checkin and checkout:
             diff = checkout.recorded_at - checkin.recorded_at
-            work_minutes = max(0, int(diff.total_seconds() / 60))
+            work_minutes = max(0, int(diff.total_seconds() / 60) - (checkin.outing_minutes or 0))
 
         member_reclock = reclock_by_user.get(member.user_id, [])
         for r in member_reclock:
@@ -180,6 +184,7 @@ def get_company_attendance(
             "work_hours": f"{work_minutes // 60}h {work_minutes % 60}m" if work_minutes else "-",
             "status": status,
             "is_missing_checkout": is_missing_checkout,
+            "is_outing": bool(checkin.is_outing) if checkin and not checkout else False,
             "reclock_status": reclock_status,
         })
 
@@ -215,10 +220,11 @@ def compute_weekly_report(db: Session, user_id: str, week_start=None) -> dict:
         kst_time = r.recorded_at.replace(tzinfo=timezone.utc).astimezone(KST)
         date_str = kst_time.date().isoformat()
         if date_str not in daily:
-            daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0}
+            daily[date_str] = {"checkin": None, "checkout": None, "work_minutes": 0, "outing_minutes": 0}
         if r.type == "checkin" and not daily[date_str]["checkin"]:
             daily[date_str]["checkin"] = r.recorded_at.isoformat()
             daily[date_str]["checkin_address"] = r.address
+            daily[date_str]["outing_minutes"] = r.outing_minutes or 0
         if r.type == "checkout":
             daily[date_str]["checkout"] = r.recorded_at.isoformat()
             daily[date_str]["checkout_address"] = r.address
@@ -231,15 +237,15 @@ def compute_weekly_report(db: Session, user_id: str, week_start=None) -> dict:
             checkin = datetime.fromisoformat(data["checkin"])
             checkout = datetime.fromisoformat(data["checkout"])
             diff = checkout - checkin
-            data["work_minutes"] = max(0, int(diff.total_seconds() / 60))
+            data["work_minutes"] = max(0, int(diff.total_seconds() / 60) - data.get("outing_minutes", 0))
             data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분"
         elif data["checkin"] and not data["checkout"] and date_str == today_str:
-            # 오늘 퇴근 전: 현재 시각 기준으로 합산
+            # 오늘 퇴근 전: 현재 시각 기준으로 합산 (완료된 외출 시간만 차감, 진행 중인 외출은 반영 안 함)
             checkin = datetime.fromisoformat(data["checkin"])
             if checkin.tzinfo is None:
                 checkin = checkin.replace(tzinfo=timezone.utc)
             diff = now_kst - checkin.astimezone(KST)
-            data["work_minutes"] = max(0, int(diff.total_seconds() / 60))
+            data["work_minutes"] = max(0, int(diff.total_seconds() / 60) - data.get("outing_minutes", 0))
             data["work_hours"] = f"{data['work_minutes'] // 60}시간 {data['work_minutes'] % 60}분 (진행중)"
         else:
             data["work_hours"] = "-"
@@ -248,7 +254,7 @@ def compute_weekly_report(db: Session, user_id: str, week_start=None) -> dict:
     for date_str, extra_minutes in reclock_map.items():
         if extra_minutes <= 0:
             continue
-        bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "work_minutes": 0})
+        bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "work_minutes": 0, "outing_minutes": 0})
         bucket["work_minutes"] += extra_minutes
         bucket["work_hours"] = f"{bucket['work_minutes'] // 60}시간 {bucket['work_minutes'] % 60}분"
 

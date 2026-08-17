@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock, outing
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -22,6 +22,7 @@ from models import page_view as page_view_model
 from models import reclock as reclock_model
 from models import attendance_reset_log as attendance_reset_log_model
 from models import member_deletion_log as member_deletion_log_model
+from models import outing as outing_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -42,6 +43,8 @@ def run_migrations():
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_latitude FLOAT",
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS home_longitude FLOAT",
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS is_outing BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS outing_minutes INTEGER DEFAULT 0",
         # 성능 인덱스
         "CREATE INDEX IF NOT EXISTS ix_attendances_user_id ON attendances (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_attendances_recorded_at ON attendances (recorded_at)",
@@ -155,6 +158,8 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_reset_logs_company_id ON attendance_reset_logs (company_id)",
         "CREATE INDEX IF NOT EXISTS ix_reset_logs_performed_by ON attendance_reset_logs (performed_by)",
         "CREATE INDEX IF NOT EXISTS ix_member_del_logs_performed_by ON member_deletion_logs (performed_by)",
+        "CREATE INDEX IF NOT EXISTS ix_outings_user_id ON outings (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_outings_company_id ON outings (company_id)",
         # Supabase 보안 권고: public 스키마 테이블이 PostgREST로 노출되는데 RLS 미설정
         # (백엔드는 postgres 소유자 role로 직접 연결해 앱 레벨에서 인가를 처리하므로 RLS를 켜도 영향 없음.
         #  정책을 별도로 만들지 않아 anon/authenticated의 PostgREST 접근만 기본 차단됨)
@@ -183,6 +188,7 @@ def run_migrations():
         "ALTER TABLE reclock_requests ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE attendance_reset_logs ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE member_deletion_logs ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE outings ENABLE ROW LEVEL SECURITY",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
@@ -440,6 +446,7 @@ app.include_router(permission.router, prefix="/api/permissions", tags=["권한�
 app.include_router(internal.router, prefix="/internal", tags=["내부서비스"])
 app.include_router(page_view.router, prefix="/api/page-view", tags=["접속로그"])
 app.include_router(reclock.router, prefix="/api/reclock", tags=["재출근"])
+app.include_router(outing.router, prefix="/api/outing", tags=["외출"])
 
 
 @app.get("/")

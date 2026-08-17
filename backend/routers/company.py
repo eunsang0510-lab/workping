@@ -446,7 +446,7 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db), curre
         work_minutes = 0
         if checkin and checkout:
             diff = checkout.recorded_at - checkin.recorded_at
-            work_minutes = int(diff.total_seconds() / 60)
+            work_minutes = max(0, int(diff.total_seconds() / 60) - (checkin.outing_minutes or 0))
 
         if checkin and not checkout and not is_missing_checkout:
             status = "출근중"
@@ -471,6 +471,7 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db), curre
             "work_hours": f"{work_minutes // 60}시간 {work_minutes % 60}분" if work_minutes > 0 else "-",
             "status": status,
             "is_missing_checkout": is_missing_checkout,
+            "is_outing": bool(checkin.is_outing) if checkin and not checkout else False,
             "home_address": member.home_address or "",
         })
 
