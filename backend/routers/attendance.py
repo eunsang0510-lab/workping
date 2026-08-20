@@ -676,11 +676,16 @@ def export_attendance_excel(
         )
         .all()
     )
+    # 팀장 최종 승인(approved)된 재출근 건만 공식 기록으로 반영 — 하루 최대 1건
     reclock_by_user: dict = {}
     for r in all_reclock:
-        mins = max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
         per_date = reclock_by_user.setdefault(r.user_id, {})
-        per_date[r.work_date] = per_date.get(r.work_date, 0) + mins
+        per_date[r.work_date] = r
+
+    def _reclock_minutes(r):
+        if not r or not r.checkout_at:
+            return 0
+        return max(0, int((r.checkout_at - r.checkin_at).total_seconds() / 60))
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -689,7 +694,11 @@ def export_attendance_excel(
     header_fill = PatternFill(start_color="6366F1", end_color="6366F1", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
 
-    headers = ["이름", "이메일", "날짜", "출근시간", "퇴근시간", "근무시간(분)", "출근위치", "퇴근위치", "주차", "주간근무시간(분)", "52시간초과"]
+    headers = [
+        "이름", "이메일", "날짜", "출근시간", "퇴근시간", "근무시간(분)", "출근위치", "퇴근위치",
+        "재출근시작시간", "재출근시작주소", "재출근종료시간", "재출근종료주소", "재출근 총 시간(분)",
+        "총 외출 시간(분)", "주차", "주간근무시간(분)", "52시간초과",
+    ]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.fill = header_fill
@@ -697,14 +706,13 @@ def export_attendance_excel(
         cell.alignment = Alignment(horizontal="center")
         ws.column_dimensions[cell.column_letter].width = 18
 
-    import math
-
     def get_week_key(d):
         monday = d - timedelta(days=d.weekday())
         return monday.isoformat()
 
     row = 2
     red_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    total_cols = len(headers)
 
     for member in members:
         records = records_by_user.get(member.user_id, [])
@@ -722,7 +730,7 @@ def export_attendance_excel(
         for date_str in member_reclock:
             daily.setdefault(date_str, {"checkin": None, "checkout": None})
 
-        # 주차별 합산 (승인된 재출근 시간 포함)
+        # 주차별 합산 (승인된 재출근 시간 포함, 외출 시간 제외)
         weekly_minutes: dict = {}
         for date_str, data in daily.items():
             d = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -730,20 +738,24 @@ def export_attendance_excel(
             checkin = data["checkin"]
             checkout = data["checkout"]
             if checkin and checkout:
-                mins = max(0, int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60))
+                mins = max(0, int((checkout.recorded_at - checkin.recorded_at).total_seconds() / 60) - (checkin.outing_minutes or 0))
             else:
                 mins = 0
-            mins += member_reclock.get(date_str, 0)
+            mins += _reclock_minutes(member_reclock.get(date_str))
             weekly_minutes[wk] = weekly_minutes.get(wk, 0) + mins
 
         for date_str, data in sorted(daily.items()):
             checkin = data["checkin"]
             checkout = data["checkout"]
+            reclock = member_reclock.get(date_str)
+            reclock_minutes = _reclock_minutes(reclock)
+            outing_minutes = (checkin.outing_minutes or 0) if checkin else 0
+
             work_minutes = 0
             if checkin and checkout:
                 diff = checkout.recorded_at - checkin.recorded_at
-                work_minutes = max(0, int(diff.total_seconds() / 60))
-            work_minutes += member_reclock.get(date_str, 0)
+                work_minutes = max(0, int(diff.total_seconds() / 60) - outing_minutes)
+            work_minutes += reclock_minutes
 
             d = datetime.strptime(date_str, "%Y-%m-%d").date()
             wk = get_week_key(d)
@@ -758,11 +770,17 @@ def export_attendance_excel(
             ws.cell(row=row, column=6, value=work_minutes if work_minutes > 0 else "-")
             ws.cell(row=row, column=7, value=checkin.address if checkin else "-")
             ws.cell(row=row, column=8, value=checkout.address if checkout else "-")
-            ws.cell(row=row, column=9, value=f"{wk} 주")
-            ws.cell(row=row, column=10, value=week_total if week_total > 0 else "-")
-            overtime_cell = ws.cell(row=row, column=11, value="초과" if is_overtime else "-")
+            ws.cell(row=row, column=9, value=reclock.checkin_at.strftime("%H:%M") if reclock and reclock.checkin_at else "-")
+            ws.cell(row=row, column=10, value=reclock.checkin_address if reclock and reclock.checkin_address else "-")
+            ws.cell(row=row, column=11, value=reclock.checkout_at.strftime("%H:%M") if reclock and reclock.checkout_at else "-")
+            ws.cell(row=row, column=12, value=reclock.checkout_address if reclock and reclock.checkout_address else "-")
+            ws.cell(row=row, column=13, value=reclock_minutes if reclock_minutes > 0 else "-")
+            ws.cell(row=row, column=14, value=outing_minutes if outing_minutes > 0 else "-")
+            ws.cell(row=row, column=15, value=f"{wk} 주")
+            ws.cell(row=row, column=16, value=week_total if week_total > 0 else "-")
+            ws.cell(row=row, column=17, value="초과" if is_overtime else "-")
             if is_overtime:
-                for col in range(1, 12):
+                for col in range(1, total_cols + 1):
                     ws.cell(row=row, column=col).fill = red_fill
             row += 1
 
