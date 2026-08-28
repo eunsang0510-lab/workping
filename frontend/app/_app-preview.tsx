@@ -4,7 +4,7 @@ import { useState } from "react";
 export default function AppPreview() {
   const [activeTab, setActiveTab] = useState(0);
 
-  const tabs = ["대시보드", "달력", "리포트", "연차", "출장", "팀장"];
+  const tabs = ["대시보드", "회의록", "달력", "리포트", "연차", "출장", "팀장"];
 
   const mockups = [
     // ── 대시보드 ──────────────────────────────────────────
@@ -81,6 +81,51 @@ export default function AppPreview() {
             </div>
           </div>
         ))}
+      </div>
+    </div>,
+
+    // ── 회의록 ────────────────────────────────────────────
+    <div key="meeting" className="bg-[#f4f4f8] rounded-3xl p-4 text-left">
+      <div className="flex items-center justify-between mb-4">
+        <div className="w-7 h-7 bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center text-xs">←</div>
+        <span className="text-[#0a0a0a] text-base font-black">Work<span className="text-[#5b5ef4]">Ping</span></span>
+        <div className="w-7" />
+      </div>
+
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="text-[#0a0a0a] text-sm font-black">주간 프로덕트 회의</span>
+        <span className="text-[9px] font-bold text-[#4a4de0] bg-[#f0f0ff] rounded-full px-1.5 py-0.5">BETA</span>
+      </div>
+      <div className="text-[#a0a0a0] text-xs mb-3">2026.05.15 (금) 14:00 · 김민준</div>
+
+      <div className="text-[10px] text-[#6b6b6b] bg-white border border-[#e5e5e5] rounded-lg px-3 py-2 mb-3 leading-relaxed">
+        ✏️ 김민준님이 수정함 · <span className="bg-amber-100 text-amber-800 rounded px-1">노란색</span>=추가 · <span className="line-through text-[#b0b0b0]">취소선</span>=삭제
+      </div>
+
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 mb-3 shadow-sm">
+        <div className="text-[#0a0a0a] text-xs font-black mb-2">📝 요약</div>
+        <div className="text-[#0a0a0a] text-xs leading-relaxed">
+          신규 회의록 기능 베타 출시 일정을 논의했습니다. <span className="line-through text-[#b0b0b0]">다음 달 초</span>{" "}
+          <span className="bg-amber-100 text-amber-800 rounded px-1">이번 주 안</span>에 오픈하고, 사용자 피드백을 수집해 정식 버전 방향을 정하기로 했습니다.
+        </div>
+      </div>
+
+      <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 shadow-sm">
+        <div className="text-[#0a0a0a] text-xs font-black mb-3">✅ 할 일</div>
+        <div className="space-y-2">
+          {[
+            ["랜딩 페이지에 회의록 기능 소개 추가", true],
+            ["베타 사용자 피드백 설문 준비", false],
+            ["다음 회의 전까지 사용량 데이터 확인", false],
+          ].map(([text, done]) => (
+            <div key={text as string} className="flex items-start gap-2">
+              <div className={`w-3.5 h-3.5 rounded border mt-0.5 shrink-0 flex items-center justify-center ${done ? "bg-[#5b5ef4] border-[#5b5ef4]" : "border-[#d0d0d0]"}`}>
+                {done && <span className="text-white text-[9px]">✓</span>}
+              </div>
+              <span className={`text-xs ${done ? "line-through text-[#b0b0b0]" : "text-[#0a0a0a]"}`}>{text}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>,
 
