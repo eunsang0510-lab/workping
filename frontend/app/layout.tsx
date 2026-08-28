@@ -60,6 +60,12 @@ export default function RootLayout({
           name="apple-mobile-web-app-status-bar-style"
           content="black-translucent"
         />
+        {/* AdSense 사이트 소유 확인용 - 로그인 없이도 크롤러가 볼 수 있도록 전체 레이아웃에 배치 */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3499132698619570"
+          crossOrigin="anonymous"
+        />
         <Script
           id="service-worker"
           strategy="afterInteractive"

@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock, outing
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock, outing, meeting
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -23,6 +23,7 @@ from models import reclock as reclock_model
 from models import attendance_reset_log as attendance_reset_log_model
 from models import member_deletion_log as member_deletion_log_model
 from models import outing as outing_model
+from models import meeting as meeting_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -447,6 +448,7 @@ app.include_router(internal.router, prefix="/internal", tags=["내부서비스"]
 app.include_router(page_view.router, prefix="/api/page-view", tags=["접속로그"])
 app.include_router(reclock.router, prefix="/api/reclock", tags=["재출근"])
 app.include_router(outing.router, prefix="/api/outing", tags=["외출"])
+app.include_router(meeting.router, prefix="/api/meeting", tags=["회의록"])
 
 
 @app.get("/")

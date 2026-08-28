@@ -1585,6 +1585,20 @@ const markAllRead = async () => {
             </div>
           </div>
         </Link>
+        {user?.email === "eunsang0510@gmail.com" && (
+          <Link href="/meeting">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-lg">🎙️</span>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-bold flex items-center gap-1">
+                  회의록
+                  <span className="text-[9px] font-bold text-[#4a4de0] bg-[#f0f0ff] rounded-full px-1.5 py-0.5">BETA</span>
+                </div>
+                <div className="text-[#6b6b6b] text-xs">녹음 · AI 요약</div>
+              </div>
+            </div>
+          </Link>
+        )}
         <Link href="/calendar">
           <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <span className="text-lg">🗓️</span>

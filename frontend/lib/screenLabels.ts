@@ -5,6 +5,8 @@ export const SCREEN_LABELS: Record<string, string> = {
   "/dashboard": "출퇴근 대시보드",
   "/leave": "연차 관리",
   "/business-trip": "출장 관리",
+  "/meeting": "회의록",
+  "/meeting/record": "회의 녹음",
   "/calendar": "근무 달력",
   "/report": "리포트",
   "/notice": "공지사항",
