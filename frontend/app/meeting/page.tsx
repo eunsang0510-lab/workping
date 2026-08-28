@@ -49,10 +49,8 @@ export default function MeetingListPage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u && u.email === "eunsang0510@gmail.com") {
+      if (u) {
         fetchCompanyThenMeetings(u.uid);
-      } else if (u) {
-        router.push("/dashboard");
       } else {
         router.push("/login");
       }

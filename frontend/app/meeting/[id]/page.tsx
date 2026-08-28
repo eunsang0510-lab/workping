@@ -104,11 +104,9 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u && u.email === "eunsang0510@gmail.com") {
+      if (u) {
         setUser(u);
         fetchMeeting();
-      } else if (u) {
-        router.push("/dashboard");
       } else {
         router.push("/login");
       }

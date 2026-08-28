@@ -62,6 +62,7 @@ export default function Landing() {
         <div className="flex flex-wrap justify-center gap-2 mt-10">
           {[
             { icon: "📍", label: "GPS 출퇴근" },
+            { icon: "🎙️", label: "AI 회의록" },
             { icon: "🔁", label: "재출근/재퇴근" },
             { icon: "🚶", label: "외출/복귀" },
             { icon: "🏖️", label: "연차 관리" },
@@ -76,6 +77,33 @@ export default function Landing() {
               <span className="text-[#0a0a0a] text-xs font-semibold">{label}</span>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* AI 회의록 스포트라이트 */}
+      <section className="px-6 py-14">
+        <div className="relative overflow-hidden bg-[#5b5ef4] rounded-3xl p-8 text-center text-white">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.12)_0%,transparent_70%)] pointer-events-none" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1 mb-5">
+              <span className="text-[11px] font-bold tracking-wide">🆕 NEW · BETA</span>
+            </div>
+            <div className="text-4xl mb-4">🎙️</div>
+            <h3 className="text-2xl font-black leading-tight mb-4">
+              회의록 작성은 이제<br />AI에게 맡기세요
+            </h3>
+            <p className="text-white/85 text-sm leading-relaxed max-w-sm mx-auto mb-1">
+              버튼 하나로 녹음을 시작하면 끝이에요.<br />
+              회의가 끝나면 AI가 핵심 내용을 요약하고,<br />
+              실행할 일까지 목록으로 정리해드려요.
+            </p>
+            <p className="text-white/70 text-xs mt-4">
+              🔒 녹음 파일은 내 기기에만 저장되고 서버엔 남지 않아요
+            </p>
+            <p className="text-white/70 text-xs mt-1">
+              베타 기간 동안 계정당 월 3회 무료로 체험해보세요
+            </p>
+          </div>
         </div>
       </section>
 
@@ -121,6 +149,7 @@ export default function Landing() {
         <div className="grid grid-cols-2 gap-3">
           {[
             { icon: "📍", title: "GPS 출퇴근", desc: "위치 기반 정확한 출퇴근 기록" },
+            { icon: "🎙️", title: "AI 회의록 (베타)", desc: "녹음하면 AI가 요약·할 일 목록까지 자동 정리" },
             { icon: "🏢", title: "출근 구역 설정", desc: "지정된 구역 내에서만 출퇴근 가능, 도로명 주소로 등록" },
             { icon: "🏠", title: "재택근무 관리", desc: "직원별 재택 주소 등록, 재택 출퇴근 자동 감지 및 표시" },
             { icon: "🔁", title: "재출근/재퇴근", desc: "퇴근 후 추가 근무 시 재출근, 팀장 승인 후 근무시간 반영" },

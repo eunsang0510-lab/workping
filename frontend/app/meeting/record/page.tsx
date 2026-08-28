@@ -55,10 +55,6 @@ export default function MeetingRecordPage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u && u.email !== "eunsang0510@gmail.com") {
-        router.push("/dashboard");
-        return;
-      }
       if (u) {
         setUser(u);
         setUserName(u.displayName || "");
