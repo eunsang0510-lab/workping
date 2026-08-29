@@ -59,6 +59,17 @@ export default function MeetingListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  // 회의록 메뉴 진입 시 마이크 권한을 미리 요청 (녹음 화면에서 처음 물어보면 당황스러우니 미리 안내)
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => stream.getTracks().forEach((t) => t.stop()))
+      .catch(() => {
+        showToast("마이크 권한이 없으면 녹음을 시작할 수 없어요. 브라우저 설정에서 마이크 권한을 허용해주세요", "info");
+      });
+  }, [showToast]);
+
   const fetchCompanyThenMeetings = async (uid: string) => {
     try {
       const res = await fetch(`${API_URL}/api/company/my/${uid}`);

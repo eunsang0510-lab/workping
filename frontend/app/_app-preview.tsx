@@ -4,7 +4,7 @@ import { useState } from "react";
 export default function AppPreview() {
   const [activeTab, setActiveTab] = useState(0);
 
-  const tabs = ["대시보드", "회의록", "달력", "리포트", "연차", "출장", "팀장"];
+  const tabs = ["대시보드", "AI 회의록", "달력", "리포트", "연차", "출장", "팀장"];
 
   const mockups = [
     // ── 대시보드 ──────────────────────────────────────────
