@@ -24,6 +24,7 @@ from models import attendance_reset_log as attendance_reset_log_model
 from models import member_deletion_log as member_deletion_log_model
 from models import outing as outing_model
 from models import meeting as meeting_model
+from models import meeting_progress as meeting_progress_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager

@@ -7,6 +7,7 @@ export const SCREEN_LABELS: Record<string, string> = {
   "/business-trip": "출장 관리",
   "/meeting": "회의록",
   "/meeting/record": "회의 녹음",
+  "/meeting/progress": "팀 업무 진행 현황",
   "/calendar": "근무 달력",
   "/report": "리포트",
   "/notice": "공지사항",

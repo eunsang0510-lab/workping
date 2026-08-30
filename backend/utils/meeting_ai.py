@@ -41,6 +41,56 @@ def transcribe_audio(file_bytes: bytes, filename: str, content_type: str | None)
     return (text or "").strip()
 
 
+PROGRESS_SYSTEM_PROMPT = """당신은 팀의 여러 회의록을 훑어보고 지금 어떤 일이 어떤 상태로 진행 중인지 정리해주는 어시스턴트입니다.
+입력은 시간순(오래된 것 → 최신)으로 정렬된 여러 회의의 [날짜/제목/요약/할 일] 목록입니다.
+같은 주제가 여러 회의에 걸쳐 반복해서 언급될 수 있습니다 — 이를 하나의 작업(work item)으로 묶어서 추적하세요.
+
+다음을 작성하세요.
+1. overview: 팀 전체 진행 상황에 대한 2~4문장 요약.
+2. items: 회의들을 관통하는 주요 작업/안건 목록. 각 항목은
+   - topic: 작업/안건 이름 (짧게)
+   - status: "진행중" | "완료" | "보류" 중 하나 (최신 회의 기준으로 판단)
+   - description: 어떻게 진행되어 왔고 지금 상태가 어떤지 1~3문장
+
+너무 사소하거나 한 번만 언급되고 후속 언급이 없는 잡담성 안건은 items에서 제외하세요.
+"""
+
+
+class _ProgressItem(BaseModel):
+    topic: str
+    status: str
+    description: str
+
+
+class _ProgressAnalysis(BaseModel):
+    overview: str
+    items: List[_ProgressItem]
+
+
+def analyze_progress(meetings_text: str) -> tuple[str, list[dict]]:
+    """여러 회의의 요약/할일을 모아 Claude에 보내 팀 진행 현황을 재구성."""
+    if not meetings_text.strip():
+        return "", []
+
+    client = anthropic.Anthropic()
+    response = client.messages.parse(
+        model=SUMMARY_MODEL,
+        max_tokens=4096,
+        system=PROGRESS_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": meetings_text,
+        }],
+        output_format=_ProgressAnalysis,
+    )
+    analysis = response.parsed_output
+    items = [
+        {"topic": i.topic.strip(), "status": i.status.strip(), "description": i.description.strip()}
+        for i in analysis.items if i.topic.strip()
+    ]
+    return analysis.overview.strip(), items
+
+
 def summarize_meeting(transcript: str) -> tuple[str, list[dict]]:
     """텍스트를 Claude에 보내 요약 + 할일 목록을 생성."""
     if not transcript.strip():

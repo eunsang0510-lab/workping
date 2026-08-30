@@ -128,6 +128,16 @@ export default function MeetingListPage() {
           </div>
         )}
 
+        {companyId && (
+          <Link href="/meeting/progress">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl px-4 py-3 flex items-center gap-2.5 mb-4 transition-all cursor-pointer">
+              <span className="text-lg">📊</span>
+              <div className="text-[#0a0a0a] text-xs font-bold flex-1">팀 업무 진행 현황 보기</div>
+              <span className="text-[#b0b0b0] text-xs">›</span>
+            </div>
+          </Link>
+        )}
+
         {quota && quota.remaining <= 0 ? (
           <div className="bg-[#f8f8f8] rounded-2xl p-5 mb-5 text-center">
             <div className="text-2xl mb-2">🔒</div>

@@ -7,9 +7,11 @@ from typing import Optional
 
 from database.connection import get_db, SessionLocal
 from models.meeting import Meeting
+from models.meeting_progress import MeetingProgress
 from models.company import CompanyMember
 from routers.deps import get_current_user
-from utils.meeting_ai import transcribe_audio, summarize_meeting
+from utils.meeting_ai import transcribe_audio, summarize_meeting, analyze_progress
+from utils.team import get_user_team_id
 from utils.text_diff import word_diff
 from utils.push import send_push_to_users
 
@@ -194,6 +196,12 @@ async def upload_meeting(
     if company_id:
         _require_member(db, user_id, company_id)
 
+    # 팀을 명시적으로 지정하지 않았으면 사용자의 소속 팀으로 자동 태깅 (진행 현황 화면의 팀별 집계에 사용)
+    if company_id and not team_id:
+        auto_team_id = get_user_team_id(db, company_id, user_id)
+        if auto_team_id:
+            team_id = auto_team_id
+
     if _monthly_usage_count(db, user_id) >= FREE_MONTHLY_LIMIT:
         raise HTTPException(status_code=403, detail=QUOTA_EXCEEDED_MESSAGE)
     if duration_seconds and duration_seconds > MAX_DURATION_SECONDS:
@@ -248,6 +256,115 @@ def list_meetings(
         q = q.filter(or_(Meeting.team_id == team_id, Meeting.team_id.is_(None)))
     meetings = q.order_by(Meeting.recorded_at.desc()).all()
     return {"meetings": [_serialize_list(m) for m in meetings]}
+
+
+PROGRESS_MEETING_LIMIT = 30  # 진행 현황 재정리 시 반영할 최근 회의 수 (비용/토큰 제한)
+
+
+def _progress_scope_meetings(db: Session, company_id: str, team_id: Optional[str]):
+    """진행 현황 스코프에 해당하는 완료된 회의 쿼리. team_id 지정 시 해당 팀 + 팀 미지정 회의,
+    미지정 시 팀 미지정 회의만 (list_meetings의 team_id 필터와 동일한 규칙)."""
+    q = db.query(Meeting).filter(Meeting.company_id == company_id, Meeting.status == "completed")
+    if team_id:
+        q = q.filter(or_(Meeting.team_id == team_id, Meeting.team_id.is_(None)))
+    else:
+        q = q.filter(Meeting.team_id.is_(None))
+    return q
+
+
+def _serialize_progress(p: MeetingProgress, stale: bool) -> dict:
+    return {
+        "generated": True,
+        "team_id": p.team_id,
+        "overview": p.overview,
+        "items": p.items or [],
+        "based_on_meeting_count": p.based_on_meeting_count,
+        "generated_at": p.generated_at.isoformat() if p.generated_at else None,
+        "generated_by_name": p.generated_by_name,
+        "stale": stale,
+    }
+
+
+# ── 팀별 진행 현황 조회 (캐시된 결과) ─────────────────────────
+@router.get("/progress/{company_id}")
+def get_progress(
+    company_id: str,
+    team_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    _require_member(db, current_user["uid"], company_id)
+
+    row = db.query(MeetingProgress).filter(
+        MeetingProgress.company_id == company_id,
+        MeetingProgress.team_id == team_id if team_id else MeetingProgress.team_id.is_(None),
+    ).first()
+
+    latest = _progress_scope_meetings(db, company_id, team_id).order_by(Meeting.recorded_at.desc()).first()
+
+    if not row:
+        return {"generated": False, "stale": latest is not None}
+
+    stale = bool(latest and (not row.last_meeting_at or latest.recorded_at > row.last_meeting_at))
+    return _serialize_progress(row, stale)
+
+
+# ── 팀별 진행 현황 다시 정리 (회의 히스토리를 Claude로 재분석) ──
+@router.post("/progress/{company_id}")
+def regenerate_progress(
+    company_id: str,
+    team_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    member = _require_member(db, current_user["uid"], company_id)
+
+    meetings = (
+        _progress_scope_meetings(db, company_id, team_id)
+        .order_by(Meeting.recorded_at.desc())
+        .limit(PROGRESS_MEETING_LIMIT)
+        .all()
+    )
+    if not meetings:
+        raise HTTPException(status_code=400, detail="정리할 회의록이 아직 없어요")
+    meetings = list(reversed(meetings))  # 오래된 것 → 최신 순으로 Claude에 전달
+
+    blocks = []
+    for m in meetings:
+        todo_lines = "\n".join(
+            f"  - {t.get('text', '')} ({'완료' if t.get('done') else '미완료'})" for t in (m.todos or [])
+        )
+        blocks.append(
+            f"[{m.recorded_at.strftime('%Y-%m-%d')}] {m.title}\n"
+            f"요약: {m.summary or '(요약 없음)'}\n"
+            f"할일:\n{todo_lines or '  (없음)'}"
+        )
+    meetings_text = "\n\n".join(blocks)
+
+    try:
+        overview, items = analyze_progress(meetings_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"진행 현황 정리에 실패했어요: {e}")
+
+    row = db.query(MeetingProgress).filter(
+        MeetingProgress.company_id == company_id,
+        MeetingProgress.team_id == team_id if team_id else MeetingProgress.team_id.is_(None),
+    ).first()
+    if not row:
+        row = MeetingProgress(company_id=company_id, team_id=team_id or None)
+        db.add(row)
+
+    row.overview = overview
+    row.items = items
+    row.based_on_meeting_count = len(meetings)
+    row.last_meeting_at = meetings[-1].recorded_at
+    row.generated_at = datetime.utcnow()
+    row.generated_by = current_user["uid"]
+    row.generated_by_name = (member.user_name if member else None) or current_user.get("name") or current_user.get("email")
+    db.commit()
+    db.refresh(row)
+
+    return _serialize_progress(row, stale=False)
 
 
 # ── 이번 달 베타 이용 한도 조회 ────────────────────────────

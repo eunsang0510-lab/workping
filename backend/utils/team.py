@@ -3,6 +3,18 @@ from models.team import Team, TeamMember
 from models.company import CompanyMember
 
 
+def get_user_team_id(db: Session, company_id: str, user_id: str) -> str | None:
+    """회사 내 사용자가 소속된 팀 id. 여러 팀에 소속돼 있으면 가장 먼저 매칭된 팀, 없으면 None."""
+    team_ids = [t.id for t in db.query(Team.id).filter(Team.company_id == company_id).all()]
+    if not team_ids:
+        return None
+    membership = db.query(TeamMember.team_id).filter(
+        TeamMember.team_id.in_(team_ids),
+        TeamMember.user_id == user_id,
+    ).first()
+    return membership[0] if membership else None
+
+
 def get_manager_ids(db: Session, company_id: str, user_id: str) -> list[str]:
     """신청자 팀의 팀장 uid 목록. 팀 없으면 회사 admin."""
     teams = db.query(Team).filter(Team.company_id == company_id).all()
