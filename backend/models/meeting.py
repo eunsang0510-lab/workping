@@ -39,3 +39,13 @@ class Meeting(Base):
     __table_args__ = (
         Index("ix_meetings_company_recorded", "company_id", "recorded_at"),
     )
+
+
+class MeetingUsageLog(Base):
+    """녹음 종료(업로드) 시점마다 한 건씩 남기는 사용 기록. 월별 무료 이용 횟수 계산 기준.
+    회의록(Meeting)을 나중에 삭제해도 이 기록은 남아있어 사용 횟수가 복구되지 않는다."""
+    __tablename__ = "meeting_usage_logs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

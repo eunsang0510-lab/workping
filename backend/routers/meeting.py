@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from database.connection import get_db, SessionLocal
-from models.meeting import Meeting
+from models.meeting import Meeting, MeetingUsageLog
 from models.meeting_progress import MeetingProgress
 from models.company import CompanyMember
 from routers.deps import get_current_user
@@ -29,11 +29,13 @@ QUOTA_EXCEEDED_MESSAGE = (
 
 
 def _monthly_usage_count(db: Session, user_id: str) -> int:
+    """이번 달 사용 횟수. 회의록을 삭제해도 줄어들지 않도록 Meeting이 아니라
+    녹음 종료(업로드) 시 남긴 MeetingUsageLog 기준으로 센다."""
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     return (
-        db.query(Meeting)
-        .filter(Meeting.user_id == user_id, Meeting.created_at >= month_start)
+        db.query(MeetingUsageLog)
+        .filter(MeetingUsageLog.user_id == user_id, MeetingUsageLog.created_at >= month_start)
         .count()
     )
 
@@ -231,6 +233,7 @@ async def upload_meeting(
         status="processing",
     )
     db.add(meeting)
+    db.add(MeetingUsageLog(user_id=user_id))
     db.commit()
     db.refresh(meeting)
 

@@ -101,7 +101,7 @@ export default function Landing() {
               🔒 녹음 파일은 내 기기에만 저장되고 서버엔 남지 않아요
             </p>
             <p className="text-white/70 text-xs mt-1">
-              베타 기간 동안 계정당 월 3회 무료로 체험해보세요
+              베타 기간 동안 계정당 월 3회 무료로 사용해보세요
             </p>
           </div>
         </div>
