@@ -19,6 +19,7 @@ class TeamCreate(BaseModel):
 class TeamUpdate(BaseModel):
     name: Optional[str] = None
     manager_id: Optional[str] = None
+    parent_team_id: Optional[str] = None
 
 
 class TeamMemberAdd(BaseModel):
@@ -88,6 +89,7 @@ def get_teams(
             "name": t.name,
             "manager_id": t.manager_id,
             "manager_name": manager_name_by_user.get(t.manager_id) if t.manager_id else None,
+            "parent_team_id": t.parent_team_id,
             "member_count": len(member_ids),
             "members": member_ids,
         })
@@ -129,6 +131,11 @@ def update_team(
         if target:
             target.is_manager = True
             target.updated_by = current_user["uid"]
+
+    if req.parent_team_id is not None:
+        if req.parent_team_id == team_id:
+            raise HTTPException(status_code=400, detail="자기 자신을 상위 조직으로 지정할 수 없어요")
+        team.parent_team_id = req.parent_team_id or None
 
     team.updated_by = current_user["uid"]
     db.commit()

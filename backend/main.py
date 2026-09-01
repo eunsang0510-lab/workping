@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
-from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock, outing, meeting
+from routers import auth, location, attendance, company, superadmin, payment, notice, leave, team, business_trip, company_request, push, notification, permission, internal, page_view, reclock, outing, meeting, evaluation
 from database.connection import engine, Base, SessionLocal
 from models import user, location as location_model
 from models import attendance as attendance_model
@@ -25,6 +25,7 @@ from models import member_deletion_log as member_deletion_log_model
 from models import outing as outing_model
 from models import meeting as meeting_model
 from models import meeting_progress as meeting_progress_model
+from models import evaluation as evaluation_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -191,6 +192,18 @@ def run_migrations():
         "ALTER TABLE attendance_reset_logs ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE member_deletion_logs ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE outings ENABLE ROW LEVEL SECURITY",
+        # 평가(인사평가) 기능 — 기존 테이블에 추가된 컬럼
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS evaluation_enabled BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS job_title VARCHAR",
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS parent_team_id VARCHAR",
+        # 평가/회의록 관련 신규 테이블 RLS (Supabase 권고 — 앱은 postgres 소유자 role로 연결해 영향 없음)
+        "ALTER TABLE evaluator_assignments ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE evaluation_cycles ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE evaluation_entries ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE evaluation_results ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE one_on_one_sessions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE meeting_progress ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE meeting_usage_logs ENABLE ROW LEVEL SECURITY",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
@@ -450,6 +463,7 @@ app.include_router(page_view.router, prefix="/api/page-view", tags=["접속로�
 app.include_router(reclock.router, prefix="/api/reclock", tags=["재출근"])
 app.include_router(outing.router, prefix="/api/outing", tags=["외출"])
 app.include_router(meeting.router, prefix="/api/meeting", tags=["회의록"])
+app.include_router(evaluation.router, prefix="/api/evaluation", tags=["평가"])
 
 
 @app.get("/")

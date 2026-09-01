@@ -10,6 +10,7 @@ class Team(Base):
     company_id = Column(String, nullable=False, index=True)
     name       = Column(String, nullable=False)
     manager_id = Column(String, nullable=True, index=True)
+    parent_team_id = Column(String, nullable=True, index=True)  # 상위 조직(1on1 열람 권한 판별용)
     created_at = Column(DateTime, default=datetime.now)
     created_by = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=True, onupdate=datetime.now)

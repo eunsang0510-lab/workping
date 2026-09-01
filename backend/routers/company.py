@@ -163,6 +163,7 @@ def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depen
             "company_code": c.id[:8],
             "leave_enabled": c.leave_enabled,
             "leave_approval_required": getattr(c, "leave_approval_required", True),
+            "evaluation_enabled": getattr(c, "evaluation_enabled", False),
         }
         for c in companies
     ]
@@ -858,8 +859,10 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
         "company_name": company.name if company else None,
         "is_admin": member.is_admin,
         "is_manager": member.is_manager,
+        "job_title": member.job_title,
         "leave_enabled": company.leave_enabled if company else False,
         "leave_approval_required": getattr(company, "leave_approval_required", True) if company else True,
+        "evaluation_enabled": getattr(company, "evaluation_enabled", False) if company else False,
         "force_password_change": member.force_password_change or False,
     }
 

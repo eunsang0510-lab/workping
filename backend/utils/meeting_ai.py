@@ -91,6 +91,115 @@ def analyze_progress(meetings_text: str) -> tuple[str, list[dict]]:
     return analysis.overview.strip(), items
 
 
+CAREER_SYSTEM_PROMPT = """당신은 인사평가에서 직원의 계획을 보고 커리어 성장 방향을 조언하는 어시스턴트입니다.
+입력으로 그 사람의 직무와, 이번 평가 기간에 작성한 계획(성과/역량) 내용이 주어집니다.
+계획 내용을 바탕으로 이 사람이 그 직무에서 어떤 방향으로 성장하면 좋을지, 강점으로 보이는 부분과
+더 키우면 좋을 역량을 짚어서 2~4문단의 한국어로 조언하세요. 평가하듯 딱딱하게 쓰지 말고 성장을 돕는 코칭 톤으로 쓰세요.
+"""
+
+
+class _TextResult(BaseModel):
+    text: str
+
+
+def analyze_career(job_title: str, plan_text: str) -> str:
+    """직무 + 계획 내용을 보고 커리어 성장 방향을 텍스트로 조언."""
+    if not plan_text.strip():
+        return ""
+
+    client = anthropic.Anthropic()
+    response = client.messages.parse(
+        model=SUMMARY_MODEL,
+        max_tokens=1500,
+        system=CAREER_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": f"[직무] {job_title}\n\n[이번 평가 기간 계획]\n{plan_text}",
+        }],
+        output_format=_TextResult,
+    )
+    return response.parsed_output.text.strip()
+
+
+GROWTH_SYSTEM_PROMPT = """당신은 인사평가에서 직원의 계획 대비 실적을 분석하는 어시스턴트입니다.
+입력으로 그 사람의 직무, 이번 기간 계획, 이번 기간 실적이 주어집니다.
+
+다음 두 가지를 작성하세요.
+1. analysis: 계획 대비 실적을 보고 이 사람이 그 직무에 얼마나 잘 맞게 업무를 수행했는지,
+   이전 대비 어떻게 성장했는지 2~4문단으로 분석 (코칭 톤, 너무 박하거나 후하지 않게 균형있게).
+2. competencies: 그 직무 종사자에게 일반적으로 중요한 역량 5~7개를 당신의 지식을 바탕으로 선정하고,
+   이번 실적 내용을 근거로 각 역량을 0~100점으로 추정 평가하세요 (같은 직무의 평균적인 숙련자를 50~60점 기준으로 상대 비교).
+   axis는 역량 이름(짧게), score는 0~100 정수.
+"""
+
+
+class _CompetencyAxis(BaseModel):
+    axis: str
+    score: int
+
+
+class _GrowthAnalysis(BaseModel):
+    analysis: str
+    competencies: List[_CompetencyAxis]
+
+
+def analyze_growth(job_title: str, plan_text: str, actual_text: str) -> tuple[str, list[dict]]:
+    """직무 + 계획 + 실적을 보고 성장/직무적합도 분석과 역량 레이더 데이터를 생성."""
+    if not actual_text.strip():
+        return "", []
+
+    client = anthropic.Anthropic()
+    response = client.messages.parse(
+        model=SUMMARY_MODEL,
+        max_tokens=2000,
+        system=GROWTH_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": f"[직무] {job_title}\n\n[이번 기간 계획]\n{plan_text}\n\n[이번 기간 실적]\n{actual_text}",
+        }],
+        output_format=_GrowthAnalysis,
+    )
+    parsed = response.parsed_output
+    competencies = [
+        {"axis": c.axis.strip(), "score": max(0, min(100, c.score))}
+        for c in parsed.competencies if c.axis.strip()
+    ]
+    return parsed.analysis.strip(), competencies
+
+
+ONE_ON_ONE_SYSTEM_PROMPT = """당신은 인사평가 담당자를 도와 평가자-피평가자 1on1 면담 녹음을 검수하는 어시스턴트입니다.
+입력은 1on1 면담을 음성인식(STT)한 텍스트입니다(화자 구분 없음, 인식 오류 있을 수 있음).
+
+이 면담이 평가 면담으로서 제대로 이루어졌는지, 관리 감독자 관점에서 짧게 평가하세요.
+다음을 포함하세요.
+- 평가자가 피평가자의 실적/계획 내용을 구체적으로 짚어가며 대화했는지
+- 피평가자에게 충분히 설명하고 의견을 들을 기회를 줬는지 (일방적 통보는 아니었는지)
+- 개선점이나 다음 기간 방향에 대한 논의가 있었는지
+- 미흡해 보이는 부분이 있다면 구체적으로 지적
+
+2~4문단의 한국어로, 평가자를 검수하는 관리자에게 보고하듯 작성하세요.
+"""
+
+
+def analyze_one_on_one(transcript: str) -> str:
+    """1on1 면담 녹음 텍스트를 보고 면담 품질을 관리자 관점에서 분석."""
+    if not transcript.strip():
+        return ""
+
+    client = anthropic.Anthropic()
+    response = client.messages.parse(
+        model=SUMMARY_MODEL,
+        max_tokens=1500,
+        system=ONE_ON_ONE_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": f"[1on1 면담 STT 텍스트]\n{transcript}",
+        }],
+        output_format=_TextResult,
+    )
+    return response.parsed_output.text.strip()
+
+
 def summarize_meeting(transcript: str) -> tuple[str, list[dict]]:
     """텍스트를 Claude에 보내 요약 + 할일 목록을 생성."""
     if not transcript.strip():

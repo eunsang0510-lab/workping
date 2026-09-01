@@ -1,0 +1,916 @@
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+from database.connection import get_db, SessionLocal
+from models.company import Company, CompanyMember
+from models.team import Team, TeamMember
+from models.evaluation import EvaluatorAssignment, EvaluationCycle, EvaluationEntry, EvaluationResult, OneOnOneSession
+from routers.deps import get_current_user
+from utils.push import send_push_to_users
+from utils.meeting_ai import transcribe_audio, analyze_career, analyze_growth, analyze_one_on_one
+
+router = APIRouter()
+
+SUPERADMIN_EMAIL = "eunsang0510@gmail.com"
+CATEGORIES = ("performance", "competency")
+
+
+# ── 공통 권한 헬퍼 ─────────────────────────────────────────
+def _get_member(db: Session, uid: str, company_id: str) -> Optional[CompanyMember]:
+    return db.query(CompanyMember).filter(
+        CompanyMember.user_id == uid, CompanyMember.company_id == company_id,
+    ).first()
+
+
+def _require_member(db: Session, uid: str, company_id: str) -> CompanyMember:
+    member = _get_member(db, uid, company_id)
+    if not member:
+        raise HTTPException(status_code=403, detail="해당 회사 소속만 이용할 수 있어요")
+    return member
+
+
+def _require_admin(db: Session, current_user: dict, company_id: str):
+    if current_user.get("email") == SUPERADMIN_EMAIL:
+        return
+    member = _get_member(db, current_user["uid"], company_id)
+    if not member or not member.is_admin:
+        raise HTTPException(status_code=403, detail="관리자만 이용할 수 있어요")
+
+
+def _require_reviewer(db: Session, current_user: dict, entry: EvaluationEntry):
+    if current_user.get("email") == SUPERADMIN_EMAIL or entry.evaluator_id == current_user["uid"]:
+        return
+    member = _get_member(db, current_user["uid"], entry.company_id)
+    if not member or not member.is_admin:
+        raise HTTPException(status_code=403, detail="평가자 또는 관리자만 검토할 수 있어요")
+
+
+def _name_map(db: Session, company_id: str) -> dict:
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    return {m.user_id: (m.user_name or m.user_email) for m in members}
+
+
+# ── 직렬화 ─────────────────────────────────────────────────
+def _serialize_cycle(c: EvaluationCycle) -> dict:
+    return {
+        "id": c.id,
+        "code": c.code,
+        "name": c.name,
+        "plan_start": c.plan_start,
+        "plan_end": c.plan_end,
+        "actual_start": c.actual_start,
+        "actual_end": c.actual_end,
+        "review_start": c.review_start,
+        "review_end": c.review_end,
+        "grade_distribution": c.grade_distribution or [],
+        "status": c.status,
+    }
+
+
+def _serialize_entry(e: EvaluationEntry, names: dict | None = None) -> dict:
+    names = names or {}
+    return {
+        "id": e.id,
+        "cycle_id": e.cycle_id,
+        "user_id": e.user_id,
+        "user_name": names.get(e.user_id, e.user_id),
+        "evaluator_id": e.evaluator_id,
+        "evaluator_name": names.get(e.evaluator_id, e.evaluator_id),
+        "category": e.category,
+        "plan_content": e.plan_content,
+        "plan_status": e.plan_status,
+        "plan_feedback": e.plan_feedback,
+        "plan_submitted_at": e.plan_submitted_at.isoformat() if e.plan_submitted_at else None,
+        "actual_content": e.actual_content,
+        "actual_status": e.actual_status,
+        "actual_feedback": e.actual_feedback,
+        "actual_submitted_at": e.actual_submitted_at.isoformat() if e.actual_submitted_at else None,
+    }
+
+
+# ── 평가 기능 on/off ───────────────────────────────────────
+class ToggleEvaluationRequest(BaseModel):
+    evaluation_enabled: bool
+
+
+@router.put("/toggle/{company_id}")
+def toggle_evaluation(
+    company_id: str, req: ToggleEvaluationRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
+    _require_admin(db, current_user, company_id)
+    company.evaluation_enabled = req.evaluation_enabled
+    company.updated_by = current_user["uid"]
+    db.commit()
+    return {"success": True, "evaluation_enabled": req.evaluation_enabled}
+
+
+# ── 평가자 매핑 설정 ───────────────────────────────────────
+@router.post("/assignments/seed/{company_id}")
+def seed_assignments(
+    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    """조직도(팀장) 기준으로 매핑이 없는 사람만 자동 생성. 이미 있는 매핑은 건드리지 않는다."""
+    _require_admin(db, current_user, company_id)
+
+    teams = db.query(Team).filter(Team.company_id == company_id).all()
+    manager_by_team = {t.id: t.manager_id for t in teams if t.manager_id}
+    if not manager_by_team:
+        return {"success": True, "created": 0}
+
+    memberships = db.query(TeamMember).filter(TeamMember.team_id.in_(manager_by_team.keys())).all()
+    existing = {
+        r.evaluatee_user_id
+        for r in db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
+    }
+
+    created = 0
+    for tm in memberships:
+        if tm.user_id in existing:
+            continue
+        manager_id = manager_by_team.get(tm.team_id)
+        if not manager_id or manager_id == tm.user_id:
+            continue
+        db.add(EvaluatorAssignment(
+            company_id=company_id, evaluatee_user_id=tm.user_id, evaluator_user_id=manager_id,
+            source="auto", created_by=current_user["uid"],
+        ))
+        existing.add(tm.user_id)
+        created += 1
+    db.commit()
+    return {"success": True, "created": created}
+
+
+@router.get("/assignments/{company_id}")
+def list_assignments(
+    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    _require_admin(db, current_user, company_id)
+    rows = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
+    names = _name_map(db, company_id)
+    return {
+        "assignments": [
+            {
+                "id": r.id,
+                "evaluatee_user_id": r.evaluatee_user_id,
+                "evaluatee_name": names.get(r.evaluatee_user_id, r.evaluatee_user_id),
+                "evaluator_user_id": r.evaluator_user_id,
+                "evaluator_name": names.get(r.evaluator_user_id, r.evaluator_user_id),
+                "source": r.source,
+            }
+            for r in rows
+        ]
+    }
+
+
+class AssignmentUpsertRequest(BaseModel):
+    company_id: str
+    evaluatee_user_id: str
+    evaluator_user_id: str
+
+
+@router.put("/assignments")
+def upsert_assignment(
+    req: AssignmentUpsertRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    _require_admin(db, current_user, req.company_id)
+    if req.evaluatee_user_id == req.evaluator_user_id:
+        raise HTTPException(status_code=400, detail="본인을 평가자로 지정할 수 없어요")
+
+    row = db.query(EvaluatorAssignment).filter(
+        EvaluatorAssignment.company_id == req.company_id,
+        EvaluatorAssignment.evaluatee_user_id == req.evaluatee_user_id,
+    ).first()
+    if row:
+        row.evaluator_user_id = req.evaluator_user_id
+        row.source = "manual"
+        row.updated_by = current_user["uid"]
+    else:
+        row = EvaluatorAssignment(
+            company_id=req.company_id, evaluatee_user_id=req.evaluatee_user_id,
+            evaluator_user_id=req.evaluator_user_id, source="manual", created_by=current_user["uid"],
+        )
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"success": True, "id": row.id}
+
+
+@router.delete("/assignments/{assignment_id}")
+def delete_assignment(
+    assignment_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    row = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.id == assignment_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="매핑을 찾을 수 없어요")
+    _require_admin(db, current_user, row.company_id)
+    db.delete(row)
+    db.commit()
+    return {"success": True}
+
+
+# ── 평가 코드(기준정보) ────────────────────────────────────
+class CycleCreateRequest(BaseModel):
+    company_id: str
+    code: str
+    name: str
+
+
+class CycleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    plan_start: Optional[str] = None
+    plan_end: Optional[str] = None
+    actual_start: Optional[str] = None
+    actual_end: Optional[str] = None
+    review_start: Optional[str] = None
+    review_end: Optional[str] = None
+    grade_distribution: Optional[list[dict]] = None
+
+
+@router.post("/cycles")
+def create_cycle(
+    req: CycleCreateRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    _require_admin(db, current_user, req.company_id)
+    if not req.code.strip() or not req.name.strip():
+        raise HTTPException(status_code=400, detail="평가 코드와 이름을 입력해주세요")
+    cycle = EvaluationCycle(
+        company_id=req.company_id, code=req.code.strip(), name=req.name.strip(),
+        created_by=current_user["uid"],
+    )
+    db.add(cycle)
+    db.commit()
+    db.refresh(cycle)
+    return _serialize_cycle(cycle)
+
+
+@router.put("/cycles/{cycle_id}")
+def update_cycle(
+    cycle_id: str, req: CycleUpdateRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    _require_admin(db, current_user, cycle.company_id)
+    if cycle.status != "draft":
+        raise HTTPException(status_code=400, detail="이미 시작된 평가는 기준정보를 수정할 수 없어요")
+
+    if req.name is not None:
+        cycle.name = req.name.strip()
+    for field in ("plan_start", "plan_end", "actual_start", "actual_end", "review_start", "review_end"):
+        val = getattr(req, field)
+        if val is not None:
+            setattr(cycle, field, val)
+    if req.grade_distribution is not None:
+        cycle.grade_distribution = req.grade_distribution
+    cycle.updated_by = current_user["uid"]
+    db.commit()
+    db.refresh(cycle)
+    return _serialize_cycle(cycle)
+
+
+@router.get("/cycles/active/{company_id}")
+def get_active_cycle(
+    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    _require_member(db, current_user["uid"], company_id)
+    cycle = (
+        db.query(EvaluationCycle)
+        .filter(EvaluationCycle.company_id == company_id, EvaluationCycle.status == "active")
+        .order_by(EvaluationCycle.created_at.desc())
+        .first()
+    )
+    return {"cycle": _serialize_cycle(cycle) if cycle else None}
+
+
+@router.get("/cycles/{company_id}")
+def list_cycles(
+    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    _require_admin(db, current_user, company_id)
+    cycles = (
+        db.query(EvaluationCycle)
+        .filter(EvaluationCycle.company_id == company_id)
+        .order_by(EvaluationCycle.created_at.desc())
+        .all()
+    )
+    return {"cycles": [_serialize_cycle(c) for c in cycles]}
+
+
+@router.post("/cycles/{cycle_id}/activate")
+def activate_cycle(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    _require_admin(db, current_user, cycle.company_id)
+    if cycle.status != "draft":
+        raise HTTPException(status_code=400, detail="이미 시작됐거나 종료된 평가예요")
+
+    periods = [cycle.plan_start, cycle.plan_end, cycle.actual_start, cycle.actual_end, cycle.review_start, cycle.review_end]
+    if any(not p for p in periods):
+        raise HTTPException(status_code=400, detail="계획/실적/평가 입력기간을 모두 설정해야 시작할 수 있어요")
+    if not (cycle.plan_start <= cycle.plan_end <= cycle.actual_start <= cycle.actual_end <= cycle.review_start <= cycle.review_end):
+        raise HTTPException(status_code=400, detail="기간 순서가 올바르지 않아요 (계획 → 실적 → 평가 순으로 설정해주세요)")
+
+    dist = cycle.grade_distribution or []
+    if not dist:
+        raise HTTPException(status_code=400, detail="등급별 비율을 설정해야 시작할 수 있어요")
+    total_ratio = sum(g.get("ratio", 0) for g in dist)
+    if abs(total_ratio - 100) > 0.01:
+        raise HTTPException(status_code=400, detail=f"등급별 비율의 합이 100이어야 해요 (현재 {total_ratio})")
+
+    assignments = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == cycle.company_id).all()
+    if not assignments:
+        raise HTTPException(status_code=400, detail="평가자 매핑이 없어요. 먼저 평가자 설정을 완료해주세요")
+
+    created = 0
+    for a in assignments:
+        for category in CATEGORIES:
+            exists = db.query(EvaluationEntry).filter(
+                EvaluationEntry.cycle_id == cycle.id,
+                EvaluationEntry.user_id == a.evaluatee_user_id,
+                EvaluationEntry.category == category,
+            ).first()
+            if exists:
+                continue
+            db.add(EvaluationEntry(
+                cycle_id=cycle.id, company_id=cycle.company_id,
+                user_id=a.evaluatee_user_id, evaluator_id=a.evaluator_user_id, category=category,
+            ))
+            created += 1
+
+    cycle.status = "active"
+    cycle.updated_by = current_user["uid"]
+    db.commit()
+    return {"success": True, "status": "active", "entries_created": created}
+
+
+# ── 계획/실적 작성 (피평가자) ──────────────────────────────
+class EntryContentRequest(BaseModel):
+    content: str
+    submit: bool = False
+
+
+@router.get("/entries/my/{cycle_id}")
+def my_entries(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entries = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == cycle_id, EvaluationEntry.user_id == current_user["uid"],
+    ).all()
+    names = _name_map(db, entries[0].company_id) if entries else {}
+    return {"entries": [_serialize_entry(e, names) for e in entries]}
+
+
+@router.put("/entries/{entry_id}/plan")
+def write_plan(
+    entry_id: str, req: EntryContentRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entry = db.query(EvaluationEntry).filter(EvaluationEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    if entry.user_id != current_user["uid"]:
+        raise HTTPException(status_code=403, detail="본인의 평가만 작성할 수 있어요")
+    if entry.plan_status == "approved":
+        raise HTTPException(status_code=400, detail="이미 승인된 계획이에요")
+
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == entry.cycle_id).first()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    if not cycle or not (cycle.plan_start and cycle.plan_end and cycle.plan_start <= today <= cycle.plan_end):
+        raise HTTPException(status_code=400, detail="계획 입력기간이 아니에요")
+
+    entry.plan_content = req.content
+    entry.plan_status = "submitted" if req.submit else "draft"
+    if req.submit:
+        entry.plan_submitted_at = datetime.utcnow()
+        entry.plan_feedback = None  # 재제출 시 이전 회차 피드백은 정리
+    db.commit()
+
+    if req.submit:
+        try:
+            names = _name_map(db, entry.company_id)
+            send_push_to_users(
+                db, [entry.evaluator_id], title="📝 평가 계획 제출",
+                body=f"{names.get(entry.user_id, entry.user_id)}님이 계획을 제출했어요.",
+                url="/evaluation/review",
+            )
+        except Exception as e:
+            print(f"[write_plan] 알림 전송 실패: {e}")
+
+    return _serialize_entry(entry)
+
+
+@router.put("/entries/{entry_id}/actual")
+def write_actual(
+    entry_id: str, req: EntryContentRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entry = db.query(EvaluationEntry).filter(EvaluationEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    if entry.user_id != current_user["uid"]:
+        raise HTTPException(status_code=403, detail="본인의 평가만 작성할 수 있어요")
+    if entry.plan_status != "approved":
+        raise HTTPException(status_code=400, detail="계획이 먼저 승인돼야 실적을 입력할 수 있어요")
+    if entry.actual_status == "approved":
+        raise HTTPException(status_code=400, detail="이미 승인된 실적이에요")
+
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == entry.cycle_id).first()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    if not cycle or not (cycle.actual_start and cycle.actual_end and cycle.actual_start <= today <= cycle.actual_end):
+        raise HTTPException(status_code=400, detail="실적 입력기간이 아니에요")
+
+    entry.actual_content = req.content
+    entry.actual_status = "submitted" if req.submit else "draft"
+    if req.submit:
+        entry.actual_submitted_at = datetime.utcnow()
+        entry.actual_feedback = None  # 재제출 시 이전 회차 피드백은 정리
+    db.commit()
+
+    if req.submit:
+        try:
+            names = _name_map(db, entry.company_id)
+            send_push_to_users(
+                db, [entry.evaluator_id], title="📝 평가 실적 제출",
+                body=f"{names.get(entry.user_id, entry.user_id)}님이 실적을 제출했어요.",
+                url="/evaluation/review",
+            )
+        except Exception as e:
+            print(f"[write_actual] 알림 전송 실패: {e}")
+
+    return _serialize_entry(entry)
+
+
+# ── 검토/승인 (평가자) ─────────────────────────────────────
+class ReviewRequest(BaseModel):
+    status: str  # approved / feedback
+    feedback: str = ""
+
+
+@router.get("/entries/review/{cycle_id}")
+def review_entries(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entries = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == cycle_id, EvaluationEntry.evaluator_id == current_user["uid"],
+    ).all()
+    names = _name_map(db, entries[0].company_id) if entries else {}
+    return {"entries": [_serialize_entry(e, names) for e in entries]}
+
+
+@router.put("/entries/{entry_id}/plan/review")
+def review_plan(
+    entry_id: str, req: ReviewRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entry = db.query(EvaluationEntry).filter(EvaluationEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    _require_reviewer(db, current_user, entry)
+    if req.status not in ("approved", "feedback"):
+        raise HTTPException(status_code=400, detail="status는 approved 또는 feedback만 가능해요")
+    if entry.plan_status != "submitted":
+        raise HTTPException(status_code=400, detail="제출된 계획만 검토할 수 있어요")
+
+    entry.plan_status = req.status
+    entry.plan_feedback = req.feedback
+    entry.plan_reviewed_at = datetime.utcnow()
+    entry.plan_reviewed_by = current_user["uid"]
+    db.commit()
+
+    status_text = "승인" if req.status == "approved" else "피드백 반영 요청"
+    try:
+        send_push_to_users(
+            db, [entry.user_id], title=f"📋 평가 계획 {status_text}",
+            body=req.feedback or f"계획이 {status_text}됐어요.", url="/evaluation",
+        )
+    except Exception as e:
+        print(f"[review_plan] 알림 전송 실패: {e}")
+
+    return _serialize_entry(entry)
+
+
+@router.put("/entries/{entry_id}/actual/review")
+def review_actual(
+    entry_id: str, req: ReviewRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    entry = db.query(EvaluationEntry).filter(EvaluationEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    _require_reviewer(db, current_user, entry)
+    if req.status not in ("approved", "feedback"):
+        raise HTTPException(status_code=400, detail="status는 approved 또는 feedback만 가능해요")
+    if entry.actual_status != "submitted":
+        raise HTTPException(status_code=400, detail="제출된 실적만 검토할 수 있어요")
+
+    entry.actual_status = req.status
+    entry.actual_feedback = req.feedback
+    entry.actual_reviewed_at = datetime.utcnow()
+    entry.actual_reviewed_by = current_user["uid"]
+    db.commit()
+
+    status_text = "승인" if req.status == "approved" else "피드백 반영 요청"
+    try:
+        send_push_to_users(
+            db, [entry.user_id], title=f"📋 평가 실적 {status_text}",
+            body=req.feedback or f"실적이 {status_text}됐어요.", url="/evaluation",
+        )
+    except Exception as e:
+        print(f"[review_actual] 알림 전송 실패: {e}")
+
+    return _serialize_entry(entry)
+
+
+# ── 등급 부여 ──────────────────────────────────────────────
+@router.get("/results/{cycle_id}")
+def get_results(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    is_privileged = current_user.get("email") == SUPERADMIN_EMAIL
+    if not is_privileged:
+        member = _get_member(db, current_user["uid"], cycle.company_id)
+        is_privileged = bool(member and member.is_admin)
+
+    entries_q = db.query(EvaluationEntry).filter(EvaluationEntry.cycle_id == cycle_id)
+    if not is_privileged:
+        entries_q = entries_q.filter(EvaluationEntry.evaluator_id == current_user["uid"])
+    entries = entries_q.all()
+
+    by_user: dict[str, list[EvaluationEntry]] = {}
+    for e in entries:
+        by_user.setdefault(e.user_id, []).append(e)
+
+    results = (
+        db.query(EvaluationResult)
+        .filter(EvaluationResult.cycle_id == cycle_id, EvaluationResult.user_id.in_(by_user.keys()))
+        .all()
+        if by_user else []
+    )
+    result_by_user = {r.user_id: r for r in results}
+
+    dist = cycle.grade_distribution or []
+    pool_size = len(by_user)
+    target_counts = {g["grade"]: round(pool_size * g.get("ratio", 0) / 100) for g in dist}
+    current_counts: dict[str, int] = {}
+    for r in result_by_user.values():
+        if r.grade:
+            current_counts[r.grade] = current_counts.get(r.grade, 0) + 1
+
+    names = _name_map(db, cycle.company_id)
+    people = [
+        {
+            "user_id": uid,
+            "user_name": names.get(uid, uid),
+            "ready": len(es) >= 2 and all(e.actual_status == "approved" for e in es),
+            "score": result_by_user[uid].score if uid in result_by_user else None,
+            "grade": result_by_user[uid].grade if uid in result_by_user else None,
+        }
+        for uid, es in by_user.items()
+    ]
+
+    return {
+        "people": people,
+        "distribution": [
+            {
+                "grade": g["grade"], "ratio": g.get("ratio", 0),
+                "target": target_counts.get(g["grade"], 0), "current": current_counts.get(g["grade"], 0),
+            }
+            for g in dist
+        ],
+    }
+
+
+class GradeRequest(BaseModel):
+    cycle_id: str
+    score: Optional[float] = None
+    grade: str
+
+
+@router.put("/results/{user_id}/grade")
+def set_grade(
+    user_id: str, req: GradeRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == req.cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    entries = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == req.cycle_id, EvaluationEntry.user_id == user_id,
+    ).all()
+    if len(entries) < 2 or not all(e.actual_status == "approved" for e in entries):
+        raise HTTPException(status_code=400, detail="성과/역량 실적이 모두 승인된 후에 등급을 줄 수 있어요")
+
+    evaluator_id = entries[0].evaluator_id
+    if current_user.get("email") != SUPERADMIN_EMAIL and evaluator_id != current_user["uid"]:
+        member = _get_member(db, current_user["uid"], cycle.company_id)
+        if not member or not member.is_admin:
+            raise HTTPException(status_code=403, detail="담당 평가자 또는 관리자만 등급을 줄 수 있어요")
+
+    valid_grades = {g["grade"] for g in (cycle.grade_distribution or [])}
+    if valid_grades and req.grade not in valid_grades:
+        raise HTTPException(status_code=400, detail="유효하지 않은 등급이에요")
+
+    result = db.query(EvaluationResult).filter(
+        EvaluationResult.cycle_id == req.cycle_id, EvaluationResult.user_id == user_id,
+    ).first()
+    if not result:
+        result = EvaluationResult(
+            cycle_id=req.cycle_id, company_id=cycle.company_id, user_id=user_id, evaluator_id=evaluator_id,
+        )
+        db.add(result)
+
+    result.score = req.score
+    result.grade = req.grade
+    result.graded_at = datetime.utcnow()
+    result.graded_by = current_user["uid"]
+    db.commit()
+
+    try:
+        send_push_to_users(
+            db, [user_id], title="⭐ 평가 등급 확정",
+            body=f"{cycle.name} 등급이 확정됐어요.", url="/evaluation",
+        )
+    except Exception as e:
+        print(f"[set_grade] 알림 전송 실패: {e}")
+
+    return {"success": True, "grade": result.grade, "score": result.score}
+
+
+# ══════════════════════════════════════════════════════════
+# Phase 2: AI 분석 (커리어/성장/1on1)
+# ══════════════════════════════════════════════════════════
+
+def _serialize_result(r: Optional[EvaluationResult]) -> dict:
+    if not r:
+        return {
+            "score": None, "grade": None,
+            "ai_career_analysis": None, "ai_career_generated_at": None,
+            "ai_growth_analysis": None, "ai_competencies": [], "ai_growth_generated_at": None,
+        }
+    return {
+        "score": r.score, "grade": r.grade,
+        "ai_career_analysis": r.ai_career_analysis,
+        "ai_career_generated_at": r.ai_career_generated_at.isoformat() if r.ai_career_generated_at else None,
+        "ai_growth_analysis": r.ai_growth_analysis,
+        "ai_competencies": r.ai_competencies or [],
+        "ai_growth_generated_at": r.ai_growth_generated_at.isoformat() if r.ai_growth_generated_at else None,
+    }
+
+
+def _combined_content(entries: list[EvaluationEntry], phase: str) -> str:
+    label = {"performance": "성과평가", "competency": "역량평가"}
+    parts = []
+    for e in sorted(entries, key=lambda x: x.category):
+        content = getattr(e, f"{phase}_content")
+        if content and content.strip():
+            parts.append(f"[{label.get(e.category, e.category)}]\n{content.strip()}")
+    return "\n\n".join(parts)
+
+
+def _get_or_create_result(db: Session, cycle: EvaluationCycle, user_id: str, evaluator_id: str) -> EvaluationResult:
+    result = db.query(EvaluationResult).filter(
+        EvaluationResult.cycle_id == cycle.id, EvaluationResult.user_id == user_id,
+    ).first()
+    if not result:
+        result = EvaluationResult(cycle_id=cycle.id, company_id=cycle.company_id, user_id=user_id, evaluator_id=evaluator_id)
+        db.add(result)
+    return result
+
+
+# ── 직무 입력 (본인) ───────────────────────────────────────
+class JobTitleRequest(BaseModel):
+    company_id: str
+    job_title: str
+
+
+@router.put("/job-title")
+def set_job_title(
+    req: JobTitleRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    member = _require_member(db, current_user["uid"], req.company_id)
+    member.job_title = req.job_title.strip() or None
+    member.updated_by = current_user["uid"]
+    db.commit()
+    return {"success": True, "job_title": member.job_title}
+
+
+# ── 본인 결과(등급/AI분석) 조회 ────────────────────────────
+@router.get("/results/me/{cycle_id}")
+def get_my_result(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    result = db.query(EvaluationResult).filter(
+        EvaluationResult.cycle_id == cycle_id, EvaluationResult.user_id == current_user["uid"],
+    ).first()
+    return _serialize_result(result)
+
+
+# ── AI 커리어 분석 (본인, 계획 기반) ────────────────────────
+@router.post("/results/{cycle_id}/career-analysis")
+def generate_career_analysis(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    member = _get_member(db, current_user["uid"], cycle.company_id)
+    if not member or not member.job_title:
+        raise HTTPException(status_code=400, detail="먼저 직무를 입력해주세요")
+
+    entries = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == cycle_id, EvaluationEntry.user_id == current_user["uid"],
+    ).all()
+    if not entries:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    plan_text = _combined_content(entries, "plan")
+    if not plan_text:
+        raise HTTPException(status_code=400, detail="계획을 먼저 작성해주세요")
+
+    try:
+        analysis = analyze_career(member.job_title, plan_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI 분석에 실패했어요: {e}")
+
+    result = _get_or_create_result(db, cycle, current_user["uid"], entries[0].evaluator_id)
+    result.ai_career_analysis = analysis
+    result.ai_career_generated_at = datetime.utcnow()
+    db.commit()
+    return _serialize_result(result)
+
+
+# ── AI 성장 분석 + 역량 레이더 (본인, 실적 기반) ────────────
+@router.post("/results/{cycle_id}/growth-analysis")
+def generate_growth_analysis(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    member = _get_member(db, current_user["uid"], cycle.company_id)
+    if not member or not member.job_title:
+        raise HTTPException(status_code=400, detail="먼저 직무를 입력해주세요")
+
+    entries = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == cycle_id, EvaluationEntry.user_id == current_user["uid"],
+    ).all()
+    if not entries:
+        raise HTTPException(status_code=404, detail="평가 항목을 찾을 수 없어요")
+    plan_text = _combined_content(entries, "plan")
+    actual_text = _combined_content(entries, "actual")
+    if not actual_text:
+        raise HTTPException(status_code=400, detail="실적을 먼저 작성해주세요")
+
+    try:
+        analysis, competencies = analyze_growth(member.job_title, plan_text, actual_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI 분석에 실패했어요: {e}")
+
+    result = _get_or_create_result(db, cycle, current_user["uid"], entries[0].evaluator_id)
+    result.ai_growth_analysis = analysis
+    result.ai_competencies = competencies
+    result.ai_growth_generated_at = datetime.utcnow()
+    db.commit()
+    return _serialize_result(result)
+
+
+# ── 1on1 면담 녹음/분석 ─────────────────────────────────────
+def _is_one_on_one_viewer(db: Session, current_user: dict, company_id: str, evaluator_id: str) -> bool:
+    """평가관리자(회사 관리자 또는 평가자 소속팀의 상위팀 관리자)만 1on1 분석을 열람할 수 있다."""
+    if current_user.get("email") == SUPERADMIN_EMAIL:
+        return True
+    member = _get_member(db, current_user["uid"], company_id)
+    if member and member.is_admin:
+        return True
+
+    evaluator_team_ids = [
+        row.team_id for row in db.query(TeamMember.team_id).filter(TeamMember.user_id == evaluator_id).all()
+    ]
+    if not evaluator_team_ids:
+        return False
+    parent_team_ids = {
+        t.parent_team_id for t in db.query(Team).filter(Team.id.in_(evaluator_team_ids)).all() if t.parent_team_id
+    }
+    if not parent_team_ids:
+        return False
+    upper_manager = db.query(Team).filter(
+        Team.id.in_(parent_team_ids), Team.manager_id == current_user["uid"],
+    ).first()
+    return upper_manager is not None
+
+
+def _process_one_on_one_background(session_id: str, audio_bytes: bytes, filename: str, content_type: str | None):
+    db = SessionLocal()
+    try:
+        session = db.query(OneOnOneSession).filter(OneOnOneSession.id == session_id).first()
+        if not session:
+            return
+        try:
+            transcript = transcribe_audio(audio_bytes, filename, content_type)
+            if not transcript:
+                raise ValueError("음성에서 텍스트를 인식하지 못했어요")
+            analysis = analyze_one_on_one(transcript)
+
+            session.transcript = transcript
+            session.ai_analysis = analysis
+            session.status = "completed"
+            db.commit()
+        except Exception as e:
+            print(f"[_process_one_on_one_background] 처리 실패: {e}")
+            db.rollback()
+            session.status = "failed"
+            session.error_message = str(e)[:500]
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.post("/one-on-one/upload")
+async def upload_one_on_one(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    cycle_id: str = Form(...),
+    evaluatee_user_id: str = Form(...),
+    duration_seconds: float = Form(0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    entry = db.query(EvaluationEntry).filter(
+        EvaluationEntry.cycle_id == cycle_id, EvaluationEntry.user_id == evaluatee_user_id,
+    ).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="평가 대상을 찾을 수 없어요")
+    if entry.evaluator_id != current_user["uid"]:
+        member = _get_member(db, current_user["uid"], cycle.company_id)
+        if not member or not member.is_admin:
+            raise HTTPException(status_code=403, detail="담당 평가자 또는 관리자만 녹음할 수 있어요")
+
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="녹음 파일이 비어있어요")
+
+    session = OneOnOneSession(
+        cycle_id=cycle_id, company_id=cycle.company_id,
+        evaluator_id=entry.evaluator_id, evaluatee_id=evaluatee_user_id,
+        duration_seconds=duration_seconds or None, status="processing",
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    background_tasks.add_task(
+        _process_one_on_one_background, session.id, audio_bytes, file.filename or "recording.webm", file.content_type,
+    )
+    return {"success": True, "id": session.id, "status": "processing"}
+
+
+@router.get("/one-on-one/{cycle_id}")
+def list_one_on_one(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+
+    sessions = db.query(OneOnOneSession).filter(OneOnOneSession.cycle_id == cycle_id).all()
+    visible = [s for s in sessions if _is_one_on_one_viewer(db, current_user, cycle.company_id, s.evaluator_id)]
+    if not visible and sessions:
+        # 세션은 있지만 열람 권한이 없는 경우와, 세션 자체가 없는 경우를 구분
+        raise HTTPException(status_code=403, detail="평가관리자만 열람할 수 있어요")
+
+    names = _name_map(db, cycle.company_id)
+    return {
+        "sessions": [
+            {
+                "id": s.id,
+                "evaluator_name": names.get(s.evaluator_id, s.evaluator_id),
+                "evaluatee_name": names.get(s.evaluatee_id, s.evaluatee_id),
+                "status": s.status,
+                "ai_analysis": s.ai_analysis,
+                "recorded_at": s.recorded_at.isoformat(),
+                "duration_seconds": s.duration_seconds,
+            }
+            for s in visible
+        ]
+    }
