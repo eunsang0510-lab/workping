@@ -4,6 +4,7 @@ import "./globals.css";
 import Script from "next/script";
 import KeepAlive from "./_keep-alive";
 import PageViewTracker from "./_page-view-tracker";
+import AdAnchor from "@/components/AdAnchor";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -83,6 +84,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <KeepAlive />
         <PageViewTracker />
+        <AdAnchor />
         {children}
       </body>
     </html>

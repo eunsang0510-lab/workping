@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
 import Confirm from "@/components/Confirm";
-import AdAnchor from "@/components/AdAnchor";
 import { API_URL } from "@/lib/api";
 
 const getAuthHeader = async () => {
@@ -379,8 +378,6 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
         </div>
-
-        <AdAnchor />
 
         {canDelete && !editing && (
           <button
