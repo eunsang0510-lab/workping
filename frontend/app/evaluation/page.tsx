@@ -110,7 +110,9 @@ export default function EvaluationPage() {
       const data = await res.json();
       const cid = data.company_id || null;
       setCompanyId(cid);
-      setIsAdmin(!!data.is_admin);
+      // 이 화면은 이미 시스템 관리자만 들어올 수 있으므로(진입 시 checkSystemAdmin으로 가드),
+      // 회사 관리자 여부(CompanyMember.is_admin)와 무관하게 설정 화면 진입 권한을 준다.
+      setIsAdmin(true);
       setIsManager(!!data.is_manager);
       setJobTitle(data.job_title || "");
       setJobTitleDraft(data.job_title || "");

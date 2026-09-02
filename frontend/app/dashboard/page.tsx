@@ -106,7 +106,6 @@ export default function Dashboard() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [leaveEnabled, setLeaveEnabled] = useState(false);
-  const [evaluationEnabled, setEvaluationEnabled] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [currentNoticeIndex, setCurrentNoticeIndex] = useState(0);
@@ -424,9 +423,6 @@ const fetchPlanStatus = async (userId: string) => {
         if (data.leave_enabled) {
           setLeaveEnabled(true);
           checkTodayLeave(userId);
-        }
-        if (data.evaluation_enabled) {
-          setEvaluationEnabled(true);
         }
         if (data.force_password_change) {
           setForcePasswordChange(true);
@@ -1604,7 +1600,7 @@ const markAllRead = async () => {
             </div>
           </div>
         </Link>
-        {evaluationEnabled && isSystemAdmin && (
+        {isSystemAdmin && (
           <Link href="/evaluation">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <span className="text-lg">📊</span>

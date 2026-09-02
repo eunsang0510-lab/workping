@@ -64,7 +64,6 @@ type Tab = "toggle" | "assignments" | "cycles";
 export default function EvaluationSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [tab, setTab] = useState<Tab>("toggle");
   const [enabled, setEnabled] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -101,9 +100,8 @@ export default function EvaluationSettingsPage() {
       const data = await res.json();
       const cid = data.company_id || null;
       setCompanyId(cid);
-      setIsAdmin(!!data.is_admin);
       setEnabled(!!data.evaluation_enabled);
-      if (!cid || !data.is_admin) return;
+      if (!cid) return;
 
       const headers = await getAuthHeader();
       const [membersRes, assignRes, cyclesRes, teamsRes] = await Promise.all([
@@ -332,13 +330,13 @@ export default function EvaluationSettingsPage() {
     return <div className="min-h-screen flex items-center justify-center text-[#6b6b6b] text-sm">불러오는 중...</div>;
   }
 
-  if (!companyId || !isAdmin) {
+  if (!companyId) {
     return (
       <div className="min-h-screen bg-[#fafafa] px-4 py-6">
         <div className="max-w-lg mx-auto">
           <Link href="/evaluation" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-[#6b6b6b] text-sm">
-            관리자만 접근할 수 있어요
+            소속 회사가 있어야 평가 설정을 이용할 수 있어요
           </div>
         </div>
       </div>
