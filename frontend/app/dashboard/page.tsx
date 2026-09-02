@@ -116,6 +116,7 @@ export default function Dashboard() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [isOnLeave, setIsOnLeave] = useState(false);
   const [isManager, setIsManager] = useState(false);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
   const [companyName, setCompanyName] = useState<string | null>(null);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
   const [passwordError, setPasswordError] = useState("");
@@ -430,11 +431,27 @@ const fetchPlanStatus = async (userId: string) => {
         if (data.is_manager) {
           setIsManager(true);
         }
+        if (data.is_manager || data.is_admin) {
+          fetchPendingApprovalCount(data.company_id);
+        }
       }
       return;
     } catch {
       if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
     }
+  }
+};
+
+const fetchPendingApprovalCount = async (companyId: string) => {
+  try {
+    const res = await fetch(`${API_URL}/api/team/pending-count/${companyId}`, {
+      headers: await getAuthHeader(),
+    });
+    if (!res.ok) return; // 팀장/관리자가 아니면 403 — 조용히 무시
+    const data = await res.json();
+    setPendingApprovalCount(data.total || 0);
+  } catch {
+    /* 배지 표시용이라 실패해도 조용히 무시 */
   }
 };
 
@@ -1640,7 +1657,12 @@ const markAllRead = async () => {
         </Link>
         {(isManager || isAdmin) && (
           <Link href="/manager">
-            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="relative bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              {pendingApprovalCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#ef4444] text-white text-[10px] font-bold flex items-center justify-center">
+                  {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
+                </span>
+              )}
               <span className="text-lg">👑</span>
               <div>
                 <div className="text-[#0a0a0a] text-sm font-bold">팀장 권한</div>

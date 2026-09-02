@@ -15,6 +15,17 @@ def get_user_team_id(db: Session, company_id: str, user_id: str) -> str | None:
     return membership[0] if membership else None
 
 
+def get_managed_user_ids(db: Session, company_id: str, manager_uid: str) -> list[str]:
+    """이 사람이 팀장으로 있는 팀들의 팀원 uid 목록 (본인이 관리하는 팀원만 승인/조회 범위를 좁힐 때 사용)."""
+    managed_team_ids = [
+        t.id for t in db.query(Team.id).filter(Team.company_id == company_id, Team.manager_id == manager_uid).all()
+    ]
+    if not managed_team_ids:
+        return []
+    rows = db.query(TeamMember.user_id).filter(TeamMember.team_id.in_(managed_team_ids)).all()
+    return [uid for (uid,) in rows]
+
+
 def get_manager_ids(db: Session, company_id: str, user_id: str) -> list[str]:
     """신청자 팀의 팀장 uid 목록. 팀 없으면 회사 admin."""
     teams = db.query(Team).filter(Team.company_id == company_id).all()

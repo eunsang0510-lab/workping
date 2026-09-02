@@ -4,8 +4,12 @@ from pydantic import BaseModel
 from database.connection import get_db
 from models.team import Team, TeamMember
 from models.company import CompanyMember
+from models.leave import Leave
+from models.business_trip import BusinessTrip
+from models.reclock import ReclockRequest
 from routers.deps import get_current_user
 from utils.admin import is_superadmin_email
+from utils.team import get_managed_user_ids
 from datetime import datetime
 from typing import Optional
 
@@ -258,4 +262,41 @@ def get_my_team(
     return {
         "managed_teams": [{"id": t.id, "name": t.name} for t in managed_teams],
         "member_teams": [{"id": t.id, "name": t.name} for t in member_teams],
+    }
+
+
+# ── 팀장 메뉴 배지용 대기 결재건 수 ────────────────────────
+@router.get("/pending-count/{company_id}")
+def get_pending_count(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """연차/출장/재출근 중 팀장(또는 관리자)의 결재를 기다리는 건수 합계.
+    대시보드의 '팀장 권한' 메뉴 배지에 쓴다 — 목록 전체를 안 받고 개수만 세서 가볍게 유지."""
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"], CompanyMember.company_id == company_id,
+    ).first()
+    if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
+        raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
+
+    is_manager_only = bool(member and member.is_manager and not member.is_admin) and not is_superadmin
+    scope_user_ids = get_managed_user_ids(db, company_id, current_user["uid"]) if is_manager_only else None
+
+    def _count(model, company_col, user_col, statuses):
+        q = db.query(model).filter(company_col == company_id, model.status.in_(statuses))
+        if scope_user_ids is not None:
+            q = q.filter(user_col.in_(scope_user_ids))
+        return q.count()
+
+    leave_count = _count(Leave, Leave.company_id, Leave.user_id, ("pending", "cancel_requested"))
+    trip_count = _count(BusinessTrip, BusinessTrip.company_id, BusinessTrip.user_id, ("pending", "cancel_requested"))
+    reclock_count = _count(ReclockRequest, ReclockRequest.company_id, ReclockRequest.user_id, ("pending",))
+
+    return {
+        "total": leave_count + trip_count + reclock_count,
+        "leave": leave_count,
+        "business_trip": trip_count,
+        "reclock": reclock_count,
     }
