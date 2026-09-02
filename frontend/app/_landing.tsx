@@ -54,6 +54,9 @@ export default function Landing() {
               https://workping-kappa.vercel.app
             </a>
           </p>
+          <p className="text-[#a0a0a0] text-xs mt-1">
+            PC에서도 같은 화면 그대로 접속해서 이용할 수 있어요.
+          </p>
         </div>
         <p className="text-[#a0a0a0] text-xs mt-3">
           🔒 이름 · 이메일만 있으면 돼요. 개인정보 걱정 없이 시작하세요.

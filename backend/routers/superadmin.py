@@ -251,6 +251,8 @@ def create_member(body: MemberCreate, db: Session = Depends(get_db), current_use
         birth_date=body.birth_date or "00000000",
     )
     result = register_member(req, db, current_user)
+    if result.get("success") is False:
+        return {"success": False, "message": result.get("message"), "email": body.user_email}
 
     if body.is_admin:
         member = db.query(CompanyMember).filter(

@@ -211,13 +211,11 @@ def add_member(req: AddMemberRequest, db: Session = Depends(get_db), current_use
         if not requester:
             raise HTTPException(status_code=403, detail="해당 회사의 관리자만 팀원을 추가할 수 있어요")
 
-    existing = db.query(CompanyMember).filter(
-        CompanyMember.company_id == req.company_id,
-        CompanyMember.user_id == req.user_id,
-    ).first()
-
-    if existing:
-        return {"message": "이미 등록된 팀원이에요"}
+    existing_any = db.query(CompanyMember).filter(CompanyMember.user_id == req.user_id).first()
+    if existing_any:
+        if existing_any.company_id == req.company_id:
+            return {"message": "이미 등록된 팀원이에요"}
+        return {"message": "이미 다른 회사에 등록된 계정이에요. 한 계정은 하나의 회사에만 소속될 수 있어요.", "success": False}
 
     member = CompanyMember(
         company_id=req.company_id,
@@ -257,13 +255,16 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
             "limit_exceeded": True,
         }
 
-    existing = db.query(CompanyMember).filter(
-        CompanyMember.company_id == req.company_id,
-        CompanyMember.user_email == req.email,
+    existing_any = db.query(CompanyMember).filter(
+        CompanyMember.user_email == req.email.strip(),
     ).first()
-
-    if existing:
-        return {"message": "이미 등록된 직원이에요", "success": False}
+    if existing_any:
+        if existing_any.company_id == req.company_id:
+            return {"message": "이미 등록된 직원이에요", "success": False}
+        return {
+            "message": "이미 다른 회사에 등록된 이메일이에요. 한 계정은 하나의 회사에만 소속될 수 있어요.",
+            "success": False,
+        }
 
     email_prefix = req.email.strip().split("@")[0]
     initial_password = f"{email_prefix}{req.birth_date.strip()}"
