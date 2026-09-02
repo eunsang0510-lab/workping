@@ -199,7 +199,7 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
-        checkSystemAdmin(user.uid).then(setIsSystemAdmin);
+        checkSystemAdmin(user.email).then(setIsSystemAdmin);
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
         fetchOutingStatus(user.uid);

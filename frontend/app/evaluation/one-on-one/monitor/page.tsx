@@ -34,7 +34,7 @@ export default function OneOnOneMonitorPage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u && (await checkSystemAdmin(u.uid))) init(u.uid);
+      if (u && (await checkSystemAdmin(u.email))) init(u.uid);
       else router.push("/login");
     });
     return () => unsub();

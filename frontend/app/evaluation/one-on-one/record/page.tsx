@@ -53,7 +53,7 @@ function OneOnOneRecordInner() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u && (await checkSystemAdmin(u.uid))) setUser(u);
+      if (u && (await checkSystemAdmin(u.email))) setUser(u);
       else router.push("/login");
     });
     return () => unsub();

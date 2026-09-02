@@ -41,7 +41,7 @@ export default function SystemAdminsPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (!u || !(await checkSystemAdmin(u.uid))) {
+      if (!u || !(await checkSystemAdmin(u.email))) {
         router.push("/login");
         return;
       }

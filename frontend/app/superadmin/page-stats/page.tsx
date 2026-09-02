@@ -57,7 +57,7 @@ export default function PageStatsPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
-      if (!u || !(await checkSystemAdmin(u.uid))) {
+      if (!u || !(await checkSystemAdmin(u.email))) {
         router.push("/login");
         return;
       }

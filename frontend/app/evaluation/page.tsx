@@ -94,7 +94,7 @@ export default function EvaluationPage() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u && (await checkSystemAdmin(u.uid))) {
+      if (u && (await checkSystemAdmin(u.email))) {
         init(u.uid);
       } else {
         router.push("/login");

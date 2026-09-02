@@ -77,10 +77,12 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
     return {"is_admin": member is not None}
 
 
-@router.get("/system-admin-check/{user_id}")
-def check_system_admin(user_id: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    return {"is_system_admin": bool(user and is_superadmin_email(db, user.email))}
+@router.get("/system-admin-check")
+def check_system_admin(email: str, db: Session = Depends(get_db)):
+    """이메일 기준으로 직접 판정한다. user_id로 users 테이블을 거치면
+    이메일/비밀번호 로그인(구글 로그인 아닌 계정)처럼 users 행이 아예
+    없는 계정은 항상 False로 잘못 판정되는 문제가 있었다."""
+    return {"is_system_admin": is_superadmin_email(db, email)}
 
 
 @router.post("/find-email")

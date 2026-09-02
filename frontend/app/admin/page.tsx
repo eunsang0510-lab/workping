@@ -236,7 +236,7 @@ export default function Admin() {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (user) {
       setUser(user);
-      const isSysAdmin = await checkSystemAdmin(user.uid);
+      const isSysAdmin = await checkSystemAdmin(user.email);
       setIsSystemAdmin(isSysAdmin);
       fetchCompanyInfo(user.uid, isSysAdmin);
     } else {
