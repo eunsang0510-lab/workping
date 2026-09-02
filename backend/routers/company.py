@@ -834,9 +834,12 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
 @router.get("/my/{user_id}")
 def get_my_company(user_id: str, db: Session = Depends(get_db)):
     """유저 ID로 소속 회사 정보 반환"""
+    # 한 계정이 여러 회사에 중복 등록된 경우 ORDER BY 없는 .first()는 호출마다
+    # 다른 행을 돌려줄 수 있어(화면 상태가 이유 없이 널뛰는 원인) 항상
+    # "가장 최근에 등록된 소속"으로 고정한다.
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id
-    ).first()
+    ).order_by(CompanyMember.created_at.desc()).first()
 
     if not member:
         return {"company_id": None, "company_name": None}

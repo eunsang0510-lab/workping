@@ -25,6 +25,18 @@ def _get_member(db: Session, uid: str, company_id: str) -> Optional[CompanyMembe
     ).first()
 
 
+def _get_primary_member(db: Session, uid: str) -> Optional[CompanyMember]:
+    """uid만으로 소속 회사를 찾을 때 쓰는 조회. 한 계정이 여러 회사에 중복 등록된 경우
+    ORDER BY 없는 .first()는 호출마다 다른 행을 돌려줄 수 있어(같은 화면에서 값이
+    널뛰는 버그의 원인이었음) 항상 "가장 최근에 등록된 소속"으로 고정한다."""
+    return (
+        db.query(CompanyMember)
+        .filter(CompanyMember.user_id == uid)
+        .order_by(CompanyMember.created_at.desc())
+        .first()
+    )
+
+
 def _require_member(db: Session, uid: str, company_id: str) -> CompanyMember:
     member = _get_member(db, uid, company_id)
     if not member:
@@ -106,7 +118,7 @@ def get_bootstrap(db: Session = Depends(get_db), current_user: dict = Depends(ge
     """/evaluation 메인 화면용. company/my + cycles/active + entries/my + results/me를
     하나로 묶어 화면 진입 시 요청 왕복 수를 4회 → 1회로 줄인다."""
     uid = current_user["uid"]
-    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
 
     cycle_data = None
@@ -142,7 +154,7 @@ def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Dep
     """/evaluation/review 화면용. company/my + cycles/active + entries/review + results를
     하나로 묶어 요청 왕복 수를 4회 → 1회로 줄인다."""
     uid = current_user["uid"]
-    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
 
     cycle_data = None
@@ -168,7 +180,7 @@ def get_bootstrap_settings(db: Session = Depends(get_db), current_user: dict = D
     """/evaluation/settings 화면용. company/my + members + assignments + cycles + teams를
     하나로 묶어 요청 왕복 수를 5회 → 1회로 줄인다."""
     uid = current_user["uid"]
-    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
     if not company_id:
         return {"company_id": None, "evaluation_enabled": False, "members": [], "assignments": [], "cycles": [], "teams": []}
@@ -1049,7 +1061,7 @@ def get_bootstrap_one_on_one(db: Session = Depends(get_db), current_user: dict =
     """/evaluation/one-on-one/monitor 화면용. company/my + cycles/active + one-on-one 목록을
     하나로 묶어 요청 왕복 수를 3회 → 1회로 줄인다."""
     uid = current_user["uid"]
-    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
     if not company_id:
         return {"company_id": None, "sessions": []}

@@ -64,7 +64,7 @@ type Tab = "toggle" | "assignments" | "cycles";
 export default function EvaluationSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("toggle");
+  const [tab, setTab] = useState<Tab>("cycles");
   const [enabled, setEnabled] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -347,9 +347,9 @@ export default function EvaluationSettingsPage() {
 
         <div className="flex gap-2 mb-5">
           {([
-            ["toggle", "활성화"],
-            ["assignments", "평가자 설정"],
             ["cycles", "평가 코드"],
+            ["assignments", "평가자 설정"],
+            ["toggle", "활성화"],
           ] as [Tab, string][]).map(([key, label]) => (
             <button
               key={key}
