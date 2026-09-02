@@ -226,13 +226,6 @@ export default function EvaluationPage() {
 
         {(isAdmin || isManager) && (
           <div className="flex gap-2 mb-5">
-            {isManager && (
-              <Link href="/evaluation/review" className="flex-1">
-                <div className="w-full text-center py-2 rounded-lg border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold">
-                  평가 검토하기
-                </div>
-              </Link>
-            )}
             {isAdmin && (
               <Link href="/evaluation/settings" className="flex-1">
                 <div className="w-full text-center py-2 rounded-lg border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold">
@@ -244,6 +237,13 @@ export default function EvaluationPage() {
               <Link href="/evaluation/one-on-one/monitor" className="flex-1">
                 <div className="w-full text-center py-2 rounded-lg border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold">
                   1on1 모니터링
+                </div>
+              </Link>
+            )}
+            {isManager && (
+              <Link href="/evaluation/review" className="flex-1">
+                <div className="w-full text-center py-2 rounded-lg border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold">
+                  평가 검토하기
                 </div>
               </Link>
             )}
