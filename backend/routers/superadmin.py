@@ -4,10 +4,13 @@ from sqlalchemy import func
 from database.connection import get_db
 from models.company import Company, CompanyMember
 from models.page_view import PageView
+from models.meeting import Meeting, MeetingUsageLog
 from routers.deps import get_current_user, get_superadmin
+from routers.meeting import _serialize_list, _serialize_detail
 from models.system_admin import SystemAdmin
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime, timedelta
 import uuid
 import os
 import firebase_admin
@@ -373,3 +376,111 @@ def reset_user_attendance(user_id: str, db: Session = Depends(get_db), current_u
 
     db.commit()
     return {"message": "초기화 완료"}
+
+
+# ── AI 회의록 이용 현황 (시스템 관리자) ─────────────────────
+@router.get("/meetings/stats")
+def get_meeting_stats(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+    """전체 AI 회의록 이용 현황. 삭제된 회의록도 MeetingUsageLog 기준으로는 카운트에 남는다
+    (평가 화면과 동일하게 '삭제해도 이용 횟수는 복구 안 됨' 정책과 일치)."""
+    now = datetime.utcnow()
+    month_start = datetime(now.year, now.month, 1)
+
+    total_usage = db.query(func.count(MeetingUsageLog.id)).scalar() or 0
+    month_usage = db.query(func.count(MeetingUsageLog.id)).filter(MeetingUsageLog.created_at >= month_start).scalar() or 0
+    unique_users_total = db.query(func.count(func.distinct(MeetingUsageLog.user_id))).scalar() or 0
+    unique_users_month = (
+        db.query(func.count(func.distinct(MeetingUsageLog.user_id)))
+        .filter(MeetingUsageLog.created_at >= month_start)
+        .scalar() or 0
+    )
+
+    meeting_counts = dict(
+        db.query(Meeting.status, func.count(Meeting.id)).group_by(Meeting.status).all()
+    )
+
+    # 최근 6개월 월별 이용 추이
+    six_months_ago = (month_start - timedelta(days=150)).replace(day=1)
+    monthly_rows = (
+        db.query(
+            func.date_trunc("month", MeetingUsageLog.created_at).label("month"),
+            func.count(MeetingUsageLog.id),
+        )
+        .filter(MeetingUsageLog.created_at >= six_months_ago)
+        .group_by("month")
+        .order_by("month")
+        .all()
+    )
+    monthly_trend = [{"month": m.strftime("%Y-%m"), "count": c} for m, c in monthly_rows]
+
+    # 이번 달 이용자 상위 목록
+    top_rows = (
+        db.query(MeetingUsageLog.user_id, func.count(MeetingUsageLog.id).label("cnt"))
+        .filter(MeetingUsageLog.created_at >= month_start)
+        .group_by(MeetingUsageLog.user_id)
+        .order_by(func.count(MeetingUsageLog.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_user_ids = [uid for uid, _ in top_rows]
+    members_by_uid = {
+        m.user_id: m for m in db.query(CompanyMember).filter(CompanyMember.user_id.in_(top_user_ids)).all()
+    } if top_user_ids else {}
+    top_users = [
+        {
+            "user_id": uid,
+            "user_name": members_by_uid[uid].user_name if uid in members_by_uid else None,
+            "user_email": members_by_uid[uid].user_email if uid in members_by_uid else None,
+            "company_name": None,
+            "count": cnt,
+        }
+        for uid, cnt in top_rows
+    ]
+    company_ids = {m.company_id for m in members_by_uid.values() if m.company_id}
+    company_name_by_id = {
+        c.id: c.name for c in db.query(Company).filter(Company.id.in_(company_ids)).all()
+    } if company_ids else {}
+    for row in top_users:
+        member = members_by_uid.get(row["user_id"])
+        if member and member.company_id:
+            row["company_name"] = company_name_by_id.get(member.company_id)
+
+    return {
+        "total_usage": total_usage,
+        "month_usage": month_usage,
+        "unique_users_total": unique_users_total,
+        "unique_users_month": unique_users_month,
+        "meeting_counts_by_status": meeting_counts,
+        "monthly_trend": monthly_trend,
+        "top_users_this_month": top_users,
+    }
+
+
+@router.get("/meetings")
+def list_all_meetings(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+    """전체 회사의 회의록 목록 (회사명 포함)."""
+    meetings = db.query(Meeting).order_by(Meeting.recorded_at.desc()).all()
+    company_ids = {m.company_id for m in meetings if m.company_id}
+    company_name_by_id = {
+        c.id: c.name for c in db.query(Company).filter(Company.id.in_(company_ids)).all()
+    } if company_ids else {}
+
+    result = []
+    for m in meetings:
+        row = _serialize_list(m)
+        row["company_id"] = m.company_id
+        row["company_name"] = company_name_by_id.get(m.company_id) if m.company_id else "개인(비소속)"
+        result.append(row)
+    return {"meetings": result}
+
+
+@router.get("/meetings/{meeting_id}")
+def get_meeting_detail_admin(meeting_id: str, db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+    """회의록 상세(원문/요약/할일 포함) — 시스템 관리자는 회사 소속 여부와 무관하게 열람 가능."""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="회의록을 찾을 수 없어요")
+    detail = _serialize_detail(meeting)
+    company = db.query(Company).filter(Company.id == meeting.company_id).first() if meeting.company_id else None
+    detail["company_name"] = company.name if company else "개인(비소속)"
+    return detail

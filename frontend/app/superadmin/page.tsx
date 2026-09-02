@@ -537,6 +537,9 @@ export default function SuperAdmin() {
           <Link href="/superadmin/admins" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
             관리자 계정
           </Link>
+          <Link href="/superadmin/meetings" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
+            AI 회의록
+          </Link>
           <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
             <span className="text-[#4a4de0] text-xs font-bold">SUPERADMIN</span>
           </div>

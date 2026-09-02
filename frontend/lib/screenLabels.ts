@@ -24,6 +24,7 @@ export const SCREEN_LABELS: Record<string, string> = {
   "/superadmin/access-logs": "접속 로그",
   "/superadmin/page-stats": "화면별 Hit 요약",
   "/superadmin/admins": "시스템 관리자 계정",
+  "/superadmin/meetings": "AI 회의록 이용 현황",
   "/pricing": "요금제",
   "/delete-account": "계정 삭제",
   "/privacy": "개인정보처리방침",
