@@ -29,6 +29,7 @@ class CompanyMember(Base):
     birth_date     = Column(String, nullable=True)
     phone          = Column(String, nullable=True)
     job_title      = Column(String, nullable=True)  # 본인이 직접 입력하는 직무 (평가 AI 분석용)
+    org_level      = Column(Integer, nullable=True)  # 조직도 레벨 (숫자, 평가자 엑셀 업로드로 설정)
     is_admin              = Column(Boolean, default=False)
     is_manager            = Column(Boolean, default=False)
     force_password_change = Column(Boolean, default=False)

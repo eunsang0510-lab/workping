@@ -202,7 +202,8 @@ def get_bootstrap_settings(db: Session = Depends(get_db), current_user: dict = D
         "company_id": company_id,
         "evaluation_enabled": bool(company and company.evaluation_enabled),
         "members": [
-            {"user_id": m.user_id, "user_name": m.user_name, "user_email": m.user_email} for m in members
+            {"user_id": m.user_id, "user_name": m.user_name, "user_email": m.user_email, "org_level": m.org_level}
+            for m in members
         ],
         "assignments": [
             {
@@ -349,6 +350,167 @@ def delete_assignment(
     db.delete(row)
     db.commit()
     return {"success": True}
+
+
+# ── 평가자 설정 엑셀 양식 다운로드 / 업로드 ──────────────────
+ASSIGNMENT_TEMPLATE_HEADERS = ["이름", "이메일", "레벨(숫자)", "상위자(평가자) 이메일"]
+ASSIGNMENT_TEMPLATE_MAX_ROWS = 2000
+ASSIGNMENT_TEMPLATE_MAX_BYTES = 3 * 1024 * 1024  # 3MB
+
+
+@router.get("/assignments/template/{company_id}")
+def download_assignment_template(
+    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    """조직도 계층 구조(이름/이메일/레벨/상위자 이메일)를 입력할 엑셀 양식을 내려준다.
+    기존 직원들의 이름/이메일은 미리 채워주고, 레벨/상위자 이메일만 입력하면 되게 한다."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from fastapi.responses import StreamingResponse
+    from urllib.parse import quote
+    import io
+
+    _require_admin(db, current_user, company_id)
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).order_by(CompanyMember.created_at).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "평가자 설정"
+
+    header_fill = PatternFill(start_color="6366F1", end_color="6366F1", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    for col, header in enumerate(ASSIGNMENT_TEMPLATE_HEADERS, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[cell.column_letter].width = 24
+
+    for row_idx, m in enumerate(members, 2):
+        ws.cell(row=row_idx, column=1, value=m.user_name or "")
+        ws.cell(row=row_idx, column=2, value=m.user_email)
+        ws.cell(row=row_idx, column=3, value=m.org_level)
+
+    # 레벨 칸에 정수만 입력하도록 유효성 검사(엑셀 자체 UX 가드 — 서버 검증을 대체하진 않음)
+    if members:
+        dv = DataValidation(type="whole", operator="greaterThan", formula1="0", showErrorMessage=True)
+        dv.error = "레벨은 1 이상의 숫자로 입력해주세요"
+        ws.add_data_validation(dv)
+        dv.add(f"C2:C{len(members) + 1}")
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    filename = "평가자_설정_양식.xlsx"
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+@router.post("/assignments/upload/{company_id}")
+async def upload_assignments(
+    company_id: str, file: UploadFile = File(...),
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    """엑셀 양식을 업로드해 조직도(레벨/상위자)를 일괄 반영한다. 기존 평가자 매핑은 전체 교체된다.
+    업로드 취약점 방어: 확장자/크기/실제 파일 시그니처(zip)/헤더 형식을 모두 검사하고,
+    우리 양식과 다르면 이유를 명시해 거부한다."""
+    import openpyxl
+    import io
+
+    _require_admin(db, current_user, company_id)
+
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="지정된 엑셀 양식(.xlsx)만 업로드할 수 있어요")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="파일이 비어있어요")
+    if len(content) > ASSIGNMENT_TEMPLATE_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="파일이 너무 커요 (최대 3MB)")
+    # xlsx는 ZIP 컨테이너 포맷 — 실제 파일 시그니처를 확인해 확장자만 바꾼 다른 파일을 차단한다.
+    if content[:2] != b"PK":
+        raise HTTPException(status_code=400, detail="올바른 엑셀(.xlsx) 파일이 아니에요")
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="파일을 열 수 없어요. 지정된 양식 파일이 맞는지 확인해주세요")
+
+    ws = wb.active
+    header_row = [str(c.value).strip() if c.value is not None else "" for c in next(ws.iter_rows(min_row=1, max_row=1))]
+    if header_row[: len(ASSIGNMENT_TEMPLATE_HEADERS)] != ASSIGNMENT_TEMPLATE_HEADERS:
+        raise HTTPException(
+            status_code=400,
+            detail="지정된 양식이 아니에요. '템플릿 다운로드'로 받은 파일을 그대로 사용해주세요",
+        )
+
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    member_by_email = {m.user_email.strip().lower(): m for m in members if m.user_email}
+
+    rows = []
+    for i, raw in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if i - 1 > ASSIGNMENT_TEMPLATE_MAX_ROWS:
+            raise HTTPException(status_code=400, detail=f"한 번에 최대 {ASSIGNMENT_TEMPLATE_MAX_ROWS}행까지 처리할 수 있어요")
+        name, email, level, manager_email = (raw + (None, None, None, None))[:4]
+        if not email or not str(email).strip():
+            continue
+        rows.append({
+            "row": i, "name": str(name).strip() if name else "",
+            "email": str(email).strip().lower(),
+            "level": level, "manager_email": str(manager_email).strip().lower() if manager_email else None,
+        })
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="입력된 데이터가 없어요")
+
+    errors = []
+    for r in rows:
+        if r["email"] not in member_by_email:
+            errors.append(f"{r['row']}행: '{r['email']}'은 이 회사에 등록된 이메일이 아니에요")
+            continue
+        if r["level"] is not None:
+            try:
+                lvl = int(r["level"])
+                if lvl <= 0:
+                    raise ValueError()
+            except (TypeError, ValueError):
+                errors.append(f"{r['row']}행: 레벨은 1 이상의 숫자여야 해요 (입력값: {r['level']!r})")
+        if r["manager_email"]:
+            if r["manager_email"] == r["email"]:
+                errors.append(f"{r['row']}행: 본인을 상위자로 지정할 수 없어요")
+            elif r["manager_email"] not in member_by_email:
+                errors.append(f"{r['row']}행: 상위자 이메일 '{r['manager_email']}'을 찾을 수 없어요")
+
+    if errors:
+        raise HTTPException(status_code=400, detail={"message": "업로드 내용에 오류가 있어요", "errors": errors[:50]})
+
+    # 검증 통과 → org_level 반영 + 평가자 매핑 전체 교체
+    for r in rows:
+        member = member_by_email[r["email"]]
+        member.org_level = int(r["level"]) if r["level"] is not None else None
+        member.updated_by = current_user["uid"]
+
+    db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).delete()
+    created = 0
+    for r in rows:
+        if not r["manager_email"]:
+            continue
+        evaluatee = member_by_email[r["email"]]
+        evaluator = member_by_email[r["manager_email"]]
+        db.add(EvaluatorAssignment(
+            company_id=company_id, evaluatee_user_id=evaluatee.user_id,
+            evaluator_user_id=evaluator.user_id, source="excel", created_by=current_user["uid"],
+        ))
+        created += 1
+
+    db.commit()
+    return {"success": True, "processed": len(rows), "assignments_created": created}
 
 
 # ── 평가 코드(기준정보) ────────────────────────────────────

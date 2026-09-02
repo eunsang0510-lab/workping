@@ -196,6 +196,7 @@ def run_migrations():
         # 평가(인사평가) 기능 — 기존 테이블에 추가된 컬럼
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS evaluation_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS job_title VARCHAR",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS org_level INTEGER",
         "ALTER TABLE teams ADD COLUMN IF NOT EXISTS parent_team_id VARCHAR",
         # 평가/회의록 관련 신규 테이블 RLS (Supabase 권고 — 앱은 postgres 소유자 role로 연결해 영향 없음)
         "ALTER TABLE evaluator_assignments ENABLE ROW LEVEL SECURITY",

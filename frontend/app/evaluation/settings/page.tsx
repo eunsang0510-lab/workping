@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ interface Member {
   user_id: string;
   user_name: string | null;
   user_email: string;
+  org_level: number | null;
 }
 
 interface Assignment {
@@ -75,6 +76,8 @@ export default function EvaluationSettingsPage() {
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[] | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const router = useRouter();
 
@@ -96,24 +99,28 @@ export default function EvaluationSettingsPage() {
 
   const init = async (uid: string) => {
     try {
-      // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/settings)으로 모아 받는다.
-      // 이전엔 company/my → members + assignments + cycles + teams 순으로 요청이
-      // 5번 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
-      const res = await fetch(`${API_URL}/api/evaluation/bootstrap/settings`, { headers: await getAuthHeader() });
-      const data = await res.json();
-      setCompanyId(data.company_id || null);
-      setEnabled(!!data.evaluation_enabled);
-      setMembers(data.members || []);
-      setAssignments(data.assignments || []);
-      setTeams(data.teams || []);
-      const cycleList: Cycle[] = data.cycles || [];
-      setCycles(cycleList);
-      if (cycleList[0]) {
-        setSelectedCycleId(cycleList[0].id);
-        setCycleForm(cycleList[0]);
-      }
+      await reloadAll();
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/settings)으로 모아 받는다.
+  // 이전엔 company/my → members + assignments + cycles + teams 순으로 요청이
+  // 5번 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+  const reloadAll = async () => {
+    const res = await fetch(`${API_URL}/api/evaluation/bootstrap/settings`, { headers: await getAuthHeader() });
+    const data = await res.json();
+    setCompanyId(data.company_id || null);
+    setEnabled(!!data.evaluation_enabled);
+    setMembers(data.members || []);
+    setAssignments(data.assignments || []);
+    setTeams(data.teams || []);
+    const cycleList: Cycle[] = data.cycles || [];
+    setCycles(cycleList);
+    if (cycleList[0]) {
+      setSelectedCycleId(cycleList[0].id);
+      setCycleForm(cycleList[0]);
     }
   };
 
@@ -163,6 +170,60 @@ export default function EvaluationSettingsPage() {
       await reloadAssignments(companyId);
     } catch (e) {
       showToast(e instanceof Error ? e.message : "자동 설정에 실패했어요", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    if (!companyId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/evaluation/assignments/template/${companyId}`, {
+        headers: await getAuthHeader(),
+      });
+      if (!res.ok) throw new Error("템플릿 다운로드에 실패했어요");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "평가자_설정_양식.xlsx";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "템플릿 다운로드에 실패했어요", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadAssignmentsExcel = async (file: File) => {
+    if (!companyId) return;
+    setBusy(true);
+    setUploadErrors(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/evaluation/assignments/upload/${companyId}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const detail = data.detail;
+        if (typeof detail === "object" && Array.isArray(detail?.errors)) {
+          setUploadErrors(detail.errors);
+          showToast(detail.message || "업로드 내용에 오류가 있어요", "error");
+          return;
+        }
+        throw new Error(typeof detail === "string" ? detail : "업로드에 실패했어요");
+      }
+      showToast(`${data.processed}명 반영, 평가자 매핑 ${data.assignments_created}건 생성했어요`, "success");
+      await reloadAll();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "업로드에 실패했어요", "error");
     } finally {
       setBusy(false);
     }
@@ -390,6 +451,48 @@ export default function EvaluationSettingsPage() {
 
         {tab === "assignments" && (
           <div className="flex flex-col gap-4">
+            <div className="bg-white border border-[#e5e5e5] rounded-xl p-3">
+              <div className="text-[#0a0a0a] text-xs font-bold mb-1">엑셀로 일괄 설정</div>
+              <div className="text-[#b0b0b0] text-[10px] mb-2">
+                템플릿을 받아 이름/이메일 옆에 레벨과 상위자(평가자) 이메일을 채운 뒤 업로드하면,
+                기존 평가자 설정을 전체 교체해요.
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={downloadTemplate}
+                  disabled={busy}
+                  className="flex-1 py-2 rounded-lg border border-[#e5e5e5] text-[#6b6b6b] text-xs font-bold disabled:opacity-50"
+                >
+                  템플릿 다운로드
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy}
+                  className="flex-1 py-2 rounded-lg bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-xs font-bold disabled:opacity-50"
+                >
+                  엑셀 업로드
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(ev) => {
+                    const file = ev.target.files?.[0];
+                    if (file) uploadAssignmentsExcel(file);
+                    ev.target.value = "";
+                  }}
+                />
+              </div>
+              {uploadErrors && (
+                <div className="mt-2 bg-[#fef2f2] border border-[#fecaca] rounded-lg p-2 max-h-40 overflow-y-auto">
+                  {uploadErrors.map((err, i) => (
+                    <div key={i} className="text-[#ef4444] text-[10px] leading-relaxed">{err}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={seedAssignments}
               disabled={busy}
@@ -406,10 +509,15 @@ export default function EvaluationSettingsPage() {
                   return (
                     <div key={m.user_id} className="bg-white border border-[#e5e5e5] rounded-xl p-3 flex items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-[#0a0a0a] text-xs font-bold truncate">{m.user_name || m.user_email}</div>
+                        <div className="text-[#0a0a0a] text-xs font-bold truncate">
+                          {m.user_name || m.user_email}
+                          {m.org_level != null && (
+                            <span className="ml-1.5 text-[#4a4de0] font-normal">Lv.{m.org_level}</span>
+                          )}
+                        </div>
                         {assignment && (
                           <div className="text-[#b0b0b0] text-[10px]">
-                            {assignment.source === "auto" ? "자동" : "수동"} 설정됨
+                            {{ auto: "자동", excel: "엑셀", manual: "수동" }[assignment.source] || "수동"} 설정됨
                           </div>
                         )}
                       </div>
