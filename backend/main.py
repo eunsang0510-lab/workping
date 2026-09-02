@@ -26,6 +26,7 @@ from models import outing as outing_model
 from models import meeting as meeting_model
 from models import meeting_progress as meeting_progress_model
 from models import evaluation as evaluation_model
+from models import system_admin as system_admin_model
 import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -202,8 +203,10 @@ def run_migrations():
         "ALTER TABLE evaluation_entries ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE evaluation_results ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE one_on_one_sessions ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE meetings ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE meeting_progress ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE meeting_usage_logs ENABLE ROW LEVEL SECURITY",
+        "ALTER TABLE system_admins ENABLE ROW LEVEL SECURITY",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
@@ -214,6 +217,26 @@ def run_migrations():
             print(f"Migration skipped: {e}")
 
 run_migrations()
+
+
+def seed_system_admins():
+    """system_admins 테이블이 비어있으면 부트스트랩 관리자 계정을 시드한다.
+    이후로는 /superadmin 화면에서 시스템 관리자가 직접 추가/삭제한다."""
+    from models.system_admin import SystemAdmin
+    from utils.admin import BOOTSTRAP_SUPERADMIN_EMAILS
+
+    db = SessionLocal()
+    try:
+        if db.query(SystemAdmin).count() == 0:
+            for email in BOOTSTRAP_SUPERADMIN_EMAILS:
+                db.add(SystemAdmin(email=email.strip().lower(), created_by="bootstrap"))
+            db.commit()
+    except Exception as e:
+        print(f"System admin seed skipped: {e}")
+    finally:
+        db.close()
+
+seed_system_admins()
 
 
 async def _keep_db_alive():

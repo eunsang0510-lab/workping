@@ -8,6 +8,7 @@ import Link from "next/link";
 import Toast from "@/components/Toast";
 import RadarChart from "@/components/RadarChart";
 import { API_URL } from "@/lib/api";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 const getAuthHeader = async () => {
   const token = await auth.currentUser?.getIdToken();
@@ -92,8 +93,8 @@ export default function EvaluationPage() {
   }, []);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (u && u.email === "eunsang0510@gmail.com") {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u && (await checkSystemAdmin(u.uid))) {
         init(u.uid);
       } else {
         router.push("/login");

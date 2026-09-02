@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from database.connection import get_db
 from models.subscription import Subscription, Payment
 from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 from datetime import datetime, timedelta
 import requests
 import os
@@ -60,8 +61,7 @@ def get_subscription(
     current_user: dict = Depends(get_current_user)
 ):
     from models.company import CompanyMember
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     membership = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,

@@ -14,10 +14,9 @@ from routers.deps import get_current_user
 from utils.workday import get_work_day_range, today_kst_str
 from utils.push import send_push_to_users
 from utils.team import get_managers_and_admins
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
-
-SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
 
 
 class ReclockStartRequest(BaseModel):
@@ -174,7 +173,7 @@ def get_company_reclock(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -215,7 +214,7 @@ def approve_reclock(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == reclock.company_id,
     ).first()
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 승인할 수 있어요")
 

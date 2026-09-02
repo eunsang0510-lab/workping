@@ -5,11 +5,10 @@ from database.connection import get_db
 from models.user import User
 from models.company import CompanyMember
 from limiter import limiter
+from utils.admin import is_superadmin_email
 import os
 
 router = APIRouter()
-
-SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com"
 
 
 class UpsertUserRequest(BaseModel):
@@ -53,7 +52,7 @@ def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
         .first()
     )
 
-    is_admin = member is not None or req.email == SYSTEM_ADMIN_EMAIL
+    is_admin = member is not None or is_superadmin_email(db, req.email)
 
     return {
         "success": True,
@@ -67,7 +66,7 @@ def upsert_user(req: UpsertUserRequest, db: Session = Depends(get_db)):
 @router.get("/admin-check/{user_id}")
 def check_admin(user_id: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
-    if user and user.email == SYSTEM_ADMIN_EMAIL:
+    if user and is_superadmin_email(db, user.email):
         return {"is_admin": True}
 
     member = (
@@ -76,6 +75,12 @@ def check_admin(user_id: str, db: Session = Depends(get_db)):
         .first()
     )
     return {"is_admin": member is not None}
+
+
+@router.get("/system-admin-check/{user_id}")
+def check_system_admin(user_id: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    return {"is_system_admin": bool(user and is_superadmin_email(db, user.email))}
 
 
 @router.post("/find-email")

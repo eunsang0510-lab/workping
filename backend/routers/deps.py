@@ -1,11 +1,11 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 from firebase_admin import auth as firebase_auth
-import os
+from database.connection import get_db
+from utils.admin import is_superadmin_email
 
 security = HTTPBearer(auto_error=False)
-
-SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
@@ -28,8 +28,11 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-async def get_superadmin(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user.get("email") != SUPERADMIN_EMAIL:
+async def get_superadmin(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not is_superadmin_email(db, current_user.get("email")):
         raise HTTPException(status_code=403, detail="슈퍼어드민만 접근 가능해요")
     return current_user
 

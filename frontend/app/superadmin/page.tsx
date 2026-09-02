@@ -9,7 +9,7 @@ import Toast from "@/components/Toast";
 import Confirm from "@/components/Confirm";
 
 import { API_URL, yearOptions } from "@/lib/api";
-const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 interface Company {
   id: string;
@@ -109,8 +109,8 @@ export default function SuperAdmin() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (!u || u.email !== SYSTEM_ADMIN_EMAIL) {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (!u || !(await checkSystemAdmin(u.uid))) {
         router.push("/login");
         return;
       }
@@ -533,6 +533,9 @@ export default function SuperAdmin() {
           </Link>
           <Link href="/superadmin/page-stats" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
             Hit 요약
+          </Link>
+          <Link href="/superadmin/admins" className="text-[#5b5ef4] text-xs font-bold hover:text-[#4a4de0] transition-colors">
+            관리자 계정
           </Link>
           <div className="bg-[#f0f0ff] border border-[#c7c8fa] rounded-lg px-2 py-1">
             <span className="text-[#4a4de0] text-xs font-bold">SUPERADMIN</span>

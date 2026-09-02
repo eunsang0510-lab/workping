@@ -10,6 +10,7 @@ from typing import Optional
 from models.team import Team, TeamMember
 from utils.push import send_push_to_users
 from utils.team import get_manager_ids as _get_manager_ids
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
 
@@ -223,7 +224,7 @@ def get_company_leaves(
         CompanyMember.company_id == company_id,
     ).first()
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
@@ -328,7 +329,7 @@ def approve_leave(
         CompanyMember.company_id == leave.company_id,
     ).first()
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 승인할 수 있어요")
@@ -425,7 +426,7 @@ def set_leave_balance(
         CompanyMember.is_admin == True,
     ).first()
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 연차를 부여할 수 있어요")
@@ -468,7 +469,7 @@ def get_company_balances(
         CompanyMember.company_id == company_id,
     ).first()
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not is_superadmin and (not member or (not member.is_admin and not member.is_manager)):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
@@ -531,7 +532,7 @@ def toggle_leave(
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
@@ -560,7 +561,7 @@ def toggle_leave_approval(
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -588,7 +589,7 @@ def set_manager(
     if not target:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없어요")
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],

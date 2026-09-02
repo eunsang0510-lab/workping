@@ -6,6 +6,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 const getAuthHeader = async () => {
   const token = await auth.currentUser?.getIdToken();
@@ -32,8 +33,8 @@ export default function OneOnOneMonitorPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (u && u.email === "eunsang0510@gmail.com") init(u.uid);
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u && (await checkSystemAdmin(u.uid))) init(u.uid);
       else router.push("/login");
     });
     return () => unsub();

@@ -10,10 +10,9 @@ from datetime import datetime
 from typing import Optional
 from utils.push import send_push_to_users
 from utils.team import get_manager_ids as _get_manager_ids_for_trip
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
-
-SUPERADMIN = "eunsang0510@gmail.com"
 
 
 class TripApplyRequest(BaseModel):
@@ -33,7 +32,7 @@ class TripApproveRequest(BaseModel):
 
 def _is_approver(db: Session, uid: str, company_id: str, email: str) -> bool:
     """팀장 또는 관리자 여부 확인"""
-    if email == SUPERADMIN:
+    if is_superadmin_email(db, email):
         return True
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == uid,
@@ -137,7 +136,7 @@ def get_company_trips(
     if not _is_approver(db, uid, company_id, email):
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 조회할 수 있어요")
 
-    if email == SUPERADMIN:
+    if is_superadmin_email(db, email):
         trips = db.query(BusinessTrip).filter(BusinessTrip.company_id == company_id).order_by(BusinessTrip.created_at.desc()).all()
     else:
         managed = _managed_user_ids(db, uid, company_id)
@@ -174,7 +173,7 @@ def approve_trip(
         raise HTTPException(status_code=403, detail="팀장 또는 관리자만 승인할 수 있어요")
 
     # 팀장은 자신의 팀원만 승인 가능
-    if email != SUPERADMIN:
+    if not is_superadmin_email(db, email):
         managed = _managed_user_ids(db, uid, trip.company_id)
         if managed is not None and trip.user_id not in managed:
             raise HTTPException(status_code=403, detail="담당 팀원의 신청만 승인할 수 있어요")

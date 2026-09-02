@@ -5,6 +5,7 @@ from database.connection import get_db
 from models.company import Company, CompanyMember
 from models.page_view import PageView
 from routers.deps import get_current_user, get_superadmin
+from models.system_admin import SystemAdmin
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -13,6 +14,58 @@ import firebase_admin
 from firebase_admin import auth as firebase_auth
 
 router = APIRouter()
+
+
+# ── 시스템 관리자 목록 관리 ─────────────────────────────
+class SystemAdminCreate(BaseModel):
+    email: str
+
+
+@router.get("/admins")
+def list_system_admins(db: Session = Depends(get_db), _: dict = Depends(get_superadmin)):
+    admins = db.query(SystemAdmin).order_by(SystemAdmin.created_at).all()
+    return {
+        "admins": [
+            {"id": a.id, "email": a.email, "created_at": a.created_at, "created_by": a.created_by}
+            for a in admins
+        ]
+    }
+
+
+@router.post("/admins")
+def add_system_admin(
+    body: SystemAdminCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_superadmin)
+):
+    email = body.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="이메일을 입력해주세요")
+    if db.query(SystemAdmin).filter(SystemAdmin.email == email).first():
+        raise HTTPException(status_code=400, detail="이미 시스템 관리자예요")
+
+    admin = SystemAdmin(email=email, created_by=current_user.get("uid"))
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return {"success": True, "id": admin.id, "email": admin.email}
+
+
+@router.delete("/admins/{admin_id}")
+def remove_system_admin(
+    admin_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_superadmin)
+):
+    admin = db.query(SystemAdmin).filter(SystemAdmin.id == admin_id).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="시스템 관리자를 찾을 수 없어요")
+
+    total = db.query(SystemAdmin).count()
+    if total <= 1:
+        raise HTTPException(status_code=400, detail="마지막 남은 시스템 관리자는 삭제할 수 없어요")
+    if admin.email == (current_user.get("email") or "").strip().lower():
+        raise HTTPException(status_code=400, detail="본인 계정은 삭제할 수 없어요")
+
+    db.delete(admin)
+    db.commit()
+    return {"success": True}
 
 
 class AdminPasswordResetRequest(BaseModel):

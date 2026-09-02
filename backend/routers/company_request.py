@@ -6,6 +6,7 @@ from models.company_request import CompanyRegistrationRequest
 from models.company import Company, CompanyMember
 from models.user import User
 from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 import uuid
 import os
 import requests
@@ -14,7 +15,6 @@ from firebase_admin import credentials, auth as firebase_auth
 import json
 
 router = APIRouter()
-SUPERADMIN = "eunsang0510@gmail.com"
 
 if not firebase_admin._apps:
     try:
@@ -188,7 +188,7 @@ def list_requests(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    if current_user.get("email") != SUPERADMIN:
+    if not is_superadmin_email(db, current_user.get("email")):
         raise HTTPException(status_code=403, detail="슈퍼어드민만 접근할 수 있어요")
 
     regs = db.query(CompanyRegistrationRequest).order_by(

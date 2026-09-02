@@ -10,7 +10,7 @@ import Toast from "@/components/Toast";
 import Confirm from "@/components/Confirm";
 
 import { API_URL, yearOptions } from "@/lib/api";
-const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 interface Member {
   user_id: string;
@@ -148,6 +148,7 @@ interface Team {
 
 export default function Admin() {
   const [user, setUser] = useState<User | null>(null);
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<Company | null>(null);
   const [attendance, setAttendance] = useState<Member[]>([]);
@@ -232,10 +233,12 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, (user) => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (user) {
       setUser(user);
-      fetchCompanyInfo(user.uid, user.email ?? undefined); // ✅ email 전달
+      const isSysAdmin = await checkSystemAdmin(user.uid);
+      setIsSystemAdmin(isSysAdmin);
+      fetchCompanyInfo(user.uid, isSysAdmin);
     } else {
       router.push("/login");
     }
@@ -244,12 +247,10 @@ export default function Admin() {
   return () => unsubscribe();
 }, [router]);
 
-  const isSystemAdmin = user?.email === SYSTEM_ADMIN_EMAIL;
-
-  const fetchCompanyInfo = async (userId: string, email?: string) => {
+  const fetchCompanyInfo = async (userId: string, isSysAdmin: boolean) => {
   try {
     // ✅ 시스템 관리자면 회사 목록 불러오고 선택 대기
-    if (email === SYSTEM_ADMIN_EMAIL) {
+    if (isSysAdmin) {
   const token = await auth.currentUser?.getIdToken();  // ✅ 토큰 추가
   const res = await fetch(`${API_URL}/api/company/list`, {
     headers: { "Authorization": `Bearer ${token}` },   // ✅ 헤더 추가
@@ -262,7 +263,7 @@ export default function Admin() {
     const res = await fetch(`${API_URL}/api/company/info/${userId}`);
     const data = await res.json();
     if (data.company) {
-      loadCompanyData(data.company);
+      loadCompanyData(data.company, false);
     } else {
       setShowCreateForm(true);
     }
@@ -283,16 +284,14 @@ const fetchSubscription = async (companyId: string) => {
 };
 
 // ✅ 회사 데이터 로드 공통 함수로 분리
-const loadCompanyData = (companyData: Company) => {
+const loadCompanyData = (companyData: Company, isSysAdmin: boolean) => {
   setCompany(companyData);
   fetchAttendance(companyData.id);
   fetchLocations(companyData.id);
   // 슈퍼어드민은 company_id를, 일반 관리자는 user_id를 전달
-  const noticeParam = auth.currentUser?.email === SYSTEM_ADMIN_EMAIL
-    ? companyData.id
-    : auth.currentUser!.uid;
+  const noticeParam = isSysAdmin ? companyData.id : auth.currentUser!.uid;
   fetchCompanyNotices(noticeParam);
-  fetchLeaveData(companyData.id, auth.currentUser!.uid);
+  fetchLeaveData(companyData.id, auth.currentUser!.uid, isSysAdmin);
   fetchTeams(companyData.id);
   fetchSubscription(companyData.id);
   fetchBusinessTrips(companyData.id);
@@ -526,13 +525,13 @@ const handleRemoveTeamMember = async (teamId: string, userId: string, userName: 
   });
 };
 
- const fetchLeaveData = async (companyId: string, userId: string) => {
+ const fetchLeaveData = async (companyId: string, userId: string, isSysAdmin: boolean) => {
   try {
     const token = await auth.currentUser?.getIdToken();
     const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
 
     // ✅ 시스템 관리자는 company API에서 직접 leave_enabled 읽기
-    if (user?.email === SYSTEM_ADMIN_EMAIL) {
+    if (isSysAdmin) {
       const companyRes = await fetch(`${API_URL}/api/company/list`, {
         headers,
       });
@@ -596,7 +595,7 @@ useEffect(() => {
         data.status === "approved" && status === "rejected" ? "취소 반려 완료!" :
         status === "approved" ? "승인 완료!" : "반려 완료!";
       showToast(msg, "success");
-      fetchLeaveData(company!.id, user!.uid);
+      fetchLeaveData(company!.id, user!.uid, isSystemAdmin);
     } else {
       showToast(data.detail || "처리 실패", "error");
     }
@@ -723,7 +722,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
       const data = await res.json();
       if (data.success) {
         showToast(isManager ? "팀장 지정 완료!" : "팀장 해제 완료!", "success");
-        fetchLeaveData(company!.id, user!.uid);
+        fetchLeaveData(company!.id, user!.uid, isSystemAdmin);
       }
     } catch {
       showToast("처리 실패", "error");
@@ -741,7 +740,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
         body: JSON.stringify({ name: companyName, admin_id: user?.uid })
       });
       setShowCreateForm(false);
-      fetchCompanyInfo(user!.uid);
+      fetchCompanyInfo(user!.uid, isSystemAdmin);
     } catch {
       showToast("회사 생성 실패", "error");
     }
@@ -1189,7 +1188,7 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                   key={c.id}
                   onClick={() => {
                     setShowCompanySelector(false);
-                    loadCompanyData(c);
+                    loadCompanyData(c, true);
                   }}
                   className="bg-[#f8f8f8] border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 cursor-pointer transition-all"
                 >

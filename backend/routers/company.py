@@ -7,6 +7,7 @@ from models.company import Company, CompanyMember, CompanyLocation
 from models.attendance import Attendance
 from models.subscription import Subscription
 from datetime import datetime
+from utils.admin import is_superadmin_email
 
 FREE_MEMBER_LIMIT = 100
 import requests
@@ -120,8 +121,7 @@ class UpdateMemberRequest(BaseModel):
 
 @router.post("/create")
 def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not is_superadmin and current_user["uid"] != req.admin_id:
         raise HTTPException(status_code=403, detail="본인 계정으로만 회사를 생성할 수 있어요")
 
@@ -145,7 +145,7 @@ def create_company(req: CreateCompanyRequest, db: Session = Depends(get_db), cur
 
 @router.get("/list")
 def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not is_superadmin:
         raise HTTPException(status_code=403, detail="시스템 관리자만 조회할 수 있어요")
 
@@ -201,8 +201,7 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
 
 @router.post("/members/add")
 def add_member(req: AddMemberRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not is_superadmin:
         requester = db.query(CompanyMember).filter(
             CompanyMember.user_id == current_user["uid"],
@@ -237,8 +236,7 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
     # is_admin 권한 상승 방지: 관리자 또는 슈퍼어드민만 is_admin=True 허용
     is_admin_to_set = req.is_admin
     if req.is_admin:
-        SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-        is_superadmin = isinstance(current_user, dict) and current_user.get("email") == SUPERADMIN_EMAIL
+        is_superadmin = isinstance(current_user, dict) and is_superadmin_email(db, current_user.get("email"))
         if not is_superadmin:
             requester = db.query(CompanyMember).filter(
                 CompanyMember.user_id == (current_user.get("uid") if isinstance(current_user, dict) else None),
@@ -283,11 +281,10 @@ def register_member(req: RegisterMemberRequest, db: Session = Depends(get_db), c
 
     print(f"🔍 Firebase 계정 생성 응답: {response.status_code} {response.text}")
 
-    SYSTEM_ADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
     if response.status_code != 200:
         error = response.json().get("error", {}).get("message", "알 수 없는 오류")
         if "EMAIL_EXISTS" in error:
-            if req.email.strip().lower() == SYSTEM_ADMIN_EMAIL.lower():
+            if is_superadmin_email(db, req.email):
                 raise HTTPException(status_code=400, detail="시스템 관리자 계정은 직원으로 등록할 수 없어요")
             fb_user = firebase_auth.get_user_by_email(req.email.strip())
             uid = fb_user.uid
@@ -370,8 +367,7 @@ def bulk_register_members(req: BulkRegisterRequest, db: Session = Depends(get_db
 
 @router.get("/members/{company_id}")
 def get_members(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     membership = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -403,8 +399,7 @@ def search_company(name: str, db: Session = Depends(get_db)):
 def get_company_attendance(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     from routers.attendance import get_work_day_range
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -481,8 +476,7 @@ def get_company_attendance(company_id: str, db: Session = Depends(get_db), curre
 
 @router.get("/locations/{company_id}")
 def get_locations(company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     membership = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -535,8 +529,7 @@ def geocode_address(address: str):
 
 @router.post("/locations/add")
 def add_location(req: LocationCreateRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == req.company_id,
@@ -566,8 +559,7 @@ def delete_location(location_id: str, db: Session = Depends(get_db), current_use
     if not location:
         raise HTTPException(status_code=404, detail="위치를 찾을 수 없습니다")
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == location.company_id,
@@ -644,8 +636,7 @@ def validate_checkin_location(req: CheckInValidateRequest, db: Session = Depends
 
 @router.get("/members/{user_id}/home-location")
 def get_home_location(user_id: str, company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     is_self = current_user["uid"] == user_id
     is_admin = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
@@ -718,8 +709,7 @@ def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db), cur
     import random
     import string
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     member = db.query(CompanyMember).filter(
         CompanyMember.user_email == req.email
@@ -815,8 +805,7 @@ def update_member(member_id: str, req: UpdateMemberRequest, db: Session = Depend
     if not member:
         raise HTTPException(status_code=404, detail="직원을 찾을 수 없습니다")
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == member.company_id,
@@ -902,7 +891,7 @@ def delete_member_by_user_id(
         CompanyMember.company_id == member.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not requester and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있어요")
@@ -935,7 +924,7 @@ def get_member_deletion_logs(
 ):
     from models.member_deletion_log import MemberDeletionLog
 
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,

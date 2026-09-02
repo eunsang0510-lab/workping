@@ -11,10 +11,10 @@ from models.evaluation import EvaluatorAssignment, EvaluationCycle, EvaluationEn
 from routers.deps import get_current_user
 from utils.push import send_push_to_users
 from utils.meeting_ai import transcribe_audio, analyze_career, analyze_growth, analyze_one_on_one
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
 
-SUPERADMIN_EMAIL = "eunsang0510@gmail.com"
 CATEGORIES = ("performance", "competency")
 
 
@@ -33,7 +33,7 @@ def _require_member(db: Session, uid: str, company_id: str) -> CompanyMember:
 
 
 def _require_admin(db: Session, current_user: dict, company_id: str):
-    if current_user.get("email") == SUPERADMIN_EMAIL:
+    if is_superadmin_email(db, current_user.get("email")):
         return
     member = _get_member(db, current_user["uid"], company_id)
     if not member or not member.is_admin:
@@ -41,7 +41,7 @@ def _require_admin(db: Session, current_user: dict, company_id: str):
 
 
 def _require_reviewer(db: Session, current_user: dict, entry: EvaluationEntry):
-    if current_user.get("email") == SUPERADMIN_EMAIL or entry.evaluator_id == current_user["uid"]:
+    if is_superadmin_email(db, current_user.get("email")) or entry.evaluator_id == current_user["uid"]:
         return
     member = _get_member(db, current_user["uid"], entry.company_id)
     if not member or not member.is_admin:
@@ -541,7 +541,7 @@ def get_results(
     if not cycle:
         raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
 
-    is_privileged = current_user.get("email") == SUPERADMIN_EMAIL
+    is_privileged = is_superadmin_email(db, current_user.get("email"))
     if not is_privileged:
         member = _get_member(db, current_user["uid"], cycle.company_id)
         is_privileged = bool(member and member.is_admin)
@@ -617,7 +617,7 @@ def set_grade(
         raise HTTPException(status_code=400, detail="성과/역량 실적이 모두 승인된 후에 등급을 줄 수 있어요")
 
     evaluator_id = entries[0].evaluator_id
-    if current_user.get("email") != SUPERADMIN_EMAIL and evaluator_id != current_user["uid"]:
+    if not is_superadmin_email(db, current_user.get("email")) and evaluator_id != current_user["uid"]:
         member = _get_member(db, current_user["uid"], cycle.company_id)
         if not member or not member.is_admin:
             raise HTTPException(status_code=403, detail="담당 평가자 또는 관리자만 등급을 줄 수 있어요")
@@ -794,7 +794,7 @@ def generate_growth_analysis(
 # ── 1on1 면담 녹음/분석 ─────────────────────────────────────
 def _is_one_on_one_viewer(db: Session, current_user: dict, company_id: str, evaluator_id: str) -> bool:
     """평가관리자(회사 관리자 또는 평가자 소속팀의 상위팀 관리자)만 1on1 분석을 열람할 수 있다."""
-    if current_user.get("email") == SUPERADMIN_EMAIL:
+    if is_superadmin_email(db, current_user.get("email")):
         return True
     member = _get_member(db, current_user["uid"], company_id)
     if member and member.is_admin:

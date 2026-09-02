@@ -12,6 +12,7 @@ from routers.deps import get_current_user
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from utils.workday import get_work_day_range, kst_date_str as _kst_date_str, today_kst_str
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
 
@@ -95,8 +96,7 @@ def get_company_attendance(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -383,8 +383,7 @@ def get_company_report(
 ):
     import calendar as _cal
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -503,8 +502,7 @@ def reset_attendance(
 ):
     from models.attendance_reset_log import AttendanceResetLog
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     target_member = db.query(CompanyMember).filter(CompanyMember.user_id == user_id).first()
 
@@ -566,8 +564,7 @@ def get_reset_logs(
 ):
     from models.attendance_reset_log import AttendanceResetLog
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,
@@ -624,8 +621,7 @@ def export_attendance_excel(
     if not company:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다")
 
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     requester = db.query(CompanyMember).filter(
         CompanyMember.user_id == current_user["uid"],
         CompanyMember.company_id == company_id,

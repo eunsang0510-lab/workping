@@ -9,6 +9,7 @@ import Link from "next/link";
 import Toast from "@/components/Toast";
 
 import { API_URL } from "@/lib/api";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 const getAuthHeader = async () => {
   if (!auth.currentUser) {
@@ -86,6 +87,7 @@ interface OutingSession {
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
@@ -197,6 +199,7 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
+        checkSystemAdmin(user.uid).then(setIsSystemAdmin);
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
         fetchOutingStatus(user.uid);
@@ -1601,7 +1604,7 @@ const markAllRead = async () => {
             </div>
           </div>
         </Link>
-        {evaluationEnabled && user?.email === "eunsang0510@gmail.com" && (
+        {evaluationEnabled && isSystemAdmin && (
           <Link href="/evaluation">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <span className="text-lg">📊</span>
@@ -1661,7 +1664,7 @@ const markAllRead = async () => {
             </div>
           </Link>
         )}
-        {user?.email === "eunsang0510@gmail.com" && (
+        {isSystemAdmin && (
           <Link href="/superadmin">
             <div className="bg-[#f0f0ff] border border-[#c7c8fa] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer">
               <span className="text-lg">⚙️</span>

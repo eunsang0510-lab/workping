@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import { SCREEN_LABELS, screenLabel } from "@/lib/screenLabels";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
-const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
 const PAGE_SIZE = 50;
 
 interface LogRow {
@@ -65,8 +65,8 @@ export default function AccessLogsPage() {
   }, [path, startDate, endDate]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
-      if (!u || u.email !== SYSTEM_ADMIN_EMAIL) {
+    const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
+      if (!u || !(await checkSystemAdmin(u.uid))) {
         router.push("/login");
         return;
       }

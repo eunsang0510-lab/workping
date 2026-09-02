@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 
 from database.connection import get_db
 from models.page_view import PageView
-from routers.deps import get_current_user, SUPERADMIN_EMAIL
+from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 
 router = APIRouter()
 
@@ -19,8 +20,8 @@ class PageViewLogRequest(BaseModel):
     user_email: Optional[str] = None
 
 
-def _require_superadmin(current_user: dict):
-    if current_user.get("email") != SUPERADMIN_EMAIL:
+def _require_superadmin(db: Session, current_user: dict):
+    if not is_superadmin_email(db, current_user.get("email")):
         raise HTTPException(status_code=403, detail="시스템 관리자만 접근할 수 있어요")
 
 
@@ -55,7 +56,7 @@ def list_page_views(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    _require_superadmin(current_user)
+    _require_superadmin(db, current_user)
     start, end = _parse_range(start_date, end_date)
 
     q = db.query(PageView).filter(PageView.created_at >= start, PageView.created_at < end)
@@ -97,7 +98,7 @@ def summarize_page_views(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    _require_superadmin(current_user)
+    _require_superadmin(db, current_user)
     start, end = _parse_range(start_date, end_date)
 
     period_col = func.date_trunc(group_by, PageView.created_at)

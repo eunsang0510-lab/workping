@@ -5,7 +5,8 @@ from typing import List, Optional
 from database.connection import get_db
 from models.permission import CustomPermission, UserPermission
 from models.company import CompanyMember
-from routers.deps import get_current_user, SUPERADMIN_EMAIL
+from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 import uuid
 
 router = APIRouter()
@@ -22,7 +23,7 @@ AVAILABLE_SCREENS = [
 
 
 def _require_admin(user_id: str, company_id: str, email: str, db: Session):
-    if email == SUPERADMIN_EMAIL:
+    if is_superadmin_email(db, email):
         return
     member = db.query(CompanyMember).filter(
         CompanyMember.user_id == user_id,

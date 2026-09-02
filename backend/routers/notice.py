@@ -5,6 +5,7 @@ from database.connection import get_db
 from models.notice import Notice, NoticeRead
 from models.company import CompanyMember
 from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 from datetime import datetime
 from typing import Optional
 
@@ -22,9 +23,7 @@ def create_notice(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    import os
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if req.notice_type == "system":
         if not is_superadmin:
@@ -117,9 +116,7 @@ def get_notice_list(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    import os
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     if not is_superadmin and current_user["uid"] != user_id:
         raise HTTPException(status_code=403, detail="본인의 공지만 조회할 수 있어요")
@@ -165,9 +162,7 @@ def delete_notice(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    import os
-    SUPERADMIN_EMAIL = os.getenv("SYSTEM_ADMIN_EMAIL", "eunsang0510@gmail.com")
-    is_superadmin = current_user.get("email") == SUPERADMIN_EMAIL
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
 
     notice = db.query(Notice).filter(Notice.id == notice_id).first()
     if not notice:

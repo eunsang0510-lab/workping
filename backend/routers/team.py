@@ -5,6 +5,7 @@ from database.connection import get_db
 from models.team import Team, TeamMember
 from models.company import CompanyMember
 from routers.deps import get_current_user
+from utils.admin import is_superadmin_email
 from datetime import datetime
 from typing import Optional
 
@@ -39,7 +40,7 @@ def create_team(
         CompanyMember.company_id == req.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 팀을 생성할 수 있어요")
 
@@ -114,7 +115,7 @@ def update_team(
         CompanyMember.company_id == team.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 수정할 수 있어요")
 
@@ -158,7 +159,7 @@ def delete_team(
         CompanyMember.company_id == team.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 삭제할 수 있어요")
 
@@ -185,7 +186,7 @@ def add_team_member(
         CompanyMember.company_id == team.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 팀원을 추가할 수 있어요")
 
@@ -224,7 +225,7 @@ def remove_team_member(
         CompanyMember.company_id == team.company_id,
         CompanyMember.is_admin == True,
     ).first()
-    is_superadmin = current_user.get("email") == "eunsang0510@gmail.com"
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
     if not member and not is_superadmin:
         raise HTTPException(status_code=403, detail="관리자만 팀원을 제거할 수 있어요")
 

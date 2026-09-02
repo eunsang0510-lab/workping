@@ -7,8 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import { screenLabel } from "@/lib/screenLabels";
-
-const SYSTEM_ADMIN_EMAIL = "eunsang0510@gmail.com";
+import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 type GroupBy = "day" | "week" | "month";
 
@@ -57,8 +56,8 @@ export default function PageStatsPage() {
   }, [startDate, endDate, groupBy]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
-      if (!u || u.email !== SYSTEM_ADMIN_EMAIL) {
+    const unsubscribe = onAuthStateChanged(auth, async (u: User | null) => {
+      if (!u || !(await checkSystemAdmin(u.uid))) {
         router.push("/login");
         return;
       }
