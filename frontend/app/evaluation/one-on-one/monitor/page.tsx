@@ -43,24 +43,17 @@ export default function OneOnOneMonitorPage() {
 
   const init = async (uid: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/my/${uid}`);
-      const data = await res.json();
-      const cid = data.company_id || null;
-      setCompanyId(cid);
-      if (!cid) return;
-
-      const headers = await getAuthHeader();
-      const cycleRes = await fetch(`${API_URL}/api/evaluation/cycles/active/${cid}`, { headers });
-      const cycleData = await cycleRes.json();
-      if (!cycleData.cycle) return;
-
-      const sessionsRes = await fetch(`${API_URL}/api/evaluation/one-on-one/${cycleData.cycle.id}`, { headers });
-      if (sessionsRes.status === 403) {
+      // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/one-on-one)으로 모아 받는다.
+      // 이전엔 company/my → cycles/active → one-on-one 목록 순으로 요청이 3번
+      // 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+      const res = await fetch(`${API_URL}/api/evaluation/bootstrap/one-on-one`, { headers: await getAuthHeader() });
+      if (res.status === 403) {
         setForbidden(true);
         return;
       }
-      const sessionsData = await sessionsRes.json();
-      setSessions(sessionsData.sessions || []);
+      const data = await res.json();
+      setCompanyId(data.company_id || null);
+      setSessions(data.sessions || []);
     } finally {
       setLoading(false);
     }

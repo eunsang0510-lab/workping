@@ -106,44 +106,35 @@ export default function EvaluationPage() {
 
   const init = async (uid: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/my/${uid}`);
-      const data = await res.json();
-      const cid = data.company_id || null;
-      setCompanyId(cid);
-      // 이 화면은 이미 시스템 관리자만 들어올 수 있으므로(진입 시 checkSystemAdmin으로 가드),
-      // 회사 관리자 여부(CompanyMember.is_admin)와 무관하게 설정 화면 진입 권한을 준다.
-      setIsAdmin(true);
-      setIsManager(!!data.is_manager);
-      setJobTitle(data.job_title || "");
-      setJobTitleDraft(data.job_title || "");
-      if (!cid) return;
-      await loadCycleAndEntries(cid);
+      await loadBootstrap();
     } finally {
       setLoading(false);
     }
   };
 
-  const loadCycleAndEntries = async (cid: string) => {
+  // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap)으로 모아 받는다.
+  // 이전엔 company/my → cycles/active → entries/my + results/me 순으로 요청이 3~4번
+  // 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+  const loadBootstrap = async () => {
     const headers = await getAuthHeader();
-    const cycleRes = await fetch(`${API_URL}/api/evaluation/cycles/active/${cid}`, { headers });
-    const cycleData = await cycleRes.json();
-    const activeCycle: Cycle | null = cycleData.cycle;
-    setCycle(activeCycle);
-    if (!activeCycle) return;
-
-    const [entriesRes, resultRes] = await Promise.all([
-      fetch(`${API_URL}/api/evaluation/entries/my/${activeCycle.id}`, { headers }),
-      fetch(`${API_URL}/api/evaluation/results/me/${activeCycle.id}`, { headers }),
-    ]);
-    const entriesData = await entriesRes.json();
-    const list: Entry[] = entriesData.entries || [];
+    const res = await fetch(`${API_URL}/api/evaluation/bootstrap`, { headers });
+    const data = await res.json();
+    setCompanyId(data.company_id || null);
+    // 이 화면은 이미 시스템 관리자만 들어올 수 있으므로(진입 시 checkSystemAdmin으로 가드),
+    // 회사 관리자 여부(CompanyMember.is_admin)와 무관하게 설정 화면 진입 권한을 준다.
+    setIsAdmin(true);
+    setIsManager(!!data.is_manager);
+    setJobTitle(data.job_title || "");
+    setJobTitleDraft(data.job_title || "");
+    setCycle(data.cycle || null);
+    const list: Entry[] = data.entries || [];
     setEntries(list);
     setDrafts(
       Object.fromEntries(
         list.map((e) => [e.id, { plan: e.plan_content || "", actual: e.actual_content || "" }])
       )
     );
-    setMyResult(await resultRes.json());
+    setMyResult(data.result || null);
   };
 
   const saveJobTitle = async () => {
@@ -197,7 +188,7 @@ export default function EvaluationPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "저장에 실패했어요");
       showToast(submit ? "제출했어요" : "임시저장했어요", "success");
-      if (companyId) await loadCycleAndEntries(companyId);
+      await loadBootstrap();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "저장에 실패했어요", "error");
     } finally {
@@ -229,7 +220,7 @@ export default function EvaluationPage() {
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-5">
           <Link href="/dashboard" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
-          <span className="text-[#0a0a0a] text-base font-bold">평가</span>
+          <span className="text-[#0a0a0a] text-base font-bold">AI 평가</span>
           <div className="w-8" />
         </div>
 

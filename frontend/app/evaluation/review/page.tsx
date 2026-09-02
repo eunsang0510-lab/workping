@@ -84,37 +84,27 @@ export default function EvaluationReviewPage() {
 
   const init = async (uid: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/my/${uid}`);
-      const data = await res.json();
-      const cid = data.company_id || null;
-      setCompanyId(cid);
-      if (!cid) return;
-      await loadAll(cid);
+      await loadAll();
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAll = async (cid: string) => {
+  // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/review)으로 모아 받는다.
+  // 이전엔 company/my → cycles/active → entries/review + results 순으로 요청이
+  // 3~4번 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+  const loadAll = async () => {
     const headers = await getAuthHeader();
-    const cycleRes = await fetch(`${API_URL}/api/evaluation/cycles/active/${cid}`, { headers });
-    const cycleData = await cycleRes.json();
-    const activeCycle: Cycle | null = cycleData.cycle;
-    setCycle(activeCycle);
-    if (!activeCycle) return;
-
-    const [entriesRes, resultsRes] = await Promise.all([
-      fetch(`${API_URL}/api/evaluation/entries/review/${activeCycle.id}`, { headers }),
-      fetch(`${API_URL}/api/evaluation/results/${activeCycle.id}`, { headers }),
-    ]);
-    const entriesData = await entriesRes.json();
-    const resultsData = await resultsRes.json();
-    setEntries(entriesData.entries || []);
-    setPeople(resultsData.people || []);
-    setDistribution(resultsData.distribution || []);
+    const res = await fetch(`${API_URL}/api/evaluation/bootstrap/review`, { headers });
+    const data = await res.json();
+    setCompanyId(data.company_id || null);
+    setCycle(data.cycle || null);
+    setEntries(data.entries || []);
+    setPeople(data.people || []);
+    setDistribution(data.distribution || []);
     setGradeDraft(
       Object.fromEntries(
-        (resultsData.people || []).map((p: Person) => [
+        (data.people || []).map((p: Person) => [
           p.user_id,
           { score: p.score != null ? String(p.score) : "", grade: p.grade || "" },
         ])
@@ -134,7 +124,7 @@ export default function EvaluationReviewPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "처리에 실패했어요");
       showToast(status === "approved" ? "승인했어요" : "피드백을 보냈어요", "success");
-      if (companyId) await loadAll(companyId);
+      await loadAll();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "처리에 실패했어요", "error");
     } finally {
@@ -163,7 +153,7 @@ export default function EvaluationReviewPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "등급 부여에 실패했어요");
       showToast("등급을 저장했어요", "success");
-      if (companyId) await loadAll(companyId);
+      await loadAll();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "등급 부여에 실패했어요", "error");
     } finally {
@@ -200,7 +190,7 @@ export default function EvaluationReviewPage() {
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-5">
           <Link href="/evaluation" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
-          <span className="text-[#0a0a0a] text-base font-bold">평가 검토</span>
+          <span className="text-[#0a0a0a] text-base font-bold">AI 평가 검토</span>
           <div className="w-8" />
         </div>
 

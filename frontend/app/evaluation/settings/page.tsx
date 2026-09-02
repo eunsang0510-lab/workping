@@ -96,28 +96,17 @@ export default function EvaluationSettingsPage() {
 
   const init = async (uid: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/company/my/${uid}`);
+      // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/settings)으로 모아 받는다.
+      // 이전엔 company/my → members + assignments + cycles + teams 순으로 요청이
+      // 5번 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+      const res = await fetch(`${API_URL}/api/evaluation/bootstrap/settings`, { headers: await getAuthHeader() });
       const data = await res.json();
-      const cid = data.company_id || null;
-      setCompanyId(cid);
+      setCompanyId(data.company_id || null);
       setEnabled(!!data.evaluation_enabled);
-      if (!cid) return;
-
-      const headers = await getAuthHeader();
-      const [membersRes, assignRes, cyclesRes, teamsRes] = await Promise.all([
-        fetch(`${API_URL}/api/company/members/${cid}`, { headers }),
-        fetch(`${API_URL}/api/evaluation/assignments/${cid}`, { headers }),
-        fetch(`${API_URL}/api/evaluation/cycles/${cid}`, { headers }),
-        fetch(`${API_URL}/api/team/company/${cid}`, { headers }),
-      ]);
-      const membersData = await membersRes.json();
-      const assignData = await assignRes.json();
-      const cyclesData = await cyclesRes.json();
-      const teamsData = await teamsRes.json();
-      setMembers(membersData.members || []);
-      setAssignments(assignData.assignments || []);
-      setTeams(teamsData.teams || []);
-      const cycleList: Cycle[] = cyclesData.cycles || [];
+      setMembers(data.members || []);
+      setAssignments(data.assignments || []);
+      setTeams(data.teams || []);
+      const cycleList: Cycle[] = data.cycles || [];
       setCycles(cycleList);
       if (cycleList[0]) {
         setSelectedCycleId(cycleList[0].id);
@@ -352,7 +341,7 @@ export default function EvaluationSettingsPage() {
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-5">
           <Link href="/evaluation" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
-          <span className="text-[#0a0a0a] text-base font-bold">평가 설정</span>
+          <span className="text-[#0a0a0a] text-base font-bold">AI 평가 설정</span>
           <div className="w-8" />
         </div>
 

@@ -91,6 +91,130 @@ def _serialize_entry(e: EvaluationEntry, names: dict | None = None) -> dict:
     }
 
 
+# ── 화면 진입 시 필요한 데이터를 한 번에 묶어 반환 (요청 왕복 최소화) ──
+def _get_active_cycle_row(db: Session, company_id: str) -> Optional[EvaluationCycle]:
+    return (
+        db.query(EvaluationCycle)
+        .filter(EvaluationCycle.company_id == company_id, EvaluationCycle.status == "active")
+        .order_by(EvaluationCycle.created_at.desc())
+        .first()
+    )
+
+
+@router.get("/bootstrap")
+def get_bootstrap(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """/evaluation 메인 화면용. company/my + cycles/active + entries/my + results/me를
+    하나로 묶어 화면 진입 시 요청 왕복 수를 4회 → 1회로 줄인다."""
+    uid = current_user["uid"]
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    company_id = member.company_id if member else None
+
+    cycle_data = None
+    entries_data: list[dict] = []
+    result_data = _serialize_result(None)
+
+    if company_id:
+        cycle_row = _get_active_cycle_row(db, company_id)
+        if cycle_row:
+            cycle_data = _serialize_cycle(cycle_row)
+            entry_rows = db.query(EvaluationEntry).filter(
+                EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.user_id == uid,
+            ).all()
+            names = _name_map(db, company_id) if entry_rows else {}
+            entries_data = [_serialize_entry(e, names) for e in entry_rows]
+            result_row = db.query(EvaluationResult).filter(
+                EvaluationResult.cycle_id == cycle_row.id, EvaluationResult.user_id == uid,
+            ).first()
+            result_data = _serialize_result(result_row)
+
+    return {
+        "company_id": company_id,
+        "is_manager": bool(member and member.is_manager),
+        "job_title": member.job_title if member else None,
+        "cycle": cycle_data,
+        "entries": entries_data,
+        "result": result_data,
+    }
+
+
+@router.get("/bootstrap/review")
+def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """/evaluation/review 화면용. company/my + cycles/active + entries/review + results를
+    하나로 묶어 요청 왕복 수를 4회 → 1회로 줄인다."""
+    uid = current_user["uid"]
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    company_id = member.company_id if member else None
+
+    cycle_data = None
+    entries_data: list[dict] = []
+    results_payload = {"people": [], "distribution": []}
+
+    if company_id:
+        cycle_row = _get_active_cycle_row(db, company_id)
+        if cycle_row:
+            cycle_data = _serialize_cycle(cycle_row)
+            entry_rows = db.query(EvaluationEntry).filter(
+                EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.evaluator_id == uid,
+            ).all()
+            names = _name_map(db, company_id) if entry_rows else {}
+            entries_data = [_serialize_entry(e, names) for e in entry_rows]
+            results_payload = _compute_results(db, cycle_row, current_user)
+
+    return {"company_id": company_id, "cycle": cycle_data, "entries": entries_data, **results_payload}
+
+
+@router.get("/bootstrap/settings")
+def get_bootstrap_settings(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """/evaluation/settings 화면용. company/my + members + assignments + cycles + teams를
+    하나로 묶어 요청 왕복 수를 5회 → 1회로 줄인다."""
+    uid = current_user["uid"]
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    company_id = member.company_id if member else None
+    if not company_id:
+        return {"company_id": None, "evaluation_enabled": False, "members": [], "assignments": [], "cycles": [], "teams": []}
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
+    assignments = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
+    cycles = (
+        db.query(EvaluationCycle)
+        .filter(EvaluationCycle.company_id == company_id)
+        .order_by(EvaluationCycle.created_at.desc())
+        .all()
+    )
+    teams = db.query(Team).filter(Team.company_id == company_id).all()
+
+    names = {m.user_id: (m.user_name or m.user_email) for m in members}
+
+    return {
+        "company_id": company_id,
+        "evaluation_enabled": bool(company and company.evaluation_enabled),
+        "members": [
+            {"user_id": m.user_id, "user_name": m.user_name, "user_email": m.user_email} for m in members
+        ],
+        "assignments": [
+            {
+                "id": a.id,
+                "evaluatee_user_id": a.evaluatee_user_id,
+                "evaluatee_name": names.get(a.evaluatee_user_id, a.evaluatee_user_id),
+                "evaluator_user_id": a.evaluator_user_id,
+                "evaluator_name": names.get(a.evaluator_user_id, a.evaluator_user_id),
+                "source": a.source,
+            }
+            for a in assignments
+        ],
+        "cycles": [_serialize_cycle(c) for c in cycles],
+        "teams": [
+            {
+                "id": t.id, "name": t.name, "manager_id": t.manager_id,
+                "manager_name": names.get(t.manager_id) if t.manager_id else None,
+                "parent_team_id": t.parent_team_id,
+            }
+            for t in teams
+        ],
+    }
+
+
 # ── 평가 기능 on/off ───────────────────────────────────────
 class ToggleEvaluationRequest(BaseModel):
     evaluation_enabled: bool
@@ -533,20 +657,13 @@ def review_actual(
 
 
 # ── 등급 부여 ──────────────────────────────────────────────
-@router.get("/results/{cycle_id}")
-def get_results(
-    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
-):
-    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
-    if not cycle:
-        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
-
+def _compute_results(db: Session, cycle: EvaluationCycle, current_user: dict) -> dict:
     is_privileged = is_superadmin_email(db, current_user.get("email"))
     if not is_privileged:
         member = _get_member(db, current_user["uid"], cycle.company_id)
         is_privileged = bool(member and member.is_admin)
 
-    entries_q = db.query(EvaluationEntry).filter(EvaluationEntry.cycle_id == cycle_id)
+    entries_q = db.query(EvaluationEntry).filter(EvaluationEntry.cycle_id == cycle.id)
     if not is_privileged:
         entries_q = entries_q.filter(EvaluationEntry.evaluator_id == current_user["uid"])
     entries = entries_q.all()
@@ -557,7 +674,7 @@ def get_results(
 
     results = (
         db.query(EvaluationResult)
-        .filter(EvaluationResult.cycle_id == cycle_id, EvaluationResult.user_id.in_(by_user.keys()))
+        .filter(EvaluationResult.cycle_id == cycle.id, EvaluationResult.user_id.in_(by_user.keys()))
         .all()
         if by_user else []
     )
@@ -593,6 +710,16 @@ def get_results(
             for g in dist
         ],
     }
+
+
+@router.get("/results/{cycle_id}")
+def get_results(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    return _compute_results(db, cycle, current_user)
 
 
 class GradeRequest(BaseModel):
@@ -885,6 +1012,28 @@ async def upload_one_on_one(
     return {"success": True, "id": session.id, "status": "processing"}
 
 
+def _serialize_one_on_one_sessions(db: Session, cycle: EvaluationCycle, current_user: dict) -> list[dict]:
+    sessions = db.query(OneOnOneSession).filter(OneOnOneSession.cycle_id == cycle.id).all()
+    visible = [s for s in sessions if _is_one_on_one_viewer(db, current_user, cycle.company_id, s.evaluator_id)]
+    if not visible and sessions:
+        # 세션은 있지만 열람 권한이 없는 경우와, 세션 자체가 없는 경우를 구분
+        raise HTTPException(status_code=403, detail="평가관리자만 열람할 수 있어요")
+
+    names = _name_map(db, cycle.company_id)
+    return [
+        {
+            "id": s.id,
+            "evaluator_name": names.get(s.evaluator_id, s.evaluator_id),
+            "evaluatee_name": names.get(s.evaluatee_id, s.evaluatee_id),
+            "status": s.status,
+            "ai_analysis": s.ai_analysis,
+            "recorded_at": s.recorded_at.isoformat(),
+            "duration_seconds": s.duration_seconds,
+        }
+        for s in visible
+    ]
+
+
 @router.get("/one-on-one/{cycle_id}")
 def list_one_on_one(
     cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
@@ -892,25 +1041,21 @@ def list_one_on_one(
     cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    return {"sessions": _serialize_one_on_one_sessions(db, cycle, current_user)}
 
-    sessions = db.query(OneOnOneSession).filter(OneOnOneSession.cycle_id == cycle_id).all()
-    visible = [s for s in sessions if _is_one_on_one_viewer(db, current_user, cycle.company_id, s.evaluator_id)]
-    if not visible and sessions:
-        # 세션은 있지만 열람 권한이 없는 경우와, 세션 자체가 없는 경우를 구분
-        raise HTTPException(status_code=403, detail="평가관리자만 열람할 수 있어요")
 
-    names = _name_map(db, cycle.company_id)
-    return {
-        "sessions": [
-            {
-                "id": s.id,
-                "evaluator_name": names.get(s.evaluator_id, s.evaluator_id),
-                "evaluatee_name": names.get(s.evaluatee_id, s.evaluatee_id),
-                "status": s.status,
-                "ai_analysis": s.ai_analysis,
-                "recorded_at": s.recorded_at.isoformat(),
-                "duration_seconds": s.duration_seconds,
-            }
-            for s in visible
-        ]
-    }
+@router.get("/bootstrap/one-on-one")
+def get_bootstrap_one_on_one(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """/evaluation/one-on-one/monitor 화면용. company/my + cycles/active + one-on-one 목록을
+    하나로 묶어 요청 왕복 수를 3회 → 1회로 줄인다."""
+    uid = current_user["uid"]
+    member = db.query(CompanyMember).filter(CompanyMember.user_id == uid).first()
+    company_id = member.company_id if member else None
+    if not company_id:
+        return {"company_id": None, "sessions": []}
+
+    cycle_row = _get_active_cycle_row(db, company_id)
+    if not cycle_row:
+        return {"company_id": company_id, "sessions": []}
+
+    return {"company_id": company_id, "sessions": _serialize_one_on_one_sessions(db, cycle_row, current_user)}
