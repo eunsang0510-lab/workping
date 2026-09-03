@@ -1610,7 +1610,7 @@ const markAllRead = async () => {
             <span className="text-lg">🎙️</span>
             <div>
               <div className="text-[#0a0a0a] text-sm font-bold flex items-center gap-1">
-                회의록
+                AI 회의록
                 <span className="text-[9px] font-bold text-[#4a4de0] bg-[#f0f0ff] rounded-full px-1.5 py-0.5">BETA</span>
               </div>
               <div className="text-[#6b6b6b] text-xs">녹음 · AI 요약</div>

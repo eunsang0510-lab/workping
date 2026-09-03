@@ -116,7 +116,7 @@ export default function MeetingListPage() {
         <div className="flex items-center justify-between mb-5">
           <Link href="/dashboard" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
           <div className="flex items-center gap-1.5">
-            <span className="text-[#0a0a0a] text-base font-bold">회의록</span>
+            <span className="text-[#0a0a0a] text-base font-bold">AI 회의록</span>
             <span className="text-[10px] font-bold text-[#4a4de0] bg-[#f0f0ff] rounded-full px-1.5 py-0.5">BETA</span>
           </div>
           <div className="w-8" />
@@ -144,17 +144,26 @@ export default function MeetingListPage() {
             <div className="text-[#6b6b6b] text-xs leading-relaxed">{quota.message}</div>
           </div>
         ) : (
-          <Link href="/meeting/record">
-            <div className="bg-[#5b5ef4] hover:bg-[#4a4de0] text-white rounded-2xl p-5 flex items-center gap-3 mb-5 shadow-[0_8px_24px_rgba(91,94,244,0.25)] transition-all cursor-pointer">
-              <span className="text-2xl">🎙️</span>
-              <div>
-                <div className="text-sm font-bold">새 회의 녹음하기</div>
-                <div className="text-xs text-white/80">
-                  녹음 후 AI가 자동으로 요약해요{quota ? ` · 이번 달 ${quota.used}/${quota.limit}회 사용` : ""}
+          <div className="flex flex-col gap-2 mb-5">
+            <Link href="/meeting/record">
+              <div className="bg-[#5b5ef4] hover:bg-[#4a4de0] text-white rounded-2xl p-5 flex items-center gap-3 shadow-[0_8px_24px_rgba(91,94,244,0.25)] transition-all cursor-pointer">
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="text-sm font-bold">새 회의 녹음하기</div>
+                  <div className="text-xs text-white/80">
+                    녹음 후 AI가 자동으로 요약해요{quota ? ` · 이번 달 ${quota.used}/${quota.limit}회 사용` : ""}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Link>
+            </Link>
+            <Link href="/meeting/write">
+              <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl px-4 py-3 flex items-center gap-2.5 transition-all cursor-pointer">
+                <span className="text-lg">✍️</span>
+                <div className="text-[#0a0a0a] text-xs font-bold flex-1">직접 타이핑해서 작성하기</div>
+                <span className="text-[#b0b0b0] text-xs">›</span>
+              </div>
+            </Link>
+          </div>
         )}
 
         {meetings.length === 0 ? (

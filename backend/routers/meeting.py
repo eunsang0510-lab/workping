@@ -19,6 +19,7 @@ router = APIRouter()
 
 MAX_AUDIO_BYTES = 25 * 1024 * 1024  # OpenAI 오디오 인식 API 요청당 상한
 MAX_DURATION_SECONDS = 30 * 60  # 녹음 최대 30분
+MANUAL_CONTENT_MAX_CHARS = 20000  # 수기 작성 최대 글자 수 (Claude 호출 비용 상한)
 
 # 베타 기간 비용 제어: 계정당 월 무료 이용 횟수
 FREE_MONTHLY_LIMIT = 3
@@ -178,6 +179,46 @@ def _process_meeting_background(meeting_id: str, audio_bytes: bytes, filename: s
         db.close()
 
 
+def _process_manual_meeting_background(meeting_id: str):
+    """수기로 작성한 내용을 Claude 요약만 거쳐 처리(STT 없음). 완료되면 결과 저장 + 푸시 알림."""
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting or not meeting.transcript:
+            return
+
+        try:
+            summary, todos = summarize_meeting(meeting.transcript)
+
+            meeting.ai_summary = summary
+            meeting.summary = summary
+            meeting.ai_todos = todos
+            meeting.todos = [{**t, "done": False} for t in todos]
+            meeting.status = "completed"
+            db.commit()
+
+            send_push_to_users(
+                db, [meeting.user_id],
+                title="📝 회의록이 준비됐어요",
+                body=meeting.title,
+                url=f"/meeting/{meeting.id}",
+            )
+        except Exception as e:
+            print(f"[_process_manual_meeting_background] 처리 실패: {e}")
+            db.rollback()
+            meeting.status = "failed"
+            meeting.error_message = str(e)[:500]
+            db.commit()
+            send_push_to_users(
+                db, [meeting.user_id],
+                title="⚠️ 회의록 생성 실패",
+                body=f"{meeting.title} 요약에 실패했어요. 다시 시도해주세요.",
+                url=f"/meeting/{meeting.id}",
+            )
+    finally:
+        db.close()
+
+
 # ── 녹음 업로드 → 백그라운드로 STT+AI 요약 처리 시작 ──────────
 @router.post("/upload")
 async def upload_meeting(
@@ -240,6 +281,71 @@ async def upload_meeting(
     background_tasks.add_task(
         _process_meeting_background, meeting.id, audio_bytes, file.filename or "recording.webm", file.content_type,
     )
+
+    return _serialize_detail(meeting)
+
+
+# ── 수기 작성 → 백그라운드로 AI 요약 처리 시작 (녹음 없이 타이핑) ──
+class ManualMeetingRequest(BaseModel):
+    company_id: str = ""
+    user_id: str
+    user_name: str = ""
+    team_id: str = ""
+    title: str = ""
+    recorded_at: str = ""
+    content: str
+
+
+@router.post("/manual")
+def create_manual_meeting(
+    req: ManualMeetingRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["uid"] != req.user_id:
+        raise HTTPException(status_code=403, detail="본인만 회의록을 등록할 수 있어요")
+    if req.company_id:
+        _require_member(db, req.user_id, req.company_id)
+
+    team_id = req.team_id
+    if req.company_id and not team_id:
+        auto_team_id = get_user_team_id(db, req.company_id, req.user_id)
+        if auto_team_id:
+            team_id = auto_team_id
+
+    if _monthly_usage_count(db, req.user_id) >= FREE_MONTHLY_LIMIT:
+        raise HTTPException(status_code=403, detail=QUOTA_EXCEEDED_MESSAGE)
+
+    content = req.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="회의 내용을 입력해주세요")
+    if len(content) > MANUAL_CONTENT_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"내용이 너무 길어요 (최대 {MANUAL_CONTENT_MAX_CHARS}자)")
+
+    try:
+        recorded_dt = datetime.fromisoformat(req.recorded_at) if req.recorded_at else datetime.utcnow()
+    except ValueError:
+        recorded_dt = datetime.utcnow()
+
+    meeting_title = req.title.strip() or f"{recorded_dt.strftime('%Y-%m-%d %H:%M')} 회의"
+
+    meeting = Meeting(
+        company_id=req.company_id or None,
+        team_id=team_id or None,
+        user_id=req.user_id,
+        user_name=req.user_name,
+        title=meeting_title,
+        recorded_at=recorded_dt,
+        transcript=content,
+        status="processing",
+    )
+    db.add(meeting)
+    db.add(MeetingUsageLog(user_id=req.user_id))
+    db.commit()
+    db.refresh(meeting)
+
+    background_tasks.add_task(_process_manual_meeting_background, meeting.id)
 
     return _serialize_detail(meeting)
 
