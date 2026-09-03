@@ -198,6 +198,9 @@ def run_migrations():
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS job_title VARCHAR",
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS org_level INTEGER",
         "ALTER TABLE teams ADD COLUMN IF NOT EXISTS parent_team_id VARCHAR",
+        # 평가자 매핑을 사이클(평가코드)별로 관리하도록 변경 — 기존 회사 전체 공용 매핑 행은
+        # cycle_id가 NULL로 남아 더 이상 조회되지 않는(사실상 폐기되는) 테스트 데이터임
+        "ALTER TABLE evaluator_assignments ADD COLUMN IF NOT EXISTS cycle_id VARCHAR",
         # 평가/회의록 관련 신규 테이블 RLS (Supabase 권고 — 앱은 postgres 소유자 role로 연결해 영향 없음)
         "ALTER TABLE evaluator_assignments ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE evaluation_cycles ENABLE ROW LEVEL SECURITY",

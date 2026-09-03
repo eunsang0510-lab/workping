@@ -177,17 +177,17 @@ def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Dep
 
 @router.get("/bootstrap/settings")
 def get_bootstrap_settings(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """/evaluation/settings 화면용. company/my + members + assignments + cycles + teams를
-    하나로 묶어 요청 왕복 수를 5회 → 1회로 줄인다."""
+    """/evaluation/settings 화면용. company/my + members + cycles + teams를 하나로 묶어
+    요청 왕복 수를 줄인다. 평가자 매핑은 이제 사이클(평가코드)별로 관리되므로 여기 포함하지
+    않고, 특정 사이클을 선택했을 때 GET /assignments/{cycle_id}로 따로 조회한다."""
     uid = current_user["uid"]
     member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
     if not company_id:
-        return {"company_id": None, "evaluation_enabled": False, "members": [], "assignments": [], "cycles": [], "teams": []}
+        return {"company_id": None, "evaluation_enabled": False, "members": [], "cycles": [], "teams": []}
 
     company = db.query(Company).filter(Company.id == company_id).first()
     members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).all()
-    assignments = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
     cycles = (
         db.query(EvaluationCycle)
         .filter(EvaluationCycle.company_id == company_id)
@@ -204,17 +204,6 @@ def get_bootstrap_settings(db: Session = Depends(get_db), current_user: dict = D
         "members": [
             {"user_id": m.user_id, "user_name": m.user_name, "user_email": m.user_email, "org_level": m.org_level}
             for m in members
-        ],
-        "assignments": [
-            {
-                "id": a.id,
-                "evaluatee_user_id": a.evaluatee_user_id,
-                "evaluatee_name": names.get(a.evaluatee_user_id, a.evaluatee_user_id),
-                "evaluator_user_id": a.evaluator_user_id,
-                "evaluator_name": names.get(a.evaluator_user_id, a.evaluator_user_id),
-                "source": a.source,
-            }
-            for a in assignments
         ],
         "cycles": [_serialize_cycle(c) for c in cycles],
         "teams": [
@@ -248,15 +237,23 @@ def toggle_evaluation(
     return {"success": True, "evaluation_enabled": req.evaluation_enabled}
 
 
-# ── 평가자 매핑 설정 ───────────────────────────────────────
-@router.post("/assignments/seed/{company_id}")
-def seed_assignments(
-    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
-):
-    """조직도(팀장) 기준으로 매핑이 없는 사람만 자동 생성. 이미 있는 매핑은 건드리지 않는다."""
-    _require_admin(db, current_user, company_id)
+# ── 평가자 매핑 설정 (사이클별) ─────────────────────────────
+def _get_cycle_or_404(db: Session, cycle_id: str) -> EvaluationCycle:
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    return cycle
 
-    teams = db.query(Team).filter(Team.company_id == company_id).all()
+
+@router.post("/assignments/seed/{cycle_id}")
+def seed_assignments(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    """조직도(팀장) 기준으로 이 사이클에 매핑이 없는 사람만 자동 생성. 이미 있는 매핑은 건드리지 않는다."""
+    cycle = _get_cycle_or_404(db, cycle_id)
+    _require_admin(db, current_user, cycle.company_id)
+
+    teams = db.query(Team).filter(Team.company_id == cycle.company_id).all()
     manager_by_team = {t.id: t.manager_id for t in teams if t.manager_id}
     if not manager_by_team:
         return {"success": True, "created": 0}
@@ -264,7 +261,7 @@ def seed_assignments(
     memberships = db.query(TeamMember).filter(TeamMember.team_id.in_(manager_by_team.keys())).all()
     existing = {
         r.evaluatee_user_id
-        for r in db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
+        for r in db.query(EvaluatorAssignment).filter(EvaluatorAssignment.cycle_id == cycle_id).all()
     }
 
     created = 0
@@ -275,7 +272,7 @@ def seed_assignments(
         if not manager_id or manager_id == tm.user_id:
             continue
         db.add(EvaluatorAssignment(
-            company_id=company_id, evaluatee_user_id=tm.user_id, evaluator_user_id=manager_id,
+            company_id=cycle.company_id, cycle_id=cycle_id, evaluatee_user_id=tm.user_id, evaluator_user_id=manager_id,
             source="auto", created_by=current_user["uid"],
         ))
         existing.add(tm.user_id)
@@ -284,13 +281,14 @@ def seed_assignments(
     return {"success": True, "created": created}
 
 
-@router.get("/assignments/{company_id}")
+@router.get("/assignments/{cycle_id}")
 def list_assignments(
-    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
 ):
-    _require_admin(db, current_user, company_id)
-    rows = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).all()
-    names = _name_map(db, company_id)
+    cycle = _get_cycle_or_404(db, cycle_id)
+    _require_admin(db, current_user, cycle.company_id)
+    rows = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.cycle_id == cycle_id).all()
+    names = _name_map(db, cycle.company_id)
     return {
         "assignments": [
             {
@@ -307,7 +305,7 @@ def list_assignments(
 
 
 class AssignmentUpsertRequest(BaseModel):
-    company_id: str
+    cycle_id: str
     evaluatee_user_id: str
     evaluator_user_id: str
 
@@ -316,12 +314,13 @@ class AssignmentUpsertRequest(BaseModel):
 def upsert_assignment(
     req: AssignmentUpsertRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
 ):
-    _require_admin(db, current_user, req.company_id)
+    cycle = _get_cycle_or_404(db, req.cycle_id)
+    _require_admin(db, current_user, cycle.company_id)
     if req.evaluatee_user_id == req.evaluator_user_id:
         raise HTTPException(status_code=400, detail="본인을 평가자로 지정할 수 없어요")
 
     row = db.query(EvaluatorAssignment).filter(
-        EvaluatorAssignment.company_id == req.company_id,
+        EvaluatorAssignment.cycle_id == req.cycle_id,
         EvaluatorAssignment.evaluatee_user_id == req.evaluatee_user_id,
     ).first()
     if row:
@@ -330,7 +329,7 @@ def upsert_assignment(
         row.updated_by = current_user["uid"]
     else:
         row = EvaluatorAssignment(
-            company_id=req.company_id, evaluatee_user_id=req.evaluatee_user_id,
+            company_id=cycle.company_id, cycle_id=req.cycle_id, evaluatee_user_id=req.evaluatee_user_id,
             evaluator_user_id=req.evaluator_user_id, source="manual", created_by=current_user["uid"],
         )
         db.add(row)
@@ -358,9 +357,9 @@ ASSIGNMENT_TEMPLATE_MAX_ROWS = 2000
 ASSIGNMENT_TEMPLATE_MAX_BYTES = 3 * 1024 * 1024  # 3MB
 
 
-@router.get("/assignments/template/{company_id}")
+@router.get("/assignments/template/{cycle_id}")
 def download_assignment_template(
-    company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
 ):
     """조직도 계층 구조(이름/이메일/레벨/상위자 이메일)를 입력할 엑셀 양식을 내려준다.
     기존 직원들의 이름/이메일은 미리 채워주고, 레벨/상위자 이메일만 입력하면 되게 한다."""
@@ -371,8 +370,9 @@ def download_assignment_template(
     from urllib.parse import quote
     import io
 
-    _require_admin(db, current_user, company_id)
-    members = db.query(CompanyMember).filter(CompanyMember.company_id == company_id).order_by(CompanyMember.created_at).all()
+    cycle = _get_cycle_or_404(db, cycle_id)
+    _require_admin(db, current_user, cycle.company_id)
+    members = db.query(CompanyMember).filter(CompanyMember.company_id == cycle.company_id).order_by(CompanyMember.created_at).all()
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -411,17 +411,20 @@ def download_assignment_template(
     )
 
 
-@router.post("/assignments/upload/{company_id}")
+@router.post("/assignments/upload/{cycle_id}")
 async def upload_assignments(
-    company_id: str, file: UploadFile = File(...),
+    cycle_id: str, file: UploadFile = File(...),
     db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
 ):
-    """엑셀 양식을 업로드해 조직도(레벨/상위자)를 일괄 반영한다. 기존 평가자 매핑은 전체 교체된다.
+    """엑셀 양식을 업로드해 조직도(레벨/상위자)를 일괄 반영한다. 이 사이클의 기존 평가자
+    매핑은 전체 교체된다(다른 사이클의 매핑에는 영향 없음).
     업로드 취약점 방어: 확장자/크기/실제 파일 시그니처(zip)/헤더 형식을 모두 검사하고,
     우리 양식과 다르면 이유를 명시해 거부한다."""
     import openpyxl
     import io
 
+    cycle = _get_cycle_or_404(db, cycle_id)
+    company_id = cycle.company_id
     _require_admin(db, current_user, company_id)
 
     filename = (file.filename or "").lower()
@@ -496,7 +499,7 @@ async def upload_assignments(
         member.org_level = int(r["level"]) if r["level"] is not None else None
         member.updated_by = current_user["uid"]
 
-    db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == company_id).delete()
+    db.query(EvaluatorAssignment).filter(EvaluatorAssignment.cycle_id == cycle_id).delete()
     created = 0
     for r in rows:
         if not r["manager_email"]:
@@ -504,7 +507,7 @@ async def upload_assignments(
         evaluatee = member_by_email[r["email"]]
         evaluator = member_by_email[r["manager_email"]]
         db.add(EvaluatorAssignment(
-            company_id=company_id, evaluatee_user_id=evaluatee.user_id,
+            company_id=company_id, cycle_id=cycle_id, evaluatee_user_id=evaluatee.user_id,
             evaluator_user_id=evaluator.user_id, source="excel", created_by=current_user["uid"],
         ))
         created += 1
@@ -574,6 +577,23 @@ def update_cycle(
     return _serialize_cycle(cycle)
 
 
+@router.delete("/cycles/{cycle_id}")
+def delete_cycle(
+    cycle_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    cycle = db.query(EvaluationCycle).filter(EvaluationCycle.id == cycle_id).first()
+    if not cycle:
+        raise HTTPException(status_code=404, detail="평가 코드를 찾을 수 없어요")
+    _require_admin(db, current_user, cycle.company_id)
+    if cycle.status != "draft":
+        raise HTTPException(status_code=400, detail="이미 시작된 평가는 삭제할 수 없어요")
+
+    db.query(EvaluatorAssignment).filter(EvaluatorAssignment.cycle_id == cycle_id).delete()
+    db.delete(cycle)
+    db.commit()
+    return {"success": True}
+
+
 @router.get("/cycles/active/{company_id}")
 def get_active_cycle(
     company_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
@@ -626,9 +646,9 @@ def activate_cycle(
     if abs(total_ratio - 100) > 0.01:
         raise HTTPException(status_code=400, detail=f"등급별 비율의 합이 100이어야 해요 (현재 {total_ratio})")
 
-    assignments = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.company_id == cycle.company_id).all()
+    assignments = db.query(EvaluatorAssignment).filter(EvaluatorAssignment.cycle_id == cycle.id).all()
     if not assignments:
-        raise HTTPException(status_code=400, detail="평가자 매핑이 없어요. 먼저 평가자 설정을 완료해주세요")
+        raise HTTPException(status_code=400, detail="이 사이클에 평가자 매핑이 없어요. 먼저 평가자 설정을 완료해주세요")
 
     created = 0
     for a in assignments:

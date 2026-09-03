@@ -5,14 +5,17 @@ import uuid
 
 
 class EvaluatorAssignment(Base):
-    """평가자-피평가자 매핑 (1:1). 조직도(팀장) 기준으로 자동 생성되고, 관리자가 개별 조정 가능."""
+    """평가자-피평가자 매핑 (1:1). 평가 코드(사이클)마다 별도로 관리된다 — 같은 회사라도
+    임원 평가/사무직 평가/생산직 평가처럼 사이클별로 대상자·평가자 조합이 다를 수 있다.
+    조직도(팀장) 기준으로 자동 생성되거나, 관리자가 개별/엑셀로 조정 가능."""
     __tablename__ = "evaluator_assignments"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id = Column(String, nullable=False, index=True)
+    cycle_id = Column(String, nullable=False, index=True)
     evaluatee_user_id = Column(String, nullable=False, index=True)
     evaluator_user_id = Column(String, nullable=False, index=True)
-    source = Column(String, nullable=False, default="manual")  # auto(조직도 자동시드) / manual(관리자 조정)
+    source = Column(String, nullable=False, default="manual")  # auto(조직도 자동시드) / manual(관리자 조정) / excel
 
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String, nullable=True)
@@ -20,7 +23,7 @@ class EvaluatorAssignment(Base):
     updated_by = Column(String, nullable=True)
 
     __table_args__ = (
-        Index("ix_evaluator_assignments_scope", "company_id", "evaluatee_user_id"),
+        Index("ix_evaluator_assignments_scope", "cycle_id", "evaluatee_user_id"),
     )
 
 
