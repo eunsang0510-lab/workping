@@ -133,7 +133,11 @@ export default function MeetingProgressPage() {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-[#6b6b6b] text-sm">불러오는 중...</div>;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-[#5b5ef4]">로딩 중...</div>
+      </div>
+    );
   }
 
   if (!companyId) {

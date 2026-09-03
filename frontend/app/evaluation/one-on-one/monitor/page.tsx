@@ -33,9 +33,17 @@ export default function OneOnOneMonitorPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u && (await checkSystemAdmin(u.email))) init(u.uid);
-      else router.push("/login");
+    // 시스템 관리자 확인과 실제 데이터 조회를 동시에 시작한다(순서대로 하면 요청
+    // 왕복이 하나 더 늘어 화면 진입이 느려짐). 관리자가 아니면 로그인 화면으로 보낸다.
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) {
+        router.push("/login");
+        return;
+      }
+      init(u.uid);
+      checkSystemAdmin(u.email).then((ok) => {
+        if (!ok) router.push("/login");
+      });
     });
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +68,11 @@ export default function OneOnOneMonitorPage() {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-[#6b6b6b] text-sm">불러오는 중...</div>;
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-[#5b5ef4]">로딩 중...</div>
+      </div>
+    );
   }
 
   if (!companyId || forbidden) {

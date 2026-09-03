@@ -52,9 +52,15 @@ function OneOnOneRecordInner() {
   }, []);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      if (u && (await checkSystemAdmin(u.email))) setUser(u);
-      else router.push("/login");
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) {
+        router.push("/login");
+        return;
+      }
+      setUser(u);
+      checkSystemAdmin(u.email).then((ok) => {
+        if (!ok) router.push("/login");
+      });
     });
     return () => unsub();
   }, [router]);
@@ -223,7 +229,7 @@ function OneOnOneRecordInner() {
 
 export default function OneOnOneRecordPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-[#6b6b6b] text-sm">불러오는 중...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center"><div className="text-[#5b5ef4]">로딩 중...</div></div>}>
       <OneOnOneRecordInner />
     </Suspense>
   );
