@@ -909,6 +909,136 @@ const markAllRead = async () => {
     return now.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" });
   };
 
+  const parseTime = (isoString: string | null) => {
+    if (!isoString) return 0;
+    const str = isoString.endsWith("Z") || isoString.includes("+") ? isoString : isoString + "Z";
+    const t = new Date(str).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  // 출근/퇴근/외출/복귀/재출근/재퇴근을 시간 흐름순으로 하나의 타임라인으로 합쳐서 보여준다.
+  // (예: 출근 → 외출 → 복귀 → 퇴근). 같은 시각(예: 진행 중인 외출의 "복귀" 자리표시)은
+  // 정렬이 안정적이라 원래 넣은 순서(외출 다음 복귀)가 유지된다.
+  const buildTodayTimeline = () => {
+    const entries: { time: number; node: React.ReactNode }[] = [];
+
+    if (checkInTime) {
+      entries.push({
+        time: parseTime(checkInTime),
+        node: (
+          <div key="checkin" className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#16a34a]"></div>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-medium">출근</div>
+              <div className="text-[#6b6b6b] text-xs">{formatTime(checkInTime)} · {trimCity(currentLocation)}</div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    if (checkOutTime) {
+      entries.push({
+        time: parseTime(checkOutTime),
+        node: (
+          <div key="checkout" className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-medium">퇴근</div>
+              <div className="text-[#6b6b6b] text-xs">{formatTime(checkOutTime)} · {checkOutLocation !== "-" ? trimCity(checkOutLocation) : "위치 미확인"}</div>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    outingSessions.forEach((outing) => {
+      entries.push({
+        time: parseTime(outing.start_at),
+        node: (
+          <div key={`${outing.id}-start`} className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#f59e0b]"></div>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-medium">외출</div>
+              <div className="text-[#6b6b6b] text-xs">{formatTime(outing.start_at)}</div>
+            </div>
+          </div>
+        ),
+      });
+      entries.push({
+        time: outing.end_at ? parseTime(outing.end_at) : parseTime(outing.start_at),
+        node: (
+          <div key={`${outing.id}-end`} className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${outing.end_at ? "bg-[#16a34a]" : "bg-[#e5e5e5]"}`}></div>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-medium">복귀</div>
+              <div className="text-[#6b6b6b] text-xs">
+                {outing.end_at
+                  ? `${formatTime(outing.end_at)} · ${outing.duration_minutes ?? 0}분`
+                  : "외출중"}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+    });
+
+    reclockSessions.forEach((session) => {
+      entries.push({
+        time: parseTime(session.checkin_at),
+        node: (
+          <div key={`${session.id}-in`} className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#5b5ef4]"></div>
+            <div>
+              <div className="text-[#0a0a0a] text-sm font-medium">재출근</div>
+              <div className="text-[#6b6b6b] text-xs">
+                {formatTime(session.checkin_at)} · {session.checkin_address ? trimCity(session.checkin_address) : "위치 미확인"}
+              </div>
+            </div>
+          </div>
+        ),
+      });
+      if (session.checkout_at) {
+        entries.push({
+          time: parseTime(session.checkout_at),
+          node: (
+            <div key={`${session.id}-out`} className="flex items-center gap-3">
+              <div className={`w-2 h-2 rounded-full ${
+                session.status === "approved"
+                  ? "bg-[#16a34a]"
+                  : session.status === "rejected"
+                  ? "bg-[#ef4444]"
+                  : "bg-[#d97706]"
+              }`}></div>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-medium">
+                  재퇴근{" "}
+                  <span className={`text-xs font-semibold ${
+                    session.status === "approved"
+                      ? "text-[#16a34a]"
+                      : session.status === "rejected"
+                      ? "text-[#ef4444]"
+                      : "text-[#d97706]"
+                  }`}>
+                    · {session.status === "approved" ? "승인완료" : session.status === "rejected" ? "반려됨" : "승인대기중"}
+                  </span>
+                </div>
+                <div className="text-[#6b6b6b] text-xs">
+                  {formatTime(session.checkout_at)} · {session.checkout_address ? trimCity(session.checkout_address) : "위치 미확인"}
+                </div>
+                {session.status === "rejected" && session.reject_reason && (
+                  <div className="text-[#ef4444] text-xs mt-0.5">사유: {session.reject_reason}</div>
+                )}
+              </div>
+            </div>
+          ),
+        });
+      }
+    });
+
+    return entries.sort((a, b) => a.time - b.time).map((e) => e.node);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -1495,90 +1625,7 @@ const markAllRead = async () => {
           <div className="text-[#a0a0a0] text-sm text-center py-6">아직 기록이 없어요</div>
         ) : (
           <div className="space-y-3">
-            {checkInTime && (
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-[#16a34a]"></div>
-                <div>
-                  <div className="text-[#0a0a0a] text-sm font-medium">출근</div>
-                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkInTime)} · {trimCity(currentLocation)}</div>
-                </div>
-              </div>
-            )}
-            {checkOutTime && (
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-[#ef4444]"></div>
-                <div>
-                  <div className="text-[#0a0a0a] text-sm font-medium">퇴근</div>
-                  <div className="text-[#6b6b6b] text-xs">{formatTime(checkOutTime)} · {checkOutLocation !== "-" ? trimCity(checkOutLocation) : "위치 미확인"}</div>
-                </div>
-              </div>
-            )}
-            {[...outingSessions].reverse().map((outing) => (
-              <div key={outing.id} className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#f59e0b]"></div>
-                  <div>
-                    <div className="text-[#0a0a0a] text-sm font-medium">외출</div>
-                    <div className="text-[#6b6b6b] text-xs">{formatTime(outing.start_at)}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${outing.end_at ? "bg-[#16a34a]" : "bg-[#e5e5e5]"}`}></div>
-                  <div>
-                    <div className="text-[#0a0a0a] text-sm font-medium">복귀</div>
-                    <div className="text-[#6b6b6b] text-xs">
-                      {outing.end_at
-                        ? `${formatTime(outing.end_at)} · ${outing.duration_minutes ?? 0}분`
-                        : "외출중"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {[...reclockSessions].reverse().map((session) => (
-              <div key={session.id} className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#5b5ef4]"></div>
-                  <div>
-                    <div className="text-[#0a0a0a] text-sm font-medium">재출근</div>
-                    <div className="text-[#6b6b6b] text-xs">
-                      {formatTime(session.checkin_at)} · {session.checkin_address ? trimCity(session.checkin_address) : "위치 미확인"}
-                    </div>
-                  </div>
-                </div>
-                {session.checkout_at && (
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      session.status === "approved"
-                        ? "bg-[#16a34a]"
-                        : session.status === "rejected"
-                        ? "bg-[#ef4444]"
-                        : "bg-[#d97706]"
-                    }`}></div>
-                    <div>
-                      <div className="text-[#0a0a0a] text-sm font-medium">
-                        재퇴근{" "}
-                        <span className={`text-xs font-semibold ${
-                          session.status === "approved"
-                            ? "text-[#16a34a]"
-                            : session.status === "rejected"
-                            ? "text-[#ef4444]"
-                            : "text-[#d97706]"
-                        }`}>
-                          · {session.status === "approved" ? "승인완료" : session.status === "rejected" ? "반려됨" : "승인대기중"}
-                        </span>
-                      </div>
-                      <div className="text-[#6b6b6b] text-xs">
-                        {formatTime(session.checkout_at)} · {session.checkout_address ? trimCity(session.checkout_address) : "위치 미확인"}
-                      </div>
-                      {session.status === "rejected" && session.reject_reason && (
-                        <div className="text-[#ef4444] text-xs mt-0.5">사유: {session.reject_reason}</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
+            {buildTodayTimeline()}
           </div>
         )}
       </div>
