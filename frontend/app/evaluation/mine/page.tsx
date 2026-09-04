@@ -8,7 +8,6 @@ import Link from "next/link";
 import Toast from "@/components/Toast";
 import RadarChart from "@/components/RadarChart";
 import { API_URL } from "@/lib/api";
-import { checkSystemAdmin } from "@/lib/systemAdmin";
 
 const getAuthHeader = async () => {
   const token = await auth.currentUser?.getIdToken();
@@ -75,6 +74,7 @@ const inPeriod = (start: string | null, end: string | null) =>
 export default function MyEvaluationPage() {
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [drafts, setDrafts] = useState<Record<string, { plan: string; actual: string }>>({});
@@ -91,23 +91,20 @@ export default function MyEvaluationPage() {
   }, []);
 
   useEffect(() => {
-    // 시스템 관리자 확인과 실제 데이터 조회를 동시에 시작한다(순서대로 하면 요청
-    // 왕복이 하나 더 늘어 화면 진입이 느려짐). 관리자가 아니면 로그인 화면으로 보낸다.
+    // 이 화면 공개 여부는 평가관리자가 회사 단위로 켜고 끈다(백엔드가 최종 판단).
+    // 시스템 관리자는 공개 여부와 무관하게 항상 들어올 수 있다.
     const unsub = onAuthStateChanged(auth, (u) => {
       if (!u) {
         router.push("/login");
         return;
       }
-      init(u.uid);
-      checkSystemAdmin(u.email).then((ok) => {
-        if (!ok) router.push("/login");
-      });
+      init();
     });
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const init = async (uid: string) => {
+  const init = async () => {
     try {
       await loadBootstrap();
     } finally {
@@ -119,6 +116,10 @@ export default function MyEvaluationPage() {
   const loadBootstrap = async () => {
     const headers = await getAuthHeader();
     const res = await fetch(`${API_URL}/api/evaluation/bootstrap`, { headers });
+    if (res.status === 403) {
+      setForbidden(true);
+      return;
+    }
     const data = await res.json();
     setCompanyId(data.company_id || null);
     setJobTitle(data.job_title || "");
@@ -197,6 +198,19 @@ export default function MyEvaluationPage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-[#5b5ef4]">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (forbidden) {
+    return (
+      <div className="min-h-screen bg-[#fafafa] px-4 py-6">
+        <div className="max-w-lg mx-auto">
+          <Link href="/dashboard" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-[#6b6b6b] text-sm">
+            아직 공개되지 않은 화면이에요. 평가관리자에게 문의해주세요
+          </div>
+        </div>
       </div>
     );
   }

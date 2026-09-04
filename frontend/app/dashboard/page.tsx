@@ -90,6 +90,8 @@ export default function Dashboard() {
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [isEvaluatee, setIsEvaluatee] = useState(false);
   const [isEvaluator, setIsEvaluator] = useState(false);
+  const [evaluateeScreenOpen, setEvaluateeScreenOpen] = useState(false);
+  const [evaluatorScreenOpen, setEvaluatorScreenOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
@@ -201,14 +203,12 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
-        checkSystemAdmin(user.email).then((ok) => {
-          setIsSystemAdmin(ok);
-          if (ok) {
-            fetchEvaluationRoles().then(({ isEvaluatee, isEvaluator }) => {
-              setIsEvaluatee(isEvaluatee);
-              setIsEvaluator(isEvaluator);
-            });
-          }
+        checkSystemAdmin(user.email).then(setIsSystemAdmin);
+        fetchEvaluationRoles().then(({ isEvaluatee, isEvaluator, evaluateeScreenOpen, evaluatorScreenOpen }) => {
+          setIsEvaluatee(isEvaluatee);
+          setIsEvaluator(isEvaluator);
+          setEvaluateeScreenOpen(evaluateeScreenOpen);
+          setEvaluatorScreenOpen(evaluatorScreenOpen);
         });
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
@@ -471,9 +471,14 @@ const fetchEvaluationRoles = async () => {
       headers: await getAuthHeader(),
     });
     const data = await res.json();
-    return { isEvaluatee: !!data.is_evaluatee, isEvaluator: !!data.is_evaluator };
+    return {
+      isEvaluatee: !!data.is_evaluatee,
+      isEvaluator: !!data.is_evaluator,
+      evaluateeScreenOpen: !!data.evaluatee_screen_open,
+      evaluatorScreenOpen: !!data.evaluator_screen_open,
+    };
   } catch {
-    return { isEvaluatee: false, isEvaluator: false };
+    return { isEvaluatee: false, isEvaluator: false, evaluateeScreenOpen: false, evaluatorScreenOpen: false };
   }
 };
 
@@ -1697,7 +1702,7 @@ const markAllRead = async () => {
             </div>
           </Link>
         )}
-        {isSystemAdmin && isEvaluatee && (
+        {(isSystemAdmin || evaluateeScreenOpen) && isEvaluatee && (
           <Link href="/evaluation/mine">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <span className="text-lg">📝</span>
@@ -1708,7 +1713,7 @@ const markAllRead = async () => {
             </div>
           </Link>
         )}
-        {isSystemAdmin && isEvaluator && (
+        {(isSystemAdmin || evaluatorScreenOpen) && isEvaluator && (
           <Link href="/evaluation/team">
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <span className="text-lg">🏅</span>

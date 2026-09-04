@@ -216,6 +216,9 @@ def run_migrations():
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS max_monthly_minutes INTEGER",
         # 평가자용 화면의 등급 부여에 코멘트 추가
         "ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS comment TEXT",
+        # 평가관리자가 내 평가/평가 검토 화면을 일반 사용자에게 열고 닫는 스위치
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS evaluatee_screen_open BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS evaluator_screen_open BOOLEAN DEFAULT FALSE",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

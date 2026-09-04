@@ -115,11 +115,17 @@ def _get_active_cycle_row(db: Session, company_id: str) -> Optional[EvaluationCy
 
 @router.get("/bootstrap")
 def get_bootstrap(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """/evaluation 메인 화면용. company/my + cycles/active + entries/my + results/me를
-    하나로 묶어 화면 진입 시 요청 왕복 수를 4회 → 1회로 줄인다."""
+    """/evaluation/mine(내 평가) 화면용. company/my + cycles/active + entries/my + results/me를
+    하나로 묶어 화면 진입 시 요청 왕복 수를 4회 → 1회로 줄인다.
+    시스템 관리자가 아니면 평가관리자가 "내 평가" 화면을 공개(evaluatee_screen_open)했을 때만 열린다."""
     uid = current_user["uid"]
     member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
+
+    if company_id and not is_superadmin_email(db, current_user.get("email")):
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not (company and company.evaluatee_screen_open):
+            raise HTTPException(status_code=403, detail="아직 공개되지 않은 화면이에요")
 
     cycle_data = None
     entries_data: list[dict] = []
@@ -182,10 +188,16 @@ def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Dep
 def get_bootstrap_team(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """/evaluation/team 화면용(평가자 전용 — 팀장/임원이 본인이 담당하는 피평가자만 본다).
     관리자 권한으로 범위가 넓어지는 /bootstrap/review와 달리, 여기서는 항상 본인이
-    평가자로 배정된 사람만 반환한다(평가정보는 화면을 아예 분리해 다루므로 권한 분기를 두지 않는다)."""
+    평가자로 배정된 사람만 반환한다(평가정보는 화면을 아예 분리해 다루므로 권한 분기를 두지 않는다).
+    시스템 관리자가 아니면 평가관리자가 이 화면을 공개(evaluator_screen_open)했을 때만 열린다."""
     uid = current_user["uid"]
     member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
+
+    if company_id and not is_superadmin_email(db, current_user.get("email")):
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not (company and company.evaluator_screen_open):
+            raise HTTPException(status_code=403, detail="아직 공개되지 않은 화면이에요")
 
     cycle_data = None
     entries_data: list[dict] = []
@@ -208,16 +220,26 @@ def get_bootstrap_team(db: Session = Depends(get_db), current_user: dict = Depen
 @router.get("/my-roles")
 def get_my_roles(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """대시보드 메뉴 노출 여부 판단용 — 활성 사이클 기준으로 내가 피평가자/평가자로
-    배정됐는지(각각 별도 화면·메뉴로 연결됨)."""
+    배정됐는지(각각 별도 화면·메뉴로 연결됨) + 평가관리자가 그 화면을 공개했는지."""
     uid = current_user["uid"]
     member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
     if not company_id:
-        return {"company_id": None, "is_evaluatee": False, "is_evaluator": False}
+        return {
+            "company_id": None, "is_evaluatee": False, "is_evaluator": False,
+            "evaluatee_screen_open": False, "evaluator_screen_open": False,
+        }
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    evaluatee_screen_open = bool(company and company.evaluatee_screen_open)
+    evaluator_screen_open = bool(company and company.evaluator_screen_open)
 
     cycle_row = _get_active_cycle_row(db, company_id)
     if not cycle_row:
-        return {"company_id": company_id, "is_evaluatee": False, "is_evaluator": False}
+        return {
+            "company_id": company_id, "is_evaluatee": False, "is_evaluator": False,
+            "evaluatee_screen_open": evaluatee_screen_open, "evaluator_screen_open": evaluator_screen_open,
+        }
 
     is_evaluatee = db.query(EvaluationEntry.id).filter(
         EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.user_id == uid,
@@ -226,7 +248,45 @@ def get_my_roles(db: Session = Depends(get_db), current_user: dict = Depends(get
         EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.evaluator_id == uid,
     ).first() is not None
 
-    return {"company_id": company_id, "is_evaluatee": is_evaluatee, "is_evaluator": is_evaluator}
+    return {
+        "company_id": company_id, "is_evaluatee": is_evaluatee, "is_evaluator": is_evaluator,
+        "evaluatee_screen_open": evaluatee_screen_open, "evaluator_screen_open": evaluator_screen_open,
+    }
+
+
+# ── 내 평가/평가 검토 화면 공개 여부 (평가관리자) ────────────
+class ToggleScreenRequest(BaseModel):
+    open: bool
+
+
+@router.put("/screens/evaluatee/{company_id}")
+def toggle_evaluatee_screen(
+    company_id: str, req: ToggleScreenRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
+    _require_admin(db, current_user, company_id)
+    company.evaluatee_screen_open = req.open
+    company.updated_by = current_user["uid"]
+    db.commit()
+    return {"success": True, "evaluatee_screen_open": company.evaluatee_screen_open}
+
+
+@router.put("/screens/evaluator/{company_id}")
+def toggle_evaluator_screen(
+    company_id: str, req: ToggleScreenRequest,
+    db: Session = Depends(get_db), current_user: dict = Depends(get_current_user),
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
+    _require_admin(db, current_user, company_id)
+    company.evaluator_screen_open = req.open
+    company.updated_by = current_user["uid"]
+    db.commit()
+    return {"success": True, "evaluator_screen_open": company.evaluator_screen_open}
 
 
 @router.get("/bootstrap/settings")

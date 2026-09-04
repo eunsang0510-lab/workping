@@ -13,6 +13,8 @@ class Company(Base):
     leave_enabled           = Column(Boolean, default=False)
     leave_approval_required = Column(Boolean, default=True)
     evaluation_enabled      = Column(Boolean, default=False)
+    evaluatee_screen_open   = Column(Boolean, default=False)  # "내 평가"(피평가자) 화면을 일반 직원에게 공개할지
+    evaluator_screen_open   = Column(Boolean, default=False)  # "평가 검토·등급 부여"(평가자) 화면을 일반 평가자에게 공개할지
     max_weekly_minutes      = Column(Integer, default=52 * 60)  # 주 최대 근로시간 기준(분), 근로시간 패턴 알림에 사용
     max_monthly_minutes     = Column(Integer, nullable=True)    # 월 최대 근로시간 기준(분), 미설정 시 월 기준 검사 안 함
     created_at = Column(DateTime, default=datetime.now)

@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
 import { API_URL } from "@/lib/api";
-import { checkSystemAdmin } from "@/lib/systemAdmin";
 import { saveRecordingLocally } from "@/lib/meetingAudioStore";
 
 interface ToastState { message: string; type: "success" | "error" | "info"; }
@@ -52,15 +51,13 @@ function OneOnOneRecordInner() {
   }, []);
 
   useEffect(() => {
+    // 이 화면 접근 권한(담당 평가자 또는 관리자)은 업로드 시 백엔드가 최종 판단한다.
     const unsub = onAuthStateChanged(auth, (u) => {
       if (!u) {
         router.push("/login");
         return;
       }
       setUser(u);
-      checkSystemAdmin(u.email).then((ok) => {
-        if (!ok) router.push("/login");
-      });
     });
     return () => unsub();
   }, [router]);
