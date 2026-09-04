@@ -164,6 +164,8 @@ def list_all_companies(db: Session = Depends(get_db), current_user: dict = Depen
             "leave_enabled": c.leave_enabled,
             "leave_approval_required": getattr(c, "leave_approval_required", True),
             "evaluation_enabled": getattr(c, "evaluation_enabled", False),
+            "max_weekly_minutes": getattr(c, "max_weekly_minutes", None) or 3120,
+            "max_monthly_minutes": getattr(c, "max_monthly_minutes", None),
         }
         for c in companies
     ]
@@ -195,6 +197,8 @@ def get_company_info(admin_id: str, db: Session = Depends(get_db)):
             "name": company.name,
             "member_count": len(members),
             "company_code": company.id[:8],
+            "max_weekly_minutes": getattr(company, "max_weekly_minutes", None) or 3120,
+            "max_monthly_minutes": getattr(company, "max_monthly_minutes", None),
         }
     }
 
@@ -856,6 +860,8 @@ def get_my_company(user_id: str, db: Session = Depends(get_db)):
         "leave_enabled": company.leave_enabled if company else False,
         "leave_approval_required": getattr(company, "leave_approval_required", True) if company else True,
         "evaluation_enabled": getattr(company, "evaluation_enabled", False) if company else False,
+        "max_weekly_minutes": (getattr(company, "max_weekly_minutes", None) or 3120) if company else 3120,
+        "max_monthly_minutes": getattr(company, "max_monthly_minutes", None) if company else None,
         "force_password_change": member.force_password_change or False,
     }
 

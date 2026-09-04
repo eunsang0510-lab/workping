@@ -211,6 +211,9 @@ def run_migrations():
         "ALTER TABLE meeting_progress ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE meeting_usage_logs ENABLE ROW LEVEL SECURITY",
         "ALTER TABLE system_admins ENABLE ROW LEVEL SECURITY",
+        # 근로시간 패턴 알림 — 회사별 주/월 최대 근로시간 기준
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS max_weekly_minutes INTEGER DEFAULT 3120",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS max_monthly_minutes INTEGER",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:
@@ -423,10 +426,86 @@ def _send_52h_warning():
         db.close()
 
 
+def _send_weekly_work_pattern_analysis():
+    """매주 월요일 오전 8시 — 지난 한 주 4일 이상 근무한 사람만 추려 AI로 근로시간 추이를 분석,
+    회사가 정한 주/월 최대 근로시간을 초과할 것 같으면 본인 + 팀장/관리자에게 알림."""
+    from utils.push import send_push_to_users
+    from utils.team import get_managers_and_admins
+    from utils.work_hour_ai import analyze_work_hour_risk
+    from models.company import Company, CompanyMember
+    from routers.attendance import compute_weekly_report, compute_month_to_date_minutes
+
+    KST = timezone(timedelta(hours=9))
+    today_kst = datetime.now(KST).date()
+    last_week_start = today_kst - timedelta(days=today_kst.weekday() + 7)  # 지난주 월요일
+    last_week_end = last_week_start + timedelta(days=6)
+
+    db = SessionLocal()
+    try:
+        companies = db.query(Company).all()
+        for company in companies:
+            max_weekly_minutes = company.max_weekly_minutes or 52 * 60
+            max_monthly_minutes = company.max_monthly_minutes  # None이면 월 기준 검사 안 함
+
+            members = db.query(CompanyMember).filter(CompanyMember.company_id == company.id).all()
+            for member in members:
+                # 최근 4주(이번 분석 대상 주 포함) 추이 — 오래된 주부터
+                reports = [
+                    compute_weekly_report(db, member.user_id, last_week_start - timedelta(weeks=i))
+                    for i in range(3, -1, -1)
+                ]
+                this_week = reports[-1]
+                work_days = len([d for d in this_week["daily"].values() if d.get("work_minutes", 0) > 0])
+                if work_days < 4:
+                    continue  # 주 4일 미만 근무자는 분석 대상 아님
+
+                weekly_minutes = this_week["total_minutes"]
+                trend_hours = [round(r["total_minutes"] / 60, 1) for r in reports]
+
+                lines = [
+                    f"[{member.user_name or member.user_id}]",
+                    f"이번 주({last_week_start} ~ {last_week_end}) 근무: "
+                    f"{weekly_minutes // 60}시간 {weekly_minutes % 60}분 "
+                    f"(회사 기준 주 최대 {max_weekly_minutes // 60}시간)",
+                    f"최근 4주 추이(오래된 순, 시간): {', '.join(str(h) for h in trend_hours)}",
+                ]
+                if max_monthly_minutes:
+                    monthly_minutes = compute_month_to_date_minutes(db, member.user_id, last_week_end)
+                    lines.append(
+                        f"이번 달 누적 근무({last_week_end.day}일까지): "
+                        f"{monthly_minutes // 60}시간 {monthly_minutes % 60}분 "
+                        f"(회사 기준 월 최대 {max_monthly_minutes // 60}시간)"
+                    )
+                pattern_text = "\n".join(lines)
+
+                at_risk, message = analyze_work_hour_risk(pattern_text)
+                if not at_risk or not message:
+                    continue
+
+                send_push_to_users(
+                    db, [member.user_id],
+                    title="📈 근로시간 패턴 알림",
+                    body=message,
+                    url="/dashboard",
+                )
+                targets = get_managers_and_admins(db, company.id, member.user_id)
+                targets = [t for t in targets if t != member.user_id]
+                if targets:
+                    send_push_to_users(
+                        db, targets,
+                        title="📈 근로시간 패턴 알림",
+                        body=f"{member.user_name or member.user_id}님이 " + message,
+                        url="/manager",
+                    )
+    finally:
+        db.close()
+
+
 scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
 scheduler.add_job(_send_checkin_reminders, CronTrigger(hour=9, minute=0))
 scheduler.add_job(_send_checkout_reminders, CronTrigger(hour=18, minute=30))
 scheduler.add_job(_send_52h_warning, CronTrigger(minute="*/30"))
+scheduler.add_job(_send_weekly_work_pattern_analysis, CronTrigger(day_of_week="mon", hour=8, minute=0))
 
 
 @asynccontextmanager

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from typing import Optional
 import os
 from sqlalchemy.orm import Session
@@ -6,7 +7,7 @@ from sqlalchemy import func
 from database.connection import get_db
 from models.attendance import Attendance
 from models.location import Location
-from models.company import CompanyMember
+from models.company import Company, CompanyMember
 from models.reclock import ReclockRequest
 from routers.deps import get_current_user
 from datetime import datetime, timedelta, timezone
@@ -270,6 +271,88 @@ def compute_weekly_report(db: Session, user_id: str, week_start=None) -> dict:
         "total_minutes": total_minutes,
         "overtime_52h": overtime_52h,
         "daily": daily,
+    }
+
+
+def compute_month_to_date_minutes(db: Session, user_id: str, end_date) -> int:
+    """이번 달 1일부터 end_date까지(포함) 근무 분 합계(승인된 재출근 포함).
+    근로시간 패턴 알림 스케줄러가 월 누적치 계산에 사용."""
+    month_start = end_date.replace(day=1)
+    utc_start = datetime(month_start.year, month_start.month, month_start.day, 0, 0, 0) - timedelta(hours=9)
+    utc_end = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59) - timedelta(hours=9)
+
+    records = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.recorded_at >= utc_start,
+            Attendance.recorded_at <= utc_end,
+        )
+        .order_by(Attendance.recorded_at)
+        .all()
+    )
+
+    daily: dict = {}
+    for r in records:
+        kst_time = r.recorded_at.replace(tzinfo=timezone.utc).astimezone(KST)
+        date_str = kst_time.date().isoformat()
+        bucket = daily.setdefault(date_str, {"checkin": None, "checkout": None, "outing_minutes": 0})
+        if r.type == "checkin" and not bucket["checkin"]:
+            bucket["checkin"] = r.recorded_at
+            bucket["outing_minutes"] = r.outing_minutes or 0
+        if r.type == "checkout":
+            bucket["checkout"] = r.recorded_at
+
+    total_minutes = 0
+    for data in daily.values():
+        if data["checkin"] and data["checkout"]:
+            diff = data["checkout"] - data["checkin"]
+            total_minutes += max(0, int(diff.total_seconds() / 60) - data["outing_minutes"])
+
+    reclock_map = _approved_reclock_minutes_map(db, user_id, list(daily.keys()))
+    total_minutes += sum(reclock_map.values())
+
+    return total_minutes
+
+
+class WorkHourLimitsRequest(BaseModel):
+    max_weekly_hours: int
+    max_monthly_hours: Optional[int] = None
+
+
+@router.put("/work-hour-limits/{company_id}")
+def set_work_hour_limits(
+    company_id: str,
+    req: WorkHourLimitsRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="회사를 찾을 수 없어요")
+
+    is_superadmin = is_superadmin_email(db, current_user.get("email"))
+    member = db.query(CompanyMember).filter(
+        CompanyMember.user_id == current_user["uid"],
+        CompanyMember.company_id == company_id,
+        CompanyMember.is_admin == True,
+    ).first()
+    if not member and not is_superadmin:
+        raise HTTPException(status_code=403, detail="관리자만 설정할 수 있어요")
+
+    if req.max_weekly_hours <= 0:
+        raise HTTPException(status_code=400, detail="주 최대 근로시간은 0보다 커야 해요")
+    if req.max_monthly_hours is not None and req.max_monthly_hours <= 0:
+        raise HTTPException(status_code=400, detail="월 최대 근로시간은 0보다 커야 해요")
+
+    company.max_weekly_minutes = req.max_weekly_hours * 60
+    company.max_monthly_minutes = req.max_monthly_hours * 60 if req.max_monthly_hours else None
+    company.updated_by = current_user["uid"]
+    db.commit()
+    return {
+        "success": True,
+        "max_weekly_hours": req.max_weekly_hours,
+        "max_monthly_hours": req.max_monthly_hours,
     }
 
 

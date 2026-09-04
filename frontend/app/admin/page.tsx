@@ -34,6 +34,8 @@ interface Company {
   name: string;
   member_count: number;
   company_code: string;
+  max_weekly_minutes?: number;
+  max_monthly_minutes?: number | null;
 }
 
 interface CompanyLocation {
@@ -187,6 +189,9 @@ export default function Admin() {
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [leaveEnabled, setLeaveEnabled] = useState(false);
   const [leaveApprovalRequired, setLeaveApprovalRequired] = useState(true);
+  const [maxWeeklyHours, setMaxWeeklyHours] = useState("52");
+  const [maxMonthlyHours, setMaxMonthlyHours] = useState("");
+  const [workHourLimitsSaving, setWorkHourLimitsSaving] = useState(false);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveItem[]>([]);
   const [leaveTab, setLeaveTab] = useState<"requests" | "balances">("requests");
@@ -286,6 +291,8 @@ const fetchSubscription = async (companyId: string) => {
 // ✅ 회사 데이터 로드 공통 함수로 분리
 const loadCompanyData = (companyData: Company, isSysAdmin: boolean) => {
   setCompany(companyData);
+  setMaxWeeklyHours(String(Math.round((companyData.max_weekly_minutes || 3120) / 60)));
+  setMaxMonthlyHours(companyData.max_monthly_minutes ? String(Math.round(companyData.max_monthly_minutes / 60)) : "");
   fetchAttendance(companyData.id);
   fetchLocations(companyData.id);
   // 슈퍼어드민은 company_id를, 일반 관리자는 user_id를 전달
@@ -668,6 +675,39 @@ useEffect(() => {
       }
     } catch {
       showToast("설정 변경 실패", "error");
+    }
+  };
+
+  const handleSaveWorkHourLimits = async () => {
+    if (!company?.id) return;
+    const weekly = Number(maxWeeklyHours);
+    if (!weekly || weekly <= 0) {
+      showToast("주 최대 근로시간을 올바르게 입력해주세요", "error");
+      return;
+    }
+    const monthly = maxMonthlyHours.trim() ? Number(maxMonthlyHours) : null;
+    if (maxMonthlyHours.trim() && (!monthly || monthly <= 0)) {
+      showToast("월 최대 근로시간을 올바르게 입력해주세요", "error");
+      return;
+    }
+    setWorkHourLimitsSaving(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_URL}/api/attendance/work-hour-limits/${company.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ max_weekly_hours: weekly, max_monthly_hours: monthly }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("근로시간 알림 기준 저장 완료!", "success");
+      } else {
+        showToast(data.detail || "저장 실패", "error");
+      }
+    } catch {
+      showToast("저장 실패", "error");
+    } finally {
+      setWorkHourLimitsSaving(false);
     }
   };
 
@@ -1238,6 +1278,42 @@ const handleApproveTrip = async (tripId: string, status: "approved" | "rejected"
                 <div className="text-[#a0a0a0] text-xs mt-1">{item.label}</div>
               </div>
             ))}
+          </div>
+
+        {/* 근로시간 패턴 알림 기준 */}
+          <div className="bg-white border border-[#e5e5e5] rounded-2xl p-5 mt-4 mb-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="text-[#a0a0a0] text-xs font-semibold uppercase tracking-wider mb-1">근로시간 패턴 알림 기준</div>
+            <div className="text-[#a0a0a0] text-xs mb-4">매주 월요일, 지난주 4일 이상 근무한 직원의 근무 추이를 AI가 분석해서 아래 기준 초과가 예상되면 본인과 팀장·관리자에게 알려드려요.</div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <div className="text-[#6b6b6b] text-xs mb-1">주 최대 근로시간(시간)</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={maxWeeklyHours}
+                  onChange={(e) => setMaxWeeklyHours(e.target.value)}
+                  className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-sm"
+                />
+              </div>
+              <div>
+                <div className="text-[#6b6b6b] text-xs mb-1">월 최대 근로시간(시간, 선택)</div>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="미설정 시 검사 안 함"
+                  value={maxMonthlyHours}
+                  onChange={(e) => setMaxMonthlyHours(e.target.value)}
+                  className="w-full bg-[#f8f8f8] border border-[#e5e5e5] text-[#0a0a0a] rounded-xl px-3 py-2 outline-none focus:border-[#5b5ef4] transition-all text-sm"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveWorkHourLimits}
+              disabled={workHourLimitsSaving}
+              className="w-full bg-[#5b5ef4] hover:bg-[#4a4de0] disabled:opacity-50 text-white text-sm font-bold rounded-xl py-2.5 transition-all"
+            >
+              {workHourLimitsSaving ? "저장 중..." : "저장"}
+            </button>
           </div>
 
         {/* 연차 관리 */}
