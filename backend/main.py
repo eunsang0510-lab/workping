@@ -214,6 +214,8 @@ def run_migrations():
         # 근로시간 패턴 알림 — 회사별 주/월 최대 근로시간 기준
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS max_weekly_minutes INTEGER DEFAULT 3120",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS max_monthly_minutes INTEGER",
+        # 평가자용 화면의 등급 부여에 코멘트 추가
+        "ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS comment TEXT",
     ]
     # 각 migration을 개별 트랜잭션으로 실행 — 한 건 실패해도 다음 건은 정상 실행
     for sql in migrations:

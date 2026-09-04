@@ -99,6 +99,7 @@ class EvaluationResult(Base):
 
     score = Column(Float, nullable=True)
     grade = Column(String, nullable=True)
+    comment = Column(Text, nullable=True)  # 평가자가 등급과 함께 남기는 평가 코멘트
 
     graded_at = Column(DateTime, nullable=True)
     graded_by = Column(String, nullable=True)

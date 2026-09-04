@@ -151,8 +151,38 @@ def get_bootstrap(db: Session = Depends(get_db), current_user: dict = Depends(ge
 
 @router.get("/bootstrap/review")
 def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """/evaluation/review 화면용. company/my + cycles/active + entries/review + results를
-    하나로 묶어 요청 왕복 수를 4회 → 1회로 줄인다."""
+    """/evaluation/review 화면용(평가관리자 전용 — 회사 전체 현황을 본다).
+    company/my + cycles/active + entries/review + results를 하나로 묶어 요청 왕복 수를 4회 → 1회로 줄인다.
+    개별 평가자가 본인 담당자만 보려면 /bootstrap/team(평가자용 화면)을 쓴다."""
+    uid = current_user["uid"]
+    member = _get_primary_member(db, uid)
+    company_id = member.company_id if member else None
+    if company_id:
+        _require_admin(db, current_user, company_id)
+
+    cycle_data = None
+    entries_data: list[dict] = []
+    results_payload = {"people": [], "distribution": []}
+
+    if company_id:
+        cycle_row = _get_active_cycle_row(db, company_id)
+        if cycle_row:
+            cycle_data = _serialize_cycle(cycle_row)
+            entry_rows = db.query(EvaluationEntry).filter(
+                EvaluationEntry.cycle_id == cycle_row.id,
+            ).all()
+            names = _name_map(db, company_id) if entry_rows else {}
+            entries_data = [_serialize_entry(e, names) for e in entry_rows]
+            results_payload = _compute_results(db, cycle_row, current_user)
+
+    return {"company_id": company_id, "cycle": cycle_data, "entries": entries_data, **results_payload}
+
+
+@router.get("/bootstrap/team")
+def get_bootstrap_team(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """/evaluation/team 화면용(평가자 전용 — 팀장/임원이 본인이 담당하는 피평가자만 본다).
+    관리자 권한으로 범위가 넓어지는 /bootstrap/review와 달리, 여기서는 항상 본인이
+    평가자로 배정된 사람만 반환한다(평가정보는 화면을 아예 분리해 다루므로 권한 분기를 두지 않는다)."""
     uid = current_user["uid"]
     member = _get_primary_member(db, uid)
     company_id = member.company_id if member else None
@@ -170,9 +200,33 @@ def get_bootstrap_review(db: Session = Depends(get_db), current_user: dict = Dep
             ).all()
             names = _name_map(db, company_id) if entry_rows else {}
             entries_data = [_serialize_entry(e, names) for e in entry_rows]
-            results_payload = _compute_results(db, cycle_row, current_user)
+            results_payload = _compute_results(db, cycle_row, current_user, own_only=True)
 
     return {"company_id": company_id, "cycle": cycle_data, "entries": entries_data, **results_payload}
+
+
+@router.get("/my-roles")
+def get_my_roles(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """대시보드 메뉴 노출 여부 판단용 — 활성 사이클 기준으로 내가 피평가자/평가자로
+    배정됐는지(각각 별도 화면·메뉴로 연결됨)."""
+    uid = current_user["uid"]
+    member = _get_primary_member(db, uid)
+    company_id = member.company_id if member else None
+    if not company_id:
+        return {"company_id": None, "is_evaluatee": False, "is_evaluator": False}
+
+    cycle_row = _get_active_cycle_row(db, company_id)
+    if not cycle_row:
+        return {"company_id": company_id, "is_evaluatee": False, "is_evaluator": False}
+
+    is_evaluatee = db.query(EvaluationEntry.id).filter(
+        EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.user_id == uid,
+    ).first() is not None
+    is_evaluator = db.query(EvaluationEntry.id).filter(
+        EvaluationEntry.cycle_id == cycle_row.id, EvaluationEntry.evaluator_id == uid,
+    ).first() is not None
+
+    return {"company_id": company_id, "is_evaluatee": is_evaluatee, "is_evaluator": is_evaluator}
 
 
 @router.get("/bootstrap/settings")
@@ -720,7 +774,7 @@ def write_plan(
             send_push_to_users(
                 db, [entry.evaluator_id], title="📝 평가 계획 제출",
                 body=f"{names.get(entry.user_id, entry.user_id)}님이 계획을 제출했어요.",
-                url="/evaluation/review",
+                url="/evaluation/team",
             )
         except Exception as e:
             print(f"[write_plan] 알림 전송 실패: {e}")
@@ -761,7 +815,7 @@ def write_actual(
             send_push_to_users(
                 db, [entry.evaluator_id], title="📝 평가 실적 제출",
                 body=f"{names.get(entry.user_id, entry.user_id)}님이 실적을 제출했어요.",
-                url="/evaluation/review",
+                url="/evaluation/team",
             )
         except Exception as e:
             print(f"[write_actual] 알림 전송 실패: {e}")
@@ -810,7 +864,7 @@ def review_plan(
     try:
         send_push_to_users(
             db, [entry.user_id], title=f"📋 평가 계획 {status_text}",
-            body=req.feedback or f"계획이 {status_text}됐어요.", url="/evaluation",
+            body=req.feedback or f"계획이 {status_text}됐어요.", url="/evaluation/mine",
         )
     except Exception as e:
         print(f"[review_plan] 알림 전송 실패: {e}")
@@ -842,7 +896,7 @@ def review_actual(
     try:
         send_push_to_users(
             db, [entry.user_id], title=f"📋 평가 실적 {status_text}",
-            body=req.feedback or f"실적이 {status_text}됐어요.", url="/evaluation",
+            body=req.feedback or f"실적이 {status_text}됐어요.", url="/evaluation/mine",
         )
     except Exception as e:
         print(f"[review_actual] 알림 전송 실패: {e}")
@@ -851,11 +905,13 @@ def review_actual(
 
 
 # ── 등급 부여 ──────────────────────────────────────────────
-def _compute_results(db: Session, cycle: EvaluationCycle, current_user: dict) -> dict:
-    is_privileged = is_superadmin_email(db, current_user.get("email"))
-    if not is_privileged:
-        member = _get_member(db, current_user["uid"], cycle.company_id)
-        is_privileged = bool(member and member.is_admin)
+def _compute_results(db: Session, cycle: EvaluationCycle, current_user: dict, own_only: bool = False) -> dict:
+    is_privileged = False
+    if not own_only:
+        is_privileged = is_superadmin_email(db, current_user.get("email"))
+        if not is_privileged:
+            member = _get_member(db, current_user["uid"], cycle.company_id)
+            is_privileged = bool(member and member.is_admin)
 
     entries_q = db.query(EvaluationEntry).filter(EvaluationEntry.cycle_id == cycle.id)
     if not is_privileged:
@@ -890,6 +946,7 @@ def _compute_results(db: Session, cycle: EvaluationCycle, current_user: dict) ->
             "ready": len(es) >= 2 and all(e.actual_status == "approved" for e in es),
             "score": result_by_user[uid].score if uid in result_by_user else None,
             "grade": result_by_user[uid].grade if uid in result_by_user else None,
+            "comment": result_by_user[uid].comment if uid in result_by_user else None,
         }
         for uid, es in by_user.items()
     ]
@@ -920,6 +977,7 @@ class GradeRequest(BaseModel):
     cycle_id: str
     score: Optional[float] = None
     grade: str
+    comment: Optional[str] = None
 
 
 @router.put("/results/{user_id}/grade")
@@ -958,6 +1016,7 @@ def set_grade(
 
     result.score = req.score
     result.grade = req.grade
+    result.comment = req.comment.strip() if req.comment else None
     result.graded_at = datetime.utcnow()
     result.graded_by = current_user["uid"]
     db.commit()
@@ -965,12 +1024,12 @@ def set_grade(
     try:
         send_push_to_users(
             db, [user_id], title="⭐ 평가 등급 확정",
-            body=f"{cycle.name} 등급이 확정됐어요.", url="/evaluation",
+            body=f"{cycle.name} 등급이 확정됐어요.", url="/evaluation/mine",
         )
     except Exception as e:
         print(f"[set_grade] 알림 전송 실패: {e}")
 
-    return {"success": True, "grade": result.grade, "score": result.score}
+    return {"success": True, "grade": result.grade, "score": result.score, "comment": result.comment}
 
 
 # ══════════════════════════════════════════════════════════

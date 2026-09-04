@@ -158,7 +158,7 @@ function OneOnOneRecordInner() {
     return (
       <div className="min-h-screen bg-[#fafafa] px-4 py-6">
         <div className="max-w-lg mx-auto">
-          <Link href="/evaluation/review" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
+          <Link href="/evaluation/team" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-[#6b6b6b] text-sm">
             잘못된 접근이에요
           </div>
@@ -173,7 +173,7 @@ function OneOnOneRecordInner() {
 
       <div className="max-w-lg w-full mx-auto flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-8">
-          <Link href="/evaluation/review" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
+          <Link href="/evaluation/team" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
           <div className="text-[#0a0a0a] text-base font-bold">1on1 면담 녹음</div>
           <div className="w-8" />
         </div>
@@ -188,7 +188,7 @@ function OneOnOneRecordInner() {
             <>
               <div className="text-4xl">✅</div>
               <div className="text-[#0a0a0a] text-sm font-medium">업로드 완료. AI가 분석 중이에요</div>
-              <Link href="/evaluation/review" className="text-[#5b5ef4] text-xs font-bold">
+              <Link href="/evaluation/team" className="text-[#5b5ef4] text-xs font-bold">
                 평가 검토로 돌아가기
               </Link>
             </>

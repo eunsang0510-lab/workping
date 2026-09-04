@@ -88,6 +88,8 @@ interface OutingSession {
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
+  const [isEvaluatee, setIsEvaluatee] = useState(false);
+  const [isEvaluator, setIsEvaluator] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
@@ -199,7 +201,15 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setUser(user);
-        checkSystemAdmin(user.email).then(setIsSystemAdmin);
+        checkSystemAdmin(user.email).then((ok) => {
+          setIsSystemAdmin(ok);
+          if (ok) {
+            fetchEvaluationRoles().then(({ isEvaluatee, isEvaluator }) => {
+              setIsEvaluatee(isEvaluatee);
+              setIsEvaluator(isEvaluator);
+            });
+          }
+        });
         fetchTodayAttendance(user.uid);
         fetchTodayReclock(user.uid);
         fetchOutingStatus(user.uid);
@@ -452,6 +462,18 @@ const fetchPendingApprovalCount = async (companyId: string) => {
     setPendingApprovalCount(data.total || 0);
   } catch {
     /* 배지 표시용이라 실패해도 조용히 무시 */
+  }
+};
+
+const fetchEvaluationRoles = async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/evaluation/my-roles`, {
+      headers: await getAuthHeader(),
+    });
+    const data = await res.json();
+    return { isEvaluatee: !!data.is_evaluatee, isEvaluator: !!data.is_evaluator };
+  } catch {
+    return { isEvaluatee: false, isEvaluator: false };
   }
 };
 
@@ -1669,8 +1691,30 @@ const markAllRead = async () => {
             <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <span className="text-lg">✨</span>
               <div>
-                <div className="text-[#0a0a0a] text-sm font-bold">AI 평가</div>
-                <div className="text-[#6b6b6b] text-xs">계획 · 실적 · 등급</div>
+                <div className="text-[#0a0a0a] text-sm font-bold">평가관리자</div>
+                <div className="text-[#6b6b6b] text-xs">평가 설정 · 전체 현황</div>
+              </div>
+            </div>
+          </Link>
+        )}
+        {isSystemAdmin && isEvaluatee && (
+          <Link href="/evaluation/mine">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-lg">📝</span>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-bold">내 평가</div>
+                <div className="text-[#6b6b6b] text-xs">계획 · 실적 작성</div>
+              </div>
+            </div>
+          </Link>
+        )}
+        {isSystemAdmin && isEvaluator && (
+          <Link href="/evaluation/team">
+            <div className="bg-white border border-[#e5e5e5] hover:border-[#5b5ef4] rounded-xl p-4 flex items-center gap-3 transition-all cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+              <span className="text-lg">🏅</span>
+              <div>
+                <div className="text-[#0a0a0a] text-sm font-bold">평가 검토 · 등급 부여</div>
+                <div className="text-[#6b6b6b] text-xs">담당 피평가자 평가</div>
               </div>
             </div>
           </Link>

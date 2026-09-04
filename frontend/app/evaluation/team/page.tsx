@@ -54,7 +54,7 @@ interface ToastState {
 
 const CATEGORY_LABEL: Record<string, string> = { performance: "성과평가", competency: "역량평가" };
 
-export default function EvaluationReviewPage() {
+export default function EvaluationTeamPage() {
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [cycle, setCycle] = useState<Cycle | null>(null);
@@ -96,12 +96,12 @@ export default function EvaluationReviewPage() {
     }
   };
 
-  // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/review)으로 모아 받는다.
-  // 이전엔 company/my → cycles/active → entries/review + results 순으로 요청이
-  // 3~4번 이어져서(왕복마다 지연 발생) 화면 진입이 느렸다.
+  // 화면 진입에 필요한 데이터를 한 번의 요청(/bootstrap/team)으로 모아 받는다. 관리자
+  // 권한으로 범위가 넓어지는 /bootstrap/review와 달리 여기서는 항상 본인이 평가자로
+  // 배정된 사람만 돌아온다 — 평가자용 화면은 관리자용 화면과 완전히 분리돼 있다.
   const loadAll = async () => {
     const headers = await getAuthHeader();
-    const res = await fetch(`${API_URL}/api/evaluation/bootstrap/review`, { headers });
+    const res = await fetch(`${API_URL}/api/evaluation/bootstrap/team`, { headers });
     const data = await res.json();
     setCompanyId(data.company_id || null);
     setCycle(data.cycle || null);
@@ -180,7 +180,7 @@ export default function EvaluationReviewPage() {
     return (
       <div className="min-h-screen bg-[#fafafa] px-4 py-6">
         <div className="max-w-lg mx-auto">
-          <Link href="/evaluation" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
+          <Link href="/dashboard" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center text-[#6b6b6b] text-sm">
             소속 회사가 있어야 이용할 수 있어요
           </div>
@@ -200,21 +200,29 @@ export default function EvaluationReviewPage() {
 
       <div className="max-w-lg mx-auto">
         <div className="flex items-center justify-between mb-5">
-          <Link href="/evaluation" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
-          <span className="text-[#0a0a0a] text-base font-bold">전체 현황 검토</span>
+          <Link href="/dashboard" className="text-[#6b6b6b] text-sm">← 뒤로</Link>
+          <span className="text-[#0a0a0a] text-base font-bold">평가 검토 · 등급 부여</span>
           <div className="w-8" />
         </div>
 
         {!cycle ? (
           <div className="text-center text-[#6b6b6b] text-sm py-16">진행 중인 평가가 없어요</div>
         ) : Object.keys(grouped).length === 0 ? (
-          <div className="text-center text-[#6b6b6b] text-sm py-16">검토할 대상이 없어요</div>
+          <div className="text-center text-[#6b6b6b] text-sm py-16">담당하는 평가 대상자가 없어요</div>
         ) : (
           <div className="flex flex-col gap-4">
             {Object.entries(grouped).map(([userId, userEntries]) => (
               <div key={userId} className="bg-white border border-[#e5e5e5] rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-[#0a0a0a] text-sm font-bold">{userEntries[0].user_name}</div>
+                  {cycle && (
+                    <Link
+                      href={`/evaluation/one-on-one/record?cycleId=${cycle.id}&userId=${userId}`}
+                      className="text-[#5b5ef4] text-[11px] font-bold"
+                    >
+                      🎙️ 1on1 녹음
+                    </Link>
+                  )}
                 </div>
                 {userEntries.map((entry) => (
                   <div key={entry.id} className="mb-3 last:mb-0">
