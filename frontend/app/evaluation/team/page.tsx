@@ -16,8 +16,14 @@ const getAuthHeader = async () => {
 interface Cycle {
   id: string;
   name: string;
+  review_start: string | null;
+  review_end: string | null;
   grade_distribution: { grade: string; ratio: number }[];
 }
+
+const today = () => new Date().toISOString().slice(0, 10);
+const inPeriod = (start: string | null, end: string | null) =>
+  !!start && !!end && start <= today() && today() <= end;
 
 interface Entry {
   id: string;
@@ -310,9 +316,17 @@ export default function EvaluationTeamPage() {
           </div>
         )}
 
-        {cycle && people.length > 0 && (
+        {cycle && people.length > 0 && (() => {
+          const reviewPeriodOpen = inPeriod(cycle.review_start, cycle.review_end);
+          return (
           <div className="mt-6">
             <div className="text-[#0a0a0a] text-sm font-bold mb-3">등급 부여</div>
+
+            {!reviewPeriodOpen && (
+              <div className="text-[11px] text-[#b0b0b0] bg-[#fafafa] rounded-xl px-3 py-2 mb-3">
+                평가기간({cycle.review_start}~{cycle.review_end})에만 등급을 부여할 수 있어요
+              </div>
+            )}
 
             {distribution.length > 0 && (
               <div className="bg-white border border-[#e5e5e5] rounded-2xl p-4 mb-3">
@@ -343,7 +357,7 @@ export default function EvaluationTeamPage() {
                       onChange={(ev) =>
                         setGradeDraft((d) => ({ ...d, [p.user_id]: { ...d[p.user_id], grade: ev.target.value } }))
                       }
-                      disabled={!p.ready}
+                      disabled={!p.ready || !reviewPeriodOpen}
                       className="flex-1 border border-[#e5e5e5] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#5b5ef4] disabled:opacity-50"
                     >
                       <option value="">등급 선택</option>
@@ -358,7 +372,7 @@ export default function EvaluationTeamPage() {
                       onChange={(ev) =>
                         setGradeDraft((d) => ({ ...d, [p.user_id]: { ...d[p.user_id], score: ev.target.value } }))
                       }
-                      disabled={!p.ready}
+                      disabled={!p.ready || !reviewPeriodOpen}
                       placeholder="점수(선택)"
                       className="w-24 border border-[#e5e5e5] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#5b5ef4] disabled:opacity-50"
                     />
@@ -369,13 +383,13 @@ export default function EvaluationTeamPage() {
                       onChange={(ev) =>
                         setGradeDraft((d) => ({ ...d, [p.user_id]: { ...d[p.user_id], comment: ev.target.value } }))
                       }
-                      disabled={!p.ready}
+                      disabled={!p.ready || !reviewPeriodOpen}
                       placeholder="평가 코멘트(선택)"
                       className="flex-1 border border-[#e5e5e5] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#5b5ef4] disabled:opacity-50"
                     />
                     <button
                       onClick={() => saveGrade(p.user_id)}
-                      disabled={!p.ready || busy === `grade-${p.user_id}`}
+                      disabled={!p.ready || !reviewPeriodOpen || busy === `grade-${p.user_id}`}
                       className="px-4 py-1.5 rounded-lg bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-xs font-bold disabled:opacity-50"
                     >
                       저장
@@ -385,7 +399,8 @@ export default function EvaluationTeamPage() {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

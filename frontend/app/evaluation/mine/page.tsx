@@ -297,12 +297,16 @@ export default function MyEvaluationPage() {
 
             <div className="flex flex-col gap-4">
               {entries.map((entry) => {
-                const planEditable = entry.plan_status === "draft" || entry.plan_status === "feedback";
-                const actualEditable =
-                  entry.plan_status === "approved" &&
-                  (entry.actual_status === "draft" || entry.actual_status === "feedback");
                 const planPeriodOpen = inPeriod(cycle.plan_start, cycle.plan_end);
                 const actualPeriodOpen = inPeriod(cycle.actual_start, cycle.actual_end);
+                const planInputtable = entry.plan_status === "draft" || entry.plan_status === "feedback";
+                const actualInputtable =
+                  entry.plan_status === "approved" &&
+                  (entry.actual_status === "draft" || entry.actual_status === "feedback");
+                // 계획/실적 작성 영역은 각각 계획 입력기간·실적 입력기간에만 편집할 수 있다
+                // (임시저장도 포함 — 기간 밖에서는 아예 입력란을 열지 않는다).
+                const planEditable = planInputtable && planPeriodOpen;
+                const actualEditable = actualInputtable && actualPeriodOpen;
 
                 return (
                   <div key={entry.id} className="bg-white border border-[#e5e5e5] rounded-2xl p-4">
@@ -345,16 +349,24 @@ export default function MyEvaluationPage() {
                             </button>
                             <button
                               onClick={() => saveEntry(entry, "plan", true)}
-                              disabled={saving === `${entry.id}-plan` || !planPeriodOpen}
+                              disabled={saving === `${entry.id}-plan`}
                               className="flex-1 py-2 rounded-lg bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-xs font-bold disabled:opacity-50"
                             >
                               제출
                             </button>
                           </div>
-                          {!planPeriodOpen && (
-                            <div className="text-[10px] text-[#b0b0b0] mt-1.5">계획 입력기간이 아니면 제출할 수 없어요</div>
-                          )}
                         </>
+                      ) : planInputtable && !planPeriodOpen ? (
+                        <div className="bg-[#fafafa] rounded-lg px-3 py-2">
+                          <div className="text-[11px] text-[#b0b0b0] mb-1">
+                            계획 입력기간({cycle.plan_start}~{cycle.plan_end})에만 작성할 수 있어요
+                          </div>
+                          {entry.plan_content && (
+                            <div className="text-[#0a0a0a] text-xs leading-relaxed whitespace-pre-wrap">
+                              {entry.plan_content}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div className="text-[#0a0a0a] text-xs leading-relaxed whitespace-pre-wrap bg-[#fafafa] rounded-lg px-3 py-2">
                           {entry.plan_content || "(내용 없음)"}
@@ -400,16 +412,24 @@ export default function MyEvaluationPage() {
                                 </button>
                                 <button
                                   onClick={() => saveEntry(entry, "actual", true)}
-                                  disabled={saving === `${entry.id}-actual` || !actualPeriodOpen}
+                                  disabled={saving === `${entry.id}-actual`}
                                   className="flex-1 py-2 rounded-lg bg-[#5b5ef4] hover:bg-[#4a4de0] text-white text-xs font-bold disabled:opacity-50"
                                 >
                                   제출
                                 </button>
                               </div>
-                              {!actualPeriodOpen && (
-                                <div className="text-[10px] text-[#b0b0b0] mt-1.5">실적 입력기간이 아니면 제출할 수 없어요</div>
-                              )}
                             </>
+                          ) : actualInputtable && !actualPeriodOpen ? (
+                            <div className="bg-[#fafafa] rounded-lg px-3 py-2">
+                              <div className="text-[11px] text-[#b0b0b0] mb-1">
+                                실적 입력기간({cycle.actual_start}~{cycle.actual_end})에만 작성할 수 있어요
+                              </div>
+                              {entry.actual_content && (
+                                <div className="text-[#0a0a0a] text-xs leading-relaxed whitespace-pre-wrap">
+                                  {entry.actual_content}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <div className="text-[#0a0a0a] text-xs leading-relaxed whitespace-pre-wrap bg-[#fafafa] rounded-lg px-3 py-2">
                               {entry.actual_content || "(내용 없음)"}

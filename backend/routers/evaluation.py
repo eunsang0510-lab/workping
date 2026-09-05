@@ -1055,6 +1055,10 @@ def set_grade(
     if len(entries) < 2 or not all(e.actual_status == "approved" for e in entries):
         raise HTTPException(status_code=400, detail="성과/역량 실적이 모두 승인된 후에 등급을 줄 수 있어요")
 
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    if not (cycle.review_start and cycle.review_end and cycle.review_start <= today <= cycle.review_end):
+        raise HTTPException(status_code=400, detail="평가기간이 아니에요")
+
     evaluator_id = entries[0].evaluator_id
     if not is_superadmin_email(db, current_user.get("email")) and evaluator_id != current_user["uid"]:
         member = _get_member(db, current_user["uid"], cycle.company_id)
